@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "advancedbackups",
+  "version": "${version}",
+  "name": "Advanced Backups",
+  "description": "Minimal server-side manual world backups.",
+  "authors": [
+    "fran"
+  ],
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "com.frandm.advancedbackups.WorldBackupMod"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.18.5",
+    "minecraft": "26.1.2",
+    "java": ">=25",
+    "fabric-api": "*"
+  }
+}
