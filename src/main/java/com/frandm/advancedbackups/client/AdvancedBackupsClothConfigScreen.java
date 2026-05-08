@@ -44,6 +44,15 @@ public final class AdvancedBackupsClothConfigScreen {
                 .build());
 
         category.addEntry(entries.startBooleanToggle(
+                        Component.literal("Pause automatic backups when no players joined"),
+                        config.pauseAutomaticBackupsWithoutPlayers
+                )
+                .setDefaultValue(defaults.pauseAutomaticBackupsWithoutPlayers)
+                .setTooltip(Component.literal("Skips scheduled automatic backups if no player has been online since the last backup."))
+                .setSaveConsumer(value -> config.pauseAutomaticBackupsWithoutPlayers = value)
+                .build());
+
+        category.addEntry(entries.startBooleanToggle(
                         Component.literal("Backup when world starts"),
                         config.backupOnServerStart
                 )

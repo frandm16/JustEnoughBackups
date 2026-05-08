@@ -20,6 +20,7 @@ public final class BackupConfig {
 
     public BackupType backupMode = BackupType.FULL;
     public boolean automaticBackupsEnabled = true;
+    public boolean pauseAutomaticBackupsWithoutPlayers = true;
     public boolean backupOnServerStart = false;
     public boolean backupOnServerStop = false;
     public int automaticIntervalMinutes = 15;
@@ -71,6 +72,7 @@ public final class BackupConfig {
         BackupConfig copy = new BackupConfig();
         copy.backupMode = backupMode;
         copy.automaticBackupsEnabled = automaticBackupsEnabled;
+        copy.pauseAutomaticBackupsWithoutPlayers = pauseAutomaticBackupsWithoutPlayers;
         copy.backupOnServerStart = backupOnServerStart;
         copy.backupOnServerStop = backupOnServerStop;
         copy.automaticIntervalMinutes = automaticIntervalMinutes;

@@ -15,19 +15,23 @@ import java.util.concurrent.CompletionException;
 public final class BackupScheduler {
     private static long ticksUntilNextCheck = 20L;
     private static long lastBackupMillis = 0L;
+    private static boolean playersSeenSinceLastBackup = false;
 
     private BackupScheduler() {
     }
 
     public static void register() {
+        // started server
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             BackupConfig config = BackupConfig.get();
             resetTimer();
+            playersSeenSinceLastBackup = hasOnlinePlayers(server);
             if (config.backupOnServerStart) {
                 runLifecycleBackup(server, config, "startup", false);
             }
         });
 
+        // stopping server
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
             BackupConfig config = BackupConfig.get();
             if (config.backupOnServerStop) {
@@ -35,6 +39,7 @@ public final class BackupScheduler {
             }
         });
 
+        // every tick
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             if (--ticksUntilNextCheck > 0) {
                 return;
@@ -42,6 +47,9 @@ public final class BackupScheduler {
 
             ticksUntilNextCheck = 20L;
             BackupConfig config = BackupConfig.get();
+            if (hasOnlinePlayers(server)) {
+                playersSeenSinceLastBackup = true;
+            }
             if (!config.automaticBackupsEnabled) {
                 return;
             }
@@ -57,6 +65,11 @@ public final class BackupScheduler {
             }
 
             lastBackupMillis = now;
+            if (config.pauseAutomaticBackupsWithoutPlayers && !playersSeenSinceLastBackup) {
+                return;
+            }
+
+            playersSeenSinceLastBackup = false;
             sendActionBar(server, "Advanced Backups: Initializing automatic backup...");
             BackupService.createBackup(server, config.backupMode, "automatic")
                     .whenComplete((manifest, exception) -> {
@@ -99,8 +112,13 @@ public final class BackupScheduler {
         server.getPlayerList().broadcastSystemMessage(Component.literal(message), true);
     }
 
+    private static boolean hasOnlinePlayers(MinecraftServer server) {
+        return server.getPlayerList().getPlayerCount() > 0;
+    }
+
     public static void resetTimer() {
         lastBackupMillis = System.currentTimeMillis();
+        playersSeenSinceLastBackup = false;
     }
 
     public static NextBackupStatus nextBackupStatus() {
