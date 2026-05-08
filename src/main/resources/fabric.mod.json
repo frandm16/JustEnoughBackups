@@ -14,6 +14,9 @@
     "main": [
       "com.frandm.advancedbackups.WorldBackupMod"
     ],
+    "client": [
+      "com.frandm.advancedbackups.client.AdvancedBackupsClient"
+    ],
     "modmenu": [
       "com.frandm.advancedbackups.client.AdvancedBackupsModMenu"
     ]

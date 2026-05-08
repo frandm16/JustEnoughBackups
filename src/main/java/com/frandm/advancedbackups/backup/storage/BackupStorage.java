@@ -6,6 +6,9 @@ import com.frandm.advancedbackups.backup.model.BackupIntegrityMode;
 import com.frandm.advancedbackups.backup.model.BackupManifest;
 import com.frandm.advancedbackups.backup.model.BackupStatus;
 import com.frandm.advancedbackups.backup.model.BackupType;
+import com.frandm.advancedbackups.backup.progress.BackupProgress;
+import com.frandm.advancedbackups.backup.progress.BackupProgressListener;
+import com.frandm.advancedbackups.backup.progress.BackupProgressState;
 import com.frandm.advancedbackups.config.BackupConfig;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -48,6 +51,18 @@ public final class BackupStorage {
             BackupType type,
             String reason
     ) throws IOException {
+        return createBackup(worldPath, worldName, worldDirectoryName, config, type, reason, BackupProgressListener.noop());
+    }
+
+    public static BackupManifest createBackup(
+            Path worldPath,
+            String worldName,
+            String worldDirectoryName,
+            BackupConfig config,
+            BackupType type,
+            String reason,
+            BackupProgressListener progressListener
+    ) throws IOException {
         Path backupDir = config.resolveBackupRoot().resolve(worldDirectoryName);
         Files.createDirectories(backupDir);
 
@@ -63,14 +78,15 @@ public final class BackupStorage {
                     null,
                     snapshot,
                     reason + " base",
-                    config.integrityMode
+                    config.integrityMode,
+                    progressListener
             );
             manifests = new ArrayList<>(manifests);
             manifests.add(fullBase);
         }
 
         BackupManifest base = findBaseManifest(manifests, type);
-        return writeBackup(worldPath, backupDir, worldName, worldDirectoryName, type, base, snapshot, reason, config.integrityMode);
+        return writeBackup(worldPath, backupDir, worldName, worldDirectoryName, type, base, snapshot, reason, config.integrityMode, progressListener);
     }
 
     private static BackupManifest writeBackup(
@@ -82,7 +98,8 @@ public final class BackupStorage {
             BackupManifest base,
             Map<String, BackupManifest.FileState> snapshot,
             String reason,
-            BackupIntegrityMode integrityMode
+            BackupIntegrityMode integrityMode,
+            BackupProgressListener progressListener
     ) throws IOException {
         List<String> includedFiles = includedFiles(type, snapshot, base);
 
@@ -105,7 +122,7 @@ public final class BackupStorage {
         manifest.includedFiles.addAll(includedFiles);
         manifest.snapshot.putAll(snapshot);
 
-        writeBackupZipToTemp(worldPath, tempBackupFile, backupFile, manifest, includedFiles, snapshot, integrityMode);
+        writeBackupZipToTemp(worldPath, tempBackupFile, backupFile, manifest, includedFiles, snapshot, integrityMode, progressListener);
         WorldBackupMod.LOGGER.info("{} backup {} created for reason: {}", type, id, reason);
         return manifest;
     }
@@ -162,7 +179,8 @@ public final class BackupStorage {
             BackupManifest manifest,
             List<String> includedFiles,
             Map<String, BackupManifest.FileState> currentSnapshot,
-            BackupIntegrityMode integrityMode
+            BackupIntegrityMode integrityMode,
+            BackupProgressListener progressListener
     ) throws IOException {
         BackupStatus status = new BackupStatus();
         status.backupId = manifest.id;
@@ -171,6 +189,15 @@ public final class BackupStorage {
         status.createdAt = manifest.createdAt;
 
         Map<String, BackupManifest.FileState> finalSnapshot = new LinkedHashMap<>(currentSnapshot);
+        ProgressTracker progress = new ProgressTracker(
+                manifest.id,
+                manifest.type,
+                manifest.reason,
+                totalBytes(worldPath, includedFiles),
+                includedFiles.size(),
+                progressListener
+        );
+        progress.emit(BackupProgressState.STARTED, true);
         try (OutputStream fileOut = Files.newOutputStream(backupFile);
              ZipOutputStream zipOut = new ZipOutputStream(fileOut)) {
             for (String relativeName : includedFiles) {
@@ -179,14 +206,16 @@ public final class BackupStorage {
                     if (!Files.isRegularFile(file)) {
                         throw new IOException("Included file is missing: " + file);
                     }
-                    BackupManifest.FileState writtenState = writeFileEntry(file, relativeName, zipOut);
+                    BackupManifest.FileState writtenState = writeFileEntry(file, relativeName, zipOut, progress);
                     manifest.includedBytes += writtenState.size;
                     status.totalBytes += writtenState.size;
                     status.files.add(new BackupStatus.FileEntry(relativeName, writtenState.size, writtenState.sha256));
                     finalSnapshot.put(relativeName, writtenState);
+                    progress.fileCompleted();
                 } catch (IOException exception) {
                     status.completed = false;
                     status.brokenFiles.add(new BackupStatus.BrokenFile(relativeName, rootMessage(exception)));
+                    progress.emit(BackupProgressState.FAILED, true);
                     if (integrityMode == BackupIntegrityMode.STRICT) {
                         throw exception;
                     }
@@ -207,6 +236,7 @@ public final class BackupStorage {
             zipOut.write(GSON.toJson(manifest).getBytes(StandardCharsets.UTF_8));
             zipOut.closeEntry();
         }
+        progress.emit(status.completed ? BackupProgressState.COMPLETED : BackupProgressState.FAILED, true);
     }
 
     private static void writeBackupZipToTemp(
@@ -216,11 +246,12 @@ public final class BackupStorage {
             BackupManifest manifest,
             List<String> includedFiles,
             Map<String, BackupManifest.FileState> currentSnapshot,
-            BackupIntegrityMode integrityMode
+            BackupIntegrityMode integrityMode,
+            BackupProgressListener progressListener
     ) throws IOException {
         Files.deleteIfExists(tempBackupFile);
         try {
-            writeBackupZip(worldPath, tempBackupFile, manifest, includedFiles, currentSnapshot, integrityMode);
+            writeBackupZip(worldPath, tempBackupFile, manifest, includedFiles, currentSnapshot, integrityMode, progressListener);
             moveCompletedBackup(tempBackupFile, backupFile);
         } catch (IOException exception) {
             Files.deleteIfExists(tempBackupFile);
@@ -273,7 +304,7 @@ public final class BackupStorage {
         }
     }
 
-    private static BackupManifest.FileState writeFileEntry(Path file, String relativeName, ZipOutputStream zipOut) throws IOException {
+    private static BackupManifest.FileState writeFileEntry(Path file, String relativeName, ZipOutputStream zipOut, ProgressTracker progress) throws IOException {
         MessageDigest digest = newDigest();
         long bytes = 0L;
 
@@ -286,6 +317,7 @@ public final class BackupStorage {
                 zipOut.write(buffer, 0, read);
                 digest.update(buffer, 0, read);
                 bytes += read;
+                progress.bytesWritten(read);
             }
         } finally {
             zipOut.closeEntry();
@@ -323,6 +355,21 @@ public final class BackupStorage {
         return Objects.requireNonNullElse(message, current.getClass().getSimpleName());
     }
 
+    private static long totalBytes(Path worldPath, List<String> includedFiles) {
+        long total = 0L;
+        for (String relativeName : includedFiles) {
+            Path file = worldPath.resolve(relativeName);
+            if (Files.isRegularFile(file)) {
+                try {
+                    total += Files.size(file);
+                } catch (IOException ignored) {
+                    // The write loop will report the concrete failure for this file.
+                }
+            }
+        }
+        return total;
+    }
+
     private static BackupManifest findBaseManifest(List<BackupManifest> manifests, BackupType type) {
         if (type == BackupType.FULL || manifests.isEmpty()) {
             return null;
@@ -351,5 +398,67 @@ public final class BackupStorage {
                 .map(Map.Entry::getKey)
                 .sorted()
                 .toList();
+    }
+
+    private static final class ProgressTracker {
+        private static final long MIN_UPDATE_INTERVAL_MILLIS = 500L;
+
+        private final String backupId;
+        private final BackupType type;
+        private final String reason;
+        private final long totalBytes;
+        private final int totalFiles;
+        private final BackupProgressListener listener;
+        private long bytesWritten;
+        private int filesWritten;
+        private long lastUpdateMillis;
+        private int lastPercent = -1;
+
+        private ProgressTracker(
+                String backupId,
+                BackupType type,
+                String reason,
+                long totalBytes,
+                int totalFiles,
+                BackupProgressListener listener
+        ) {
+            this.backupId = backupId;
+            this.type = type;
+            this.reason = reason;
+            this.totalBytes = totalBytes;
+            this.totalFiles = totalFiles;
+            this.listener = listener;
+        }
+
+        private void bytesWritten(long bytes) {
+            bytesWritten += bytes;
+            emit(BackupProgressState.RUNNING, false);
+        }
+
+        private void fileCompleted() {
+            filesWritten++;
+            emit(BackupProgressState.RUNNING, false);
+        }
+
+        private void emit(BackupProgressState state, boolean force) {
+            long now = System.currentTimeMillis();
+            int percent = totalBytes <= 0L ? 100 : (int) Math.min(100L, (bytesWritten * 100L) / totalBytes);
+            if (!force && now - lastUpdateMillis < MIN_UPDATE_INTERVAL_MILLIS && percent == lastPercent) {
+                return;
+            }
+
+            lastUpdateMillis = now;
+            lastPercent = percent;
+            listener.onProgress(new BackupProgress(
+                    backupId,
+                    type,
+                    reason,
+                    bytesWritten,
+                    totalBytes,
+                    filesWritten,
+                    totalFiles,
+                    state
+            ));
+        }
     }
 }

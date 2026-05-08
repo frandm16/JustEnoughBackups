@@ -1,6 +1,7 @@
 package com.frandm.advancedbackups;
 
 import com.frandm.advancedbackups.backup.BackupService;
+import com.frandm.advancedbackups.backup.progress.BackupProgressBroadcaster;
 import com.frandm.advancedbackups.command.BackupCommand;
 import com.frandm.advancedbackups.config.BackupConfig;
 import com.frandm.advancedbackups.scheduler.BackupScheduler;
@@ -14,6 +15,7 @@ public class WorldBackupMod implements ModInitializer {
 
     @Override
     public void onInitialize() {
+        BackupProgressBroadcaster.registerPayloadType();
         BackupConfig.reload();
         BackupCommand.register();
         BackupScheduler.register();

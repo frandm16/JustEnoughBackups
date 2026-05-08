@@ -4,6 +4,9 @@ import com.frandm.advancedbackups.WorldBackupMod;
 import com.frandm.advancedbackups.backup.model.BackupManifest;
 import com.frandm.advancedbackups.backup.model.BackupType;
 import com.frandm.advancedbackups.backup.model.PendingRestore;
+import com.frandm.advancedbackups.backup.progress.BackupProgress;
+import com.frandm.advancedbackups.backup.progress.BackupProgressBroadcaster;
+import com.frandm.advancedbackups.backup.progress.BackupProgressState;
 import com.frandm.advancedbackups.backup.restore.RestoreService;
 import com.frandm.advancedbackups.backup.retention.RetentionPolicy;
 import com.frandm.advancedbackups.backup.storage.BackupStorage;
@@ -55,12 +58,23 @@ public final class BackupService {
                         worldDirectoryName,
                         config,
                         type,
-                        reason
+                        reason,
+                        progress -> BackupProgressBroadcaster.broadcast(server, progress)
                 );
                 RetentionPolicy.apply(worldDirectoryName, config);
                 WorldBackupMod.LOGGER.info("Backup created: {}", manifest.id);
                 return manifest;
             } catch (IOException exception) {
+                BackupProgressBroadcaster.broadcast(server, new BackupProgress(
+                        "",
+                        type,
+                        reason,
+                        0L,
+                        0L,
+                        0,
+                        0,
+                        BackupProgressState.FAILED
+                ));
                 throw new RuntimeException("Failed to create " + type + " backup.", exception);
             } finally {
                 restoreSaving(server, previousAutoSave, previousWorldSavingState);
