@@ -3,7 +3,7 @@
   "id": "advancedbackups",
   "version": "${version}",
   "name": "Advanced Backups",
-  "description": "Minimal server-side manual world backups.",
+  "description": "Server-side full, incremental, and differential world backups.",
   "authors": [
     "fran"
   ],

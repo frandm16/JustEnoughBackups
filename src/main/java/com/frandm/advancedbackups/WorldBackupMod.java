@@ -11,7 +11,10 @@ public class WorldBackupMod implements ModInitializer {
 
     @Override
     public void onInitialize() {
+        BackupConfig.reload();
         BackupCommand.register();
+        BackupScheduler.register();
+        BackupManager.registerRestoreHandler();
         LOGGER.info("Advanced Backups loaded.");
     }
 }
