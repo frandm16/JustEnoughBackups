@@ -44,4 +44,35 @@ public final class BackupScheduler {
     public static void resetTimer() {
         lastBackupMillis = 0L;
     }
+
+    public static NextBackupStatus nextBackupStatus() {
+        BackupConfig config = BackupConfig.get();
+        if (!config.automaticBackupsEnabled) {
+            return NextBackupStatus.disabled();
+        }
+
+        if (lastBackupMillis == 0L) {
+            return NextBackupStatus.readyNow();
+        }
+
+        long intervalMillis = config.automaticIntervalMinutes * 60_000L;
+        long remainingMillis = Math.max(0L, intervalMillis - (System.currentTimeMillis() - lastBackupMillis));
+        return remainingMillis == 0L
+                ? NextBackupStatus.readyNow()
+                : NextBackupStatus.waiting(remainingMillis);
+    }
+
+    public record NextBackupStatus(boolean enabled, boolean ready, long remainingMillis) {
+        private static NextBackupStatus disabled() {
+            return new NextBackupStatus(false, false, 0L);
+        }
+
+        private static NextBackupStatus readyNow() {
+            return new NextBackupStatus(true, true, 0L);
+        }
+
+        private static NextBackupStatus waiting(long remainingMillis) {
+            return new NextBackupStatus(true, false, remainingMillis);
+        }
+    }
 }

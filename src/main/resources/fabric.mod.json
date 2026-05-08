@@ -12,6 +12,9 @@
   "entrypoints": {
     "main": [
       "com.frandm.advancedbackups.WorldBackupMod"
+    ],
+    "modmenu": [
+      "com.frandm.advancedbackups.client.AdvancedBackupsModMenu"
     ]
   },
   "depends": {
@@ -19,5 +22,9 @@
     "minecraft": "26.1.2",
     "java": ">=25",
     "fabric-api": "*"
+  },
+  "suggests": {
+    "modmenu": "*",
+    "cloth-config": "*"
   }
 }

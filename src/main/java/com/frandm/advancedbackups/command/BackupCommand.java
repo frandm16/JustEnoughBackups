@@ -3,6 +3,7 @@ package com.frandm.advancedbackups.command;
 import com.frandm.advancedbackups.BackupConfig;
 import com.frandm.advancedbackups.BackupManager;
 import com.frandm.advancedbackups.BackupManifest;
+import com.frandm.advancedbackups.BackupScheduler;
 import com.frandm.advancedbackups.BackupType;
 import com.frandm.advancedbackups.WorldBackupMod;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -34,6 +35,8 @@ public final class BackupCommand {
                                         .executes(context -> create(context.getSource(), BackupType.DIFFERENTIAL))))
                         .then(Commands.literal("list")
                                 .executes(context -> list(context.getSource())))
+                        .then(Commands.literal("next")
+                                .executes(context -> next(context.getSource())))
                         .then(Commands.literal("restore")
                                 .then(Commands.argument("backupId", StringArgumentType.word())
                                         .then(Commands.literal("confirm")
@@ -90,6 +93,31 @@ public final class BackupCommand {
         }
     }
 
+    private static int next(CommandSourceStack source) {
+        BackupScheduler.NextBackupStatus status = BackupScheduler.nextBackupStatus();
+        if (!status.enabled()) {
+            source.sendSuccess(
+                    () -> Component.literal("Advanced Backups: automatic backups are disabled."),
+                    false
+            );
+            return 1;
+        }
+
+        if (status.ready()) {
+            source.sendSuccess(
+                    () -> Component.literal("Advanced Backups: the next automatic backup is ready and will start on the next scheduler check."),
+                    false
+            );
+            return 1;
+        }
+
+        source.sendSuccess(
+                () -> Component.literal("Advanced Backups: next automatic backup in " + formatDuration(status.remainingMillis()) + "."),
+                false
+        );
+        return 1;
+    }
+
     private static int restore(CommandSourceStack source, String backupId) {
         source.sendSuccess(
                 () -> Component.literal("Advanced Backups: restore started for " + backupId + "."),
@@ -133,6 +161,21 @@ public final class BackupCommand {
                 + " files=" + manifest.includedFiles.size()
                 + " base=" + base
                 + " at=" + manifest.createdAt;
+    }
+
+    private static String formatDuration(long millis) {
+        long totalSeconds = Math.max(0L, (millis + 999L) / 1000L);
+        long hours = totalSeconds / 3600L;
+        long minutes = (totalSeconds % 3600L) / 60L;
+        long seconds = totalSeconds % 60L;
+
+        if (hours > 0L) {
+            return hours + "h " + minutes + "m " + seconds + "s";
+        }
+        if (minutes > 0L) {
+            return minutes + "m " + seconds + "s";
+        }
+        return seconds + "s";
     }
 
     private static String rootMessage(Throwable throwable) {

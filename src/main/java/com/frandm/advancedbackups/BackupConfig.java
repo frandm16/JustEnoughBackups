@@ -49,6 +49,24 @@ public final class BackupConfig {
         return config;
     }
 
+    public static BackupConfig saveAndApply(BackupConfig config) {
+        config.normalize();
+        current = config;
+        save(config);
+        BackupScheduler.resetTimer();
+        return config;
+    }
+
+    public BackupConfig copy() {
+        BackupConfig copy = new BackupConfig();
+        copy.backupMode = backupMode;
+        copy.automaticBackupsEnabled = automaticBackupsEnabled;
+        copy.automaticIntervalMinutes = automaticIntervalMinutes;
+        copy.backupDirectory = backupDirectory;
+        copy.retention = retention.copy();
+        return copy;
+    }
+
     public Path resolveBackupRoot() {
         Path configured = Path.of(backupDirectory);
         if (configured.isAbsolute()) {
@@ -99,6 +117,14 @@ public final class BackupConfig {
             full = Math.max(1, full);
             incremental = Math.max(0, incremental);
             differential = Math.max(0, differential);
+        }
+
+        private Retention copy() {
+            Retention copy = new Retention();
+            copy.full = full;
+            copy.incremental = incremental;
+            copy.differential = differential;
+            return copy;
         }
     }
 }
