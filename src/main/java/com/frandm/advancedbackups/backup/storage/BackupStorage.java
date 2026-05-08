@@ -13,6 +13,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -79,6 +80,7 @@ public final class BackupStorage {
         String timestamp = LocalDateTime.now().format(BackupConstants.FILE_TIME);
         String id = type.commandName() + "-" + timestamp;
         Path backupFile = backupDir.resolve(id + ".zip");
+        Path tempBackupFile = backupDir.resolve(id + ".zip.tmp");
 
         BackupManifest manifest = new BackupManifest();
         manifest.id = id;
@@ -91,7 +93,7 @@ public final class BackupStorage {
         manifest.includedFiles.addAll(includedFiles);
         manifest.snapshot.putAll(snapshot);
 
-        writeBackupZip(worldPath, backupFile, manifest, includedFiles);
+        writeBackupZipToTemp(worldPath, tempBackupFile, backupFile, manifest, includedFiles);
         WorldBackupMod.LOGGER.info("{} backup {} created for reason: {}", type, id, reason);
         return manifest;
     }
@@ -164,6 +166,36 @@ public final class BackupStorage {
             zipOut.putNextEntry(manifestEntry);
             zipOut.write(GSON.toJson(manifest).getBytes(StandardCharsets.UTF_8));
             zipOut.closeEntry();
+        }
+    }
+
+    private static void writeBackupZipToTemp(
+            Path worldPath,
+            Path tempBackupFile,
+            Path backupFile,
+            BackupManifest manifest,
+            List<String> includedFiles
+    ) throws IOException {
+        Files.deleteIfExists(tempBackupFile);
+        try {
+            writeBackupZip(worldPath, tempBackupFile, manifest, includedFiles);
+            moveCompletedBackup(tempBackupFile, backupFile);
+        } catch (IOException exception) {
+            Files.deleteIfExists(tempBackupFile);
+            throw exception;
+        }
+    }
+
+    private static void moveCompletedBackup(Path tempBackupFile, Path backupFile) throws IOException {
+        try {
+            Files.move(
+                    tempBackupFile,
+                    backupFile,
+                    StandardCopyOption.ATOMIC_MOVE,
+                    StandardCopyOption.REPLACE_EXISTING
+            );
+        } catch (AtomicMoveNotSupportedException exception) {
+            Files.move(tempBackupFile, backupFile, StandardCopyOption.REPLACE_EXISTING);
         }
     }
 

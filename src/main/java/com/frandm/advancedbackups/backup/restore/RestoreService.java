@@ -6,6 +6,7 @@ import com.frandm.advancedbackups.backup.model.BackupManifest;
 import com.frandm.advancedbackups.backup.model.BackupType;
 import com.frandm.advancedbackups.backup.model.PendingRestore;
 import com.frandm.advancedbackups.backup.storage.BackupStorage;
+import com.frandm.advancedbackups.backup.storage.WorldSnapshotter;
 import com.frandm.advancedbackups.config.BackupConfig;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 
@@ -18,7 +19,9 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.time.LocalDateTime;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -64,7 +67,14 @@ public final class RestoreService {
         }
         pruneToSnapshot(tempRestore, chain.getLast().snapshot);
 
-        PendingRestore restore = new PendingRestore(backupId, backupDir, worldPath, tempRestore, previousWorld);
+        PendingRestore restore = new PendingRestore(
+                backupId,
+                backupDir,
+                worldPath,
+                tempRestore,
+                previousWorld,
+                Map.copyOf(chain.getLast().snapshot)
+        );
         pendingRestore = restore;
         WorldBackupMod.LOGGER.warn("Restore {} prepared. It will be applied when the server stops.", backupId);
         return restore;
@@ -115,22 +125,47 @@ public final class RestoreService {
             throw new IOException("Prepared restore directory is missing: " + restore.tempRestore());
         }
 
+        Path stagingWorld = stagingWorldPath(restore);
+        deleteIfExists(stagingWorld);
+        copyDirectory(restore.tempRestore(), stagingWorld);
+        verifySnapshot(stagingWorld, restore.snapshot());
+
         deleteIfExists(restore.previousWorld());
         if (Files.exists(restore.worldPath())) {
-            copyDirectory(restore.worldPath(), restore.previousWorld());
-            deleteIfExists(restore.worldPath());
+            copyDirectory(restore.worldPath(), restore.previousWorld(), restore.backupDir(), restore.previousWorld());
+            clearDirectoryContents(restore.worldPath(), restore.backupDir());
+        } else {
+            Files.createDirectories(restore.worldPath());
         }
-        copyDirectory(restore.tempRestore(), restore.worldPath());
+
+        copyDirectory(stagingWorld, restore.worldPath());
+        verifySnapshot(restore.worldPath(), restore.snapshot());
+        deleteIfExists(stagingWorld);
         deleteIfExists(restore.tempRestore());
     }
 
-    private static void copyDirectory(Path source, Path target) throws IOException {
+    private static Path stagingWorldPath(PendingRestore restore) {
+        Path normalizedWorld = restore.worldPath().toAbsolutePath().normalize();
+        Path parent = normalizedWorld.getParent();
+        if (parent == null) {
+            parent = normalizedWorld;
+        }
+        return parent.resolve(".advancedbackups-staging-" + restore.backupId());
+    }
+
+    private static void copyDirectory(Path source, Path target, Path... skippedRoots) throws IOException {
         Path normalizedSource = source.toAbsolutePath().normalize();
         Path normalizedTarget = target.toAbsolutePath().normalize();
+        List<Path> normalizedSkippedRoots = normalizeSkippedRoots(skippedRoots);
 
         Files.walkFileTree(normalizedSource, new SimpleFileVisitor<>() {
             @Override
             public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+                Path normalizedDir = dir.toAbsolutePath().normalize();
+                if (!normalizedDir.equals(normalizedSource) && isInsideAny(normalizedDir, normalizedSkippedRoots)) {
+                    return FileVisitResult.SKIP_SUBTREE;
+                }
+
                 Path relative = normalizedSource.relativize(dir);
                 Files.createDirectories(normalizedTarget.resolve(relative));
                 return FileVisitResult.CONTINUE;
@@ -138,11 +173,84 @@ public final class RestoreService {
 
             @Override
             public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                Path normalizedFile = file.toAbsolutePath().normalize();
+                if (isInsideAny(normalizedFile, normalizedSkippedRoots)) {
+                    return FileVisitResult.CONTINUE;
+                }
+
                 Path relative = normalizedSource.relativize(file);
                 Files.copy(file, normalizedTarget.resolve(relative), StandardCopyOption.REPLACE_EXISTING);
                 return FileVisitResult.CONTINUE;
             }
         });
+    }
+
+    private static List<Path> normalizeSkippedRoots(Path... skippedRoots) {
+        List<Path> normalized = new ArrayList<>();
+        for (Path skippedRoot : skippedRoots) {
+            if (skippedRoot != null) {
+                normalized.add(skippedRoot.toAbsolutePath().normalize());
+            }
+        }
+        return normalized;
+    }
+
+    private static boolean isInsideAny(Path path, List<Path> roots) {
+        return roots.stream().anyMatch(path::startsWith);
+    }
+
+    private static void clearDirectoryContents(Path target, Path backupRootToPreserve) throws IOException {
+        Path normalizedTarget = target.toAbsolutePath().normalize();
+        Path normalizedBackupRoot = backupRootToPreserve.toAbsolutePath().normalize();
+
+        Files.walkFileTree(normalizedTarget, new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
+                Path normalizedDir = dir.toAbsolutePath().normalize();
+                if (!normalizedDir.equals(normalizedTarget) && normalizedDir.startsWith(normalizedBackupRoot)) {
+                    return FileVisitResult.SKIP_SUBTREE;
+                }
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                Path normalizedFile = file.toAbsolutePath().normalize();
+                if (!normalizedFile.startsWith(normalizedBackupRoot)) {
+                    Files.deleteIfExists(file);
+                }
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult postVisitDirectory(Path dir, IOException exception) throws IOException {
+                if (exception != null) {
+                    throw exception;
+                }
+
+                Path normalizedDir = dir.toAbsolutePath().normalize();
+                if (!normalizedDir.equals(normalizedTarget) && !normalizedDir.startsWith(normalizedBackupRoot)) {
+                    Files.deleteIfExists(dir);
+                }
+                return FileVisitResult.CONTINUE;
+            }
+        });
+    }
+
+    private static void verifySnapshot(Path dir, Map<String, BackupManifest.FileState> expectedSnapshot) throws IOException {
+        Map<String, BackupManifest.FileState> actualSnapshot = WorldSnapshotter.snapshot(dir);
+        Set<String> missingFiles = new HashSet<>(expectedSnapshot.keySet());
+        missingFiles.removeAll(actualSnapshot.keySet());
+        if (!missingFiles.isEmpty()) {
+            throw new IOException("Restored world is missing files: " + missingFiles);
+        }
+
+        Set<String> extraFiles = new HashSet<>(actualSnapshot.keySet());
+        extraFiles.removeAll(expectedSnapshot.keySet());
+        if (!extraFiles.isEmpty()) {
+            throw new IOException("Restored world has unexpected files: " + extraFiles);
+        }
+
     }
 
     private static void pruneToSnapshot(Path targetDir, Map<String, BackupManifest.FileState> snapshot) throws IOException {
