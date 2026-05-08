@@ -1,4 +1,4 @@
-package com.frandm.advancedbackups;
+package com.frandm.advancedbackups.backup.model;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;

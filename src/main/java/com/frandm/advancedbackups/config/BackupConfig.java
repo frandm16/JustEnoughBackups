@@ -1,5 +1,9 @@
-package com.frandm.advancedbackups;
+package com.frandm.advancedbackups.config;
 
+import com.frandm.advancedbackups.WorldBackupMod;
+import com.frandm.advancedbackups.backup.BackupConstants;
+import com.frandm.advancedbackups.backup.model.BackupType;
+import com.frandm.advancedbackups.scheduler.BackupScheduler;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import net.fabricmc.loader.api.FabricLoader;
@@ -14,11 +18,11 @@ public final class BackupConfig {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static volatile BackupConfig current;
 
-    public BackupType backupMode = BackupType.FULL_BACKUPS;
+    public BackupType backupMode = BackupType.FULL;
     public boolean automaticBackupsEnabled = true;
     public int automaticIntervalMinutes = 60;
     public Retention retention = new Retention();
-    public String backupDirectory = "backups/advancedbackups";
+    public String backupDirectory = BackupConstants.DEFAULT_BACKUP_DIRECTORY;
 
     public static BackupConfig get() {
         BackupConfig config = current;
@@ -94,13 +98,13 @@ public final class BackupConfig {
 
     private void normalize() {
         if (backupMode == null) {
-            backupMode = BackupType.FULL_BACKUPS;
+            backupMode = BackupType.FULL;
         }
         if (automaticIntervalMinutes < 1) {
             automaticIntervalMinutes = 60;
         }
         if (backupDirectory == null || backupDirectory.isBlank()) {
-            backupDirectory = "backups/advancedbackups";
+            backupDirectory = BackupConstants.DEFAULT_BACKUP_DIRECTORY;
         }
         if (retention == null) {
             retention = new Retention();

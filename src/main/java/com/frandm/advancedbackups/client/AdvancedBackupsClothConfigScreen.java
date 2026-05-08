@@ -1,7 +1,8 @@
 package com.frandm.advancedbackups.client;
 
-import com.frandm.advancedbackups.BackupConfig;
-import com.frandm.advancedbackups.BackupType;
+import com.frandm.advancedbackups.backup.BackupConstants;
+import com.frandm.advancedbackups.backup.model.BackupType;
+import com.frandm.advancedbackups.config.BackupConfig;
 import me.shedaniel.clothconfig2.api.ConfigBuilder;
 import me.shedaniel.clothconfig2.api.ConfigCategory;
 import me.shedaniel.clothconfig2.api.ConfigEntryBuilder;
@@ -28,7 +29,7 @@ public final class AdvancedBackupsClothConfigScreen {
                         BackupType.class,
                         config.backupMode
                 )
-                .setDefaultValue(BackupType.FULL_BACKUPS)
+                .setDefaultValue(BackupType.FULL)
                 .setSaveConsumer(value -> config.backupMode = value)
                 .build());
 
@@ -44,7 +45,7 @@ public final class AdvancedBackupsClothConfigScreen {
                         Component.literal("Automatic interval minutes"),
                         config.automaticIntervalMinutes
                 )
-                .setDefaultValue(60)
+                .setDefaultValue(15)
                 .setMin(1)
                 .setSaveConsumer(value -> config.automaticIntervalMinutes = value)
                 .build());
@@ -80,7 +81,7 @@ public final class AdvancedBackupsClothConfigScreen {
                         Component.literal("Backup directory"),
                         config.backupDirectory
                 )
-                .setDefaultValue("backups/advancedbackups")
+                .setDefaultValue(BackupConstants.DEFAULT_BACKUP_DIRECTORY)
                 .setSaveConsumer(value -> config.backupDirectory = value)
                 .build());
 

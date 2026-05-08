@@ -1,5 +1,8 @@
-package com.frandm.advancedbackups;
+package com.frandm.advancedbackups.scheduler;
 
+import com.frandm.advancedbackups.WorldBackupMod;
+import com.frandm.advancedbackups.backup.BackupService;
+import com.frandm.advancedbackups.config.BackupConfig;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 
 public final class BackupScheduler {
@@ -27,12 +30,12 @@ public final class BackupScheduler {
                 return;
             }
 
-            if (BackupManager.isBackupRunning()) {
+            if (BackupService.isBackupRunning()) {
                 return;
             }
 
             lastBackupMillis = now;
-            BackupManager.createBackup(server, config.backupMode, "automatic")
+            BackupService.createBackup(server, config.backupMode, "automatic")
                     .exceptionally(exception -> {
                         lastBackupMillis = 0L;
                         WorldBackupMod.LOGGER.error("Automatic backup failed.", exception);
@@ -60,19 +63,5 @@ public final class BackupScheduler {
         return remainingMillis == 0L
                 ? NextBackupStatus.readyNow()
                 : NextBackupStatus.waiting(remainingMillis);
-    }
-
-    public record NextBackupStatus(boolean enabled, boolean ready, long remainingMillis) {
-        private static NextBackupStatus disabled() {
-            return new NextBackupStatus(false, false, 0L);
-        }
-
-        private static NextBackupStatus readyNow() {
-            return new NextBackupStatus(true, true, 0L);
-        }
-
-        private static NextBackupStatus waiting(long remainingMillis) {
-            return new NextBackupStatus(true, false, remainingMillis);
-        }
     }
 }

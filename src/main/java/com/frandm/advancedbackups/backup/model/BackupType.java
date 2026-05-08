@@ -1,7 +1,7 @@
-package com.frandm.advancedbackups;
+package com.frandm.advancedbackups.backup.model;
 
 public enum BackupType {
-    FULL_BACKUPS("full"),
+    FULL("full"),
     INCREMENTAL("incremental"),
     DIFFERENTIAL("differential");
 

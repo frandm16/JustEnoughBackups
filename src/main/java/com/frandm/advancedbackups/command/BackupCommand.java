@@ -1,11 +1,12 @@
 package com.frandm.advancedbackups.command;
 
-import com.frandm.advancedbackups.BackupConfig;
-import com.frandm.advancedbackups.BackupManager;
-import com.frandm.advancedbackups.BackupManifest;
-import com.frandm.advancedbackups.BackupScheduler;
-import com.frandm.advancedbackups.BackupType;
 import com.frandm.advancedbackups.WorldBackupMod;
+import com.frandm.advancedbackups.backup.BackupService;
+import com.frandm.advancedbackups.backup.model.BackupManifest;
+import com.frandm.advancedbackups.backup.model.BackupType;
+import com.frandm.advancedbackups.config.BackupConfig;
+import com.frandm.advancedbackups.scheduler.BackupScheduler;
+import com.frandm.advancedbackups.scheduler.NextBackupStatus;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.commands.CommandSourceStack;
@@ -28,7 +29,7 @@ public final class BackupCommand {
                                 .executes(context -> create(context.getSource(), BackupConfig.get().backupMode)))
                         .then(Commands.literal("create")
                                 .then(Commands.literal("full")
-                                        .executes(context -> create(context.getSource(), BackupType.FULL_BACKUPS)))
+                                        .executes(context -> create(context.getSource(), BackupType.FULL)))
                                 .then(Commands.literal("incremental")
                                         .executes(context -> create(context.getSource(), BackupType.INCREMENTAL)))
                                 .then(Commands.literal("differential")
@@ -55,7 +56,7 @@ public final class BackupCommand {
                 false
         );
 
-        BackupManager.createBackup(source.getServer(), type, "manual")
+        BackupService.createBackup(source.getServer(), type, "manual")
                 .thenAccept(manifest -> source.getServer().execute(() -> source.sendSuccess(
                         () -> Component.literal("Advanced Backups: backup created: " + manifest.id),
                         false
@@ -73,7 +74,7 @@ public final class BackupCommand {
 
     private static int list(CommandSourceStack source) {
         try {
-            List<BackupManifest> backups = BackupManager.listBackups(source.getServer());
+            List<BackupManifest> backups = BackupService.listBackups(source.getServer());
             if (backups.isEmpty()) {
                 source.sendSuccess(() -> Component.literal("Advanced Backups: no backups found."), false);
                 return 1;
@@ -94,7 +95,7 @@ public final class BackupCommand {
     }
 
     private static int next(CommandSourceStack source) {
-        BackupScheduler.NextBackupStatus status = BackupScheduler.nextBackupStatus();
+        NextBackupStatus status = BackupScheduler.nextBackupStatus();
         if (!status.enabled()) {
             source.sendSuccess(
                     () -> Component.literal("Advanced Backups: automatic backups are disabled."),
@@ -124,7 +125,7 @@ public final class BackupCommand {
                 true
         );
 
-        BackupManager.restoreBackup(source.getServer(), backupId)
+        BackupService.restoreBackup(source.getServer(), backupId)
                 .thenAccept(restore -> source.getServer().execute(() -> {
                     source.sendSuccess(
                             () -> Component.literal("Advanced Backups: restore prepared for " + restore.backupId()
@@ -144,7 +145,7 @@ public final class BackupCommand {
     }
 
     private static int reloadConfig(CommandSourceStack source) {
-        BackupConfig config = BackupManager.reloadConfig();
+        BackupConfig config = BackupService.reloadConfig();
         source.sendSuccess(
                 () -> Component.literal("Advanced Backups: config reloaded. Mode=" + config.backupMode
                         + ", automatic=" + config.automaticBackupsEnabled

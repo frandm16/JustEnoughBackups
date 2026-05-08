@@ -1,6 +1,9 @@
 package com.frandm.advancedbackups;
 
+import com.frandm.advancedbackups.backup.BackupService;
 import com.frandm.advancedbackups.command.BackupCommand;
+import com.frandm.advancedbackups.config.BackupConfig;
+import com.frandm.advancedbackups.scheduler.BackupScheduler;
 import net.fabricmc.api.ModInitializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,7 +17,7 @@ public class WorldBackupMod implements ModInitializer {
         BackupConfig.reload();
         BackupCommand.register();
         BackupScheduler.register();
-        BackupManager.registerRestoreHandler();
+        BackupService.registerRestoreHandler();
         LOGGER.info("Advanced Backups loaded.");
     }
 }
