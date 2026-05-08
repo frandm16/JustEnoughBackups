@@ -7,7 +7,7 @@ import java.util.Map;
 import java.util.Objects;
 
 public final class BackupManifest {
-    public int manifestVersion = 1;
+    public int manifestVersion = 2;
     public String id;
     public BackupType type;
     public String createdAt;
@@ -15,6 +15,9 @@ public final class BackupManifest {
     public String worldDirectoryName;
     public String baseBackupId;
     public String zipFileName;
+    public String reason;
+    public String integrityStatusEntry;
+    public BackupIntegrityMode integrityMode;
     public long includedBytes;
     public List<String> includedFiles = new ArrayList<>();
     public Map<String, FileState> snapshot = new LinkedHashMap<>();

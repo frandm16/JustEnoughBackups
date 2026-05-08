@@ -1,10 +1,12 @@
 package com.frandm.advancedbackups.backup.restore;
 
 import com.frandm.advancedbackups.WorldBackupMod;
-import com.frandm.advancedbackups.backup.BackupConstants;
 import com.frandm.advancedbackups.backup.model.BackupManifest;
+import com.frandm.advancedbackups.backup.model.BackupIntegrityMode;
+import com.frandm.advancedbackups.backup.model.BackupStatus;
 import com.frandm.advancedbackups.backup.model.BackupType;
 import com.frandm.advancedbackups.backup.model.PendingRestore;
+import com.frandm.advancedbackups.backup.retention.RetentionPolicy;
 import com.frandm.advancedbackups.backup.storage.BackupStorage;
 import com.frandm.advancedbackups.backup.storage.WorldSnapshotter;
 import com.frandm.advancedbackups.config.BackupConfig;
@@ -17,7 +19,6 @@ import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.time.LocalDateTime;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -43,11 +44,10 @@ public final class RestoreService {
             pendingRestore = null;
             try {
                 applyPreparedRestore(restore);
-                applyPreviousWorldRetention(restore.backupDir(), BackupConfig.get().previousWorldsToKeep);
+                RetentionPolicy.apply(restore.worldDirectoryName(), BackupConfig.get());
                 WorldBackupMod.LOGGER.warn(
-                        "World restore {} applied. Previous world moved to {}.",
-                        restore.backupId(),
-                        restore.previousWorld()
+                        "World restore {} applied. Previous world was saved as a normal Old_World backup.",
+                        restore.backupId()
                 );
             } catch (IOException exception) {
                 WorldBackupMod.LOGGER.error("Prepared restore failed while server was stopping.", exception);
@@ -58,7 +58,7 @@ public final class RestoreService {
     public static PendingRestore prepareRestore(Path backupDir, Path worldPath, String backupId) throws IOException {
         List<BackupManifest> chain = resolveRestoreChain(backupDir, backupId);
         Path tempRestore = backupDir.resolve(".restore-" + backupId);
-        Path previousWorld = backupDir.resolve(".previous-world-" + LocalDateTime.now().format(BackupConstants.FILE_TIME));
+        BackupManifest target = chain.getLast();
 
         deleteIfExists(tempRestore);
         Files.createDirectories(tempRestore);
@@ -72,7 +72,10 @@ public final class RestoreService {
                 backupDir,
                 worldPath,
                 tempRestore,
-                previousWorld,
+                target.worldName == null ? backupDir.getFileName().toString() : target.worldName,
+                target.worldDirectoryName == null ? backupDir.getFileName().toString() : target.worldDirectoryName,
+                target.integrityMode == null ? BackupConfig.get().integrityMode : target.integrityMode,
+                hasStatusForChain(backupDir, chain),
                 Map.copyOf(chain.getLast().snapshot)
         );
         pendingRestore = restore;
@@ -128,18 +131,24 @@ public final class RestoreService {
         Path stagingWorld = stagingWorldPath(restore);
         deleteIfExists(stagingWorld);
         copyDirectory(restore.tempRestore(), stagingWorld);
-        verifySnapshot(stagingWorld, restore.snapshot());
+        verifyRestoreSnapshot(stagingWorld, restore);
 
-        deleteIfExists(restore.previousWorld());
         if (Files.exists(restore.worldPath())) {
-            copyDirectory(restore.worldPath(), restore.previousWorld(), restore.backupDir(), restore.previousWorld());
+            BackupStorage.createBackup(
+                    restore.worldPath(),
+                    restore.worldName(),
+                    restore.worldDirectoryName(),
+                    BackupConfig.get(),
+                    BackupType.FULL,
+                    "Old_World restore " + restore.backupId()
+            );
             clearDirectoryContents(restore.worldPath(), restore.backupDir());
         } else {
             Files.createDirectories(restore.worldPath());
         }
 
         copyDirectory(stagingWorld, restore.worldPath());
-        verifySnapshot(restore.worldPath(), restore.snapshot());
+        verifyRestoreSnapshot(restore.worldPath(), restore);
         deleteIfExists(stagingWorld);
         deleteIfExists(restore.tempRestore());
     }
@@ -237,7 +246,23 @@ public final class RestoreService {
         });
     }
 
-    private static void verifySnapshot(Path dir, Map<String, BackupManifest.FileState> expectedSnapshot) throws IOException {
+    private static void verifyRestoreSnapshot(Path dir, PendingRestore restore) throws IOException {
+        try {
+            if (restore.strictSnapshotVerification()) {
+                verifySnapshotContent(dir, restore.snapshot());
+            } else {
+                verifySnapshotFileList(dir, restore.snapshot());
+            }
+        } catch (IOException exception) {
+            if (restore.integrityMode() == BackupIntegrityMode.VERY_PERMISSIVE) {
+                WorldBackupMod.LOGGER.warn("Restore integrity verification failed, but VERY_PERMISSIVE mode allows continuing.", exception);
+                return;
+            }
+            throw exception;
+        }
+    }
+
+    private static void verifySnapshotFileList(Path dir, Map<String, BackupManifest.FileState> expectedSnapshot) throws IOException {
         Map<String, BackupManifest.FileState> actualSnapshot = WorldSnapshotter.snapshot(dir);
         Set<String> missingFiles = new HashSet<>(expectedSnapshot.keySet());
         missingFiles.removeAll(actualSnapshot.keySet());
@@ -250,7 +275,35 @@ public final class RestoreService {
         if (!extraFiles.isEmpty()) {
             throw new IOException("Restored world has unexpected files: " + extraFiles);
         }
+    }
 
+    private static void verifySnapshotContent(Path dir, Map<String, BackupManifest.FileState> expectedSnapshot) throws IOException {
+        verifySnapshotFileList(dir, expectedSnapshot);
+        Map<String, BackupManifest.FileState> actualSnapshot = WorldSnapshotter.snapshot(dir);
+        for (Map.Entry<String, BackupManifest.FileState> entry : expectedSnapshot.entrySet()) {
+            BackupManifest.FileState expected = entry.getValue();
+            BackupManifest.FileState actual = actualSnapshot.get(entry.getKey());
+            if (actual == null || actual.size != expected.size || !actual.sha256.equals(expected.sha256)) {
+                throw new IOException("Restored world file does not match backup snapshot: " + entry.getKey());
+            }
+        }
+    }
+
+    private static boolean hasStatusForChain(Path backupDir, List<BackupManifest> chain) throws IOException {
+        for (BackupManifest manifest : chain) {
+            BackupStatus status = BackupStorage.readStatus(backupDir.resolve(manifest.zipFileName));
+            if (status == null) {
+                return false;
+            }
+            if (!status.completed || !status.brokenFiles.isEmpty()) {
+                BackupIntegrityMode mode = manifest.integrityMode == null ? BackupConfig.get().integrityMode : manifest.integrityMode;
+                if (mode != BackupIntegrityMode.VERY_PERMISSIVE) {
+                    throw new IOException("Backup integrity status is incomplete or damaged: " + manifest.id);
+                }
+                WorldBackupMod.LOGGER.warn("Backup {} has damaged status, but VERY_PERMISSIVE mode allows restore.", manifest.id);
+            }
+        }
+        return true;
     }
 
     private static void pruneToSnapshot(Path targetDir, Map<String, BackupManifest.FileState> snapshot) throws IOException {
@@ -281,33 +334,6 @@ public final class RestoreService {
     private static boolean isEmptyDirectory(Path dir) throws IOException {
         try (var stream = Files.list(dir)) {
             return stream.findAny().isEmpty();
-        }
-    }
-
-    private static void applyPreviousWorldRetention(Path backupDir, int keepCount) throws IOException {
-        if (!Files.isDirectory(backupDir)) {
-            return;
-        }
-
-        try (var stream = Files.list(backupDir)) {
-            List<Path> previousWorlds = stream
-                    .filter(Files::isDirectory)
-                    .filter(path -> path.getFileName().toString().startsWith(".previous-world-"))
-                    .sorted(Comparator.comparing(RestoreService::lastModifiedTime).reversed())
-                    .toList();
-
-            for (Path previousWorld : previousWorlds.stream().skip(keepCount).toList()) {
-                deleteIfExists(previousWorld);
-                WorldBackupMod.LOGGER.info("Deleted old previous-world restore safety copy: {}", previousWorld);
-            }
-        }
-    }
-
-    private static long lastModifiedTime(Path path) {
-        try {
-            return Files.getLastModifiedTime(path).toMillis();
-        } catch (IOException exception) {
-            return 0L;
         }
     }
 

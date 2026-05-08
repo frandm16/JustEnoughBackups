@@ -41,6 +41,7 @@ public final class BackupService {
         server.saveEverything(true, true, true);
         boolean previousAutoSave = server.isAutoSave();
         server.setAutoSave(false);
+        WorldSavingState previousWorldSavingState = WorldSavingState.captureAndDisable(server);
         Path worldPath = server.getWorldPath(LevelResource.ROOT);
         String worldName = BackupPaths.worldName(server, worldPath);
         String worldDirectoryName = BackupPaths.worldDirectoryName(server, worldPath);
@@ -62,7 +63,7 @@ public final class BackupService {
             } catch (IOException exception) {
                 throw new RuntimeException("Failed to create " + type + " backup.", exception);
             } finally {
-                restoreAutoSave(server, previousAutoSave);
+                restoreSaving(server, previousAutoSave, previousWorldSavingState);
                 BACKUP_RUNNING.set(false);
             }
         });
@@ -100,7 +101,10 @@ public final class BackupService {
         return config;
     }
 
-    private static void restoreAutoSave(MinecraftServer server, boolean previousAutoSave) {
-        server.execute(() -> server.setAutoSave(previousAutoSave));
+    private static void restoreSaving(MinecraftServer server, boolean previousAutoSave, WorldSavingState previousWorldSavingState) {
+        server.execute(() -> {
+            previousWorldSavingState.restore(server);
+            server.setAutoSave(previousAutoSave);
+        });
     }
 }

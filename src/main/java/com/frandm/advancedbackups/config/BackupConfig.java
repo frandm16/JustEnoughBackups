@@ -2,6 +2,7 @@ package com.frandm.advancedbackups.config;
 
 import com.frandm.advancedbackups.WorldBackupMod;
 import com.frandm.advancedbackups.backup.BackupConstants;
+import com.frandm.advancedbackups.backup.model.BackupIntegrityMode;
 import com.frandm.advancedbackups.backup.model.BackupType;
 import com.frandm.advancedbackups.scheduler.BackupScheduler;
 import com.google.gson.Gson;
@@ -25,7 +26,7 @@ public final class BackupConfig {
     public boolean backupOnServerStop = false;
     public int automaticIntervalMinutes = 15;
     public int commandPermissionLevel = 2;
-    public int previousWorldsToKeep = 2;
+    public BackupIntegrityMode integrityMode = BackupIntegrityMode.STRICT;
     public Retention retention = new Retention();
     public String backupDirectory = BackupConstants.DEFAULT_BACKUP_DIRECTORY;
 
@@ -79,7 +80,7 @@ public final class BackupConfig {
         copy.backupOnServerStop = backupOnServerStop;
         copy.automaticIntervalMinutes = automaticIntervalMinutes;
         copy.commandPermissionLevel = commandPermissionLevel;
-        copy.previousWorldsToKeep = previousWorldsToKeep;
+        copy.integrityMode = integrityMode;
         copy.backupDirectory = backupDirectory;
         copy.retention = retention.copy();
         return copy;
@@ -118,7 +119,9 @@ public final class BackupConfig {
             automaticIntervalMinutes = defaults().automaticIntervalMinutes;
         }
         commandPermissionLevel = Math.clamp(commandPermissionLevel, 0, 4);
-        previousWorldsToKeep = Math.max(0, previousWorldsToKeep);
+        if (integrityMode == null) {
+            integrityMode = BackupIntegrityMode.STRICT;
+        }
         if (backupDirectory == null || backupDirectory.isBlank()) {
             backupDirectory = BackupConstants.DEFAULT_BACKUP_DIRECTORY;
         }

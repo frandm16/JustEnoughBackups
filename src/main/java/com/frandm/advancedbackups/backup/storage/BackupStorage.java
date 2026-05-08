@@ -2,7 +2,9 @@ package com.frandm.advancedbackups.backup.storage;
 
 import com.frandm.advancedbackups.WorldBackupMod;
 import com.frandm.advancedbackups.backup.BackupConstants;
+import com.frandm.advancedbackups.backup.model.BackupIntegrityMode;
 import com.frandm.advancedbackups.backup.model.BackupManifest;
+import com.frandm.advancedbackups.backup.model.BackupStatus;
 import com.frandm.advancedbackups.backup.model.BackupType;
 import com.frandm.advancedbackups.config.BackupConfig;
 import com.google.gson.Gson;
@@ -17,12 +19,17 @@ import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
@@ -55,14 +62,15 @@ public final class BackupStorage {
                     BackupType.FULL,
                     null,
                     snapshot,
-                    reason + " base"
+                    reason + " base",
+                    config.integrityMode
             );
             manifests = new ArrayList<>(manifests);
             manifests.add(fullBase);
         }
 
         BackupManifest base = findBaseManifest(manifests, type);
-        return writeBackup(worldPath, backupDir, worldName, worldDirectoryName, type, base, snapshot, reason);
+        return writeBackup(worldPath, backupDir, worldName, worldDirectoryName, type, base, snapshot, reason, config.integrityMode);
     }
 
     private static BackupManifest writeBackup(
@@ -73,7 +81,8 @@ public final class BackupStorage {
             BackupType type,
             BackupManifest base,
             Map<String, BackupManifest.FileState> snapshot,
-            String reason
+            String reason,
+            BackupIntegrityMode integrityMode
     ) throws IOException {
         List<String> includedFiles = includedFiles(type, snapshot, base);
 
@@ -90,10 +99,13 @@ public final class BackupStorage {
         manifest.worldDirectoryName = worldDirectoryName;
         manifest.baseBackupId = base == null ? null : base.id;
         manifest.zipFileName = backupFile.getFileName().toString();
+        manifest.reason = reason;
+        manifest.integrityStatusEntry = BackupConstants.STATUS_ENTRY;
+        manifest.integrityMode = integrityMode;
         manifest.includedFiles.addAll(includedFiles);
         manifest.snapshot.putAll(snapshot);
 
-        writeBackupZipToTemp(worldPath, tempBackupFile, backupFile, manifest, includedFiles);
+        writeBackupZipToTemp(worldPath, tempBackupFile, backupFile, manifest, includedFiles, snapshot, integrityMode);
         WorldBackupMod.LOGGER.info("{} backup {} created for reason: {}", type, id, reason);
         return manifest;
     }
@@ -127,7 +139,9 @@ public final class BackupStorage {
             var entries = zipFile.entries();
             while (entries.hasMoreElements()) {
                 ZipEntry entry = entries.nextElement();
-                if (entry.isDirectory() || BackupConstants.MANIFEST_ENTRY.equals(entry.getName())) {
+                if (entry.isDirectory()
+                        || BackupConstants.MANIFEST_ENTRY.equals(entry.getName())
+                        || BackupConstants.STATUS_ENTRY.equals(entry.getName())) {
                     continue;
                 }
 
@@ -146,21 +160,47 @@ public final class BackupStorage {
             Path worldPath,
             Path backupFile,
             BackupManifest manifest,
-            List<String> includedFiles
+            List<String> includedFiles,
+            Map<String, BackupManifest.FileState> currentSnapshot,
+            BackupIntegrityMode integrityMode
     ) throws IOException {
+        BackupStatus status = new BackupStatus();
+        status.backupId = manifest.id;
+        status.type = manifest.type;
+        status.baseBackupId = manifest.baseBackupId;
+        status.createdAt = manifest.createdAt;
+
+        Map<String, BackupManifest.FileState> finalSnapshot = new LinkedHashMap<>(currentSnapshot);
         try (OutputStream fileOut = Files.newOutputStream(backupFile);
              ZipOutputStream zipOut = new ZipOutputStream(fileOut)) {
             for (String relativeName : includedFiles) {
                 Path file = worldPath.resolve(relativeName);
-                if (!Files.isRegularFile(file)) {
-                    continue;
+                try {
+                    if (!Files.isRegularFile(file)) {
+                        throw new IOException("Included file is missing: " + file);
+                    }
+                    BackupManifest.FileState writtenState = writeFileEntry(file, relativeName, zipOut);
+                    manifest.includedBytes += writtenState.size;
+                    status.totalBytes += writtenState.size;
+                    status.files.add(new BackupStatus.FileEntry(relativeName, writtenState.size, writtenState.sha256));
+                    finalSnapshot.put(relativeName, writtenState);
+                } catch (IOException exception) {
+                    status.completed = false;
+                    status.brokenFiles.add(new BackupStatus.BrokenFile(relativeName, rootMessage(exception)));
+                    if (integrityMode == BackupIntegrityMode.STRICT) {
+                        throw exception;
+                    }
+                    WorldBackupMod.LOGGER.warn("Keeping partial backup after failing to write {}", relativeName, exception);
                 }
-
-                ZipEntry entry = new ZipEntry(relativeName.replace('\\', '/'));
-                zipOut.putNextEntry(entry);
-                manifest.includedBytes += Files.copy(file, zipOut);
-                zipOut.closeEntry();
             }
+
+            manifest.snapshot.clear();
+            manifest.snapshot.putAll(finalSnapshot);
+
+            ZipEntry statusEntry = new ZipEntry(BackupConstants.STATUS_ENTRY);
+            zipOut.putNextEntry(statusEntry);
+            zipOut.write(GSON.toJson(status).getBytes(StandardCharsets.UTF_8));
+            zipOut.closeEntry();
 
             ZipEntry manifestEntry = new ZipEntry(BackupConstants.MANIFEST_ENTRY);
             zipOut.putNextEntry(manifestEntry);
@@ -174,11 +214,13 @@ public final class BackupStorage {
             Path tempBackupFile,
             Path backupFile,
             BackupManifest manifest,
-            List<String> includedFiles
+            List<String> includedFiles,
+            Map<String, BackupManifest.FileState> currentSnapshot,
+            BackupIntegrityMode integrityMode
     ) throws IOException {
         Files.deleteIfExists(tempBackupFile);
         try {
-            writeBackupZip(worldPath, tempBackupFile, manifest, includedFiles);
+            writeBackupZip(worldPath, tempBackupFile, manifest, includedFiles, currentSnapshot, integrityMode);
             moveCompletedBackup(tempBackupFile, backupFile);
         } catch (IOException exception) {
             Files.deleteIfExists(tempBackupFile);
@@ -213,6 +255,72 @@ public final class BackupStorage {
             WorldBackupMod.LOGGER.warn("Skipping unreadable backup manifest: {}", backupFile, exception);
             return null;
         }
+    }
+
+    public static BackupStatus readStatus(Path backupFile) {
+        try (ZipFile zipFile = new ZipFile(backupFile.toFile())) {
+            ZipEntry entry = zipFile.getEntry(BackupConstants.STATUS_ENTRY);
+            if (entry == null) {
+                return null;
+            }
+
+            try (Reader reader = new InputStreamReader(zipFile.getInputStream(entry), StandardCharsets.UTF_8)) {
+                return GSON.fromJson(reader, BackupStatus.class);
+            }
+        } catch (IOException | RuntimeException exception) {
+            WorldBackupMod.LOGGER.warn("Skipping unreadable backup status: {}", backupFile, exception);
+            return null;
+        }
+    }
+
+    private static BackupManifest.FileState writeFileEntry(Path file, String relativeName, ZipOutputStream zipOut) throws IOException {
+        MessageDigest digest = newDigest();
+        long bytes = 0L;
+
+        ZipEntry entry = new ZipEntry(relativeName.replace('\\', '/'));
+        zipOut.putNextEntry(entry);
+        try (var input = Files.newInputStream(file)) {
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = input.read(buffer)) != -1) {
+                zipOut.write(buffer, 0, read);
+                digest.update(buffer, 0, read);
+                bytes += read;
+            }
+        } finally {
+            zipOut.closeEntry();
+        }
+
+        return new BackupManifest.FileState(
+                bytes,
+                Files.getLastModifiedTime(file).toMillis(),
+                toHex(digest.digest())
+        );
+    }
+
+    private static MessageDigest newDigest() {
+        try {
+            return MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is not available.", exception);
+        }
+    }
+
+    private static String toHex(byte[] bytes) {
+        StringBuilder builder = new StringBuilder(bytes.length * 2);
+        for (byte value : bytes) {
+            builder.append(String.format(Locale.ROOT, "%02x", value));
+        }
+        return builder.toString();
+    }
+
+    private static String rootMessage(Throwable throwable) {
+        Throwable current = throwable;
+        while (current.getCause() != null) {
+            current = current.getCause();
+        }
+        String message = current.getMessage();
+        return Objects.requireNonNullElse(message, current.getClass().getSimpleName());
     }
 
     private static BackupManifest findBaseManifest(List<BackupManifest> manifests, BackupType type) {

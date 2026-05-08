@@ -1,5 +1,6 @@
 package com.frandm.advancedbackups.client;
 
+import com.frandm.advancedbackups.backup.model.BackupIntegrityMode;
 import com.frandm.advancedbackups.backup.model.BackupType;
 import com.frandm.advancedbackups.config.BackupConfig;
 import me.shedaniel.clothconfig2.api.ConfigBuilder;
@@ -100,14 +101,17 @@ public final class AdvancedBackupsClothConfigScreen {
                 .setSaveConsumer(value -> config.commandPermissionLevel = value)
                 .build());
 
-        category.addEntry(entries.startIntField(
-                        Component.literal("Keep previous worlds"),
-                        config.previousWorldsToKeep
+        category.addEntry(entries.startEnumSelector(
+                        Component.literal("Integrity mode"),
+                        BackupIntegrityMode.class,
+                        config.integrityMode
                 )
-                .setDefaultValue(defaults.previousWorldsToKeep)
-                .setMin(0)
-                .setTooltip(Component.literal("Number of old world folders kept after restores. These are safety copies created before replacing the world."))
-                .setSaveConsumer(value -> config.previousWorldsToKeep = value)
+                .setDefaultValue(defaults.integrityMode)
+                .setTooltip(Component.literal("""
+                        STRICT: failed backups are discarded and damaged restores are blocked.
+                        PERMISSIVE: partial backups may remain, but damaged restores are blocked.
+                        VERY_PERMISSIVE: damaged restores can continue with a warning. Use only for manual recovery."""))
+                .setSaveConsumer(value -> config.integrityMode = value)
                 .build());
 
         category.addEntry(entries.startIntField(

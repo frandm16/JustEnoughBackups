@@ -8,7 +8,10 @@ public record PendingRestore(
         Path backupDir,
         Path worldPath,
         Path tempRestore,
-        Path previousWorld,
+        String worldName,
+        String worldDirectoryName,
+        BackupIntegrityMode integrityMode,
+        boolean strictSnapshotVerification,
         Map<String, BackupManifest.FileState> snapshot
 ) {
 }
