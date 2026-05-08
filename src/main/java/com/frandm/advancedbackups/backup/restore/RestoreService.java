@@ -6,6 +6,7 @@ import com.frandm.advancedbackups.backup.model.BackupManifest;
 import com.frandm.advancedbackups.backup.model.BackupType;
 import com.frandm.advancedbackups.backup.model.PendingRestore;
 import com.frandm.advancedbackups.backup.storage.BackupStorage;
+import com.frandm.advancedbackups.config.BackupConfig;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 
 import java.io.IOException;
@@ -39,6 +40,7 @@ public final class RestoreService {
             pendingRestore = null;
             try {
                 applyPreparedRestore(restore);
+                applyPreviousWorldRetention(restore.backupDir(), BackupConfig.get().previousWorldsToKeep);
                 WorldBackupMod.LOGGER.warn(
                         "World restore {} applied. Previous world moved to {}.",
                         restore.backupId(),
@@ -62,7 +64,7 @@ public final class RestoreService {
         }
         pruneToSnapshot(tempRestore, chain.getLast().snapshot);
 
-        PendingRestore restore = new PendingRestore(backupId, worldPath, tempRestore, previousWorld);
+        PendingRestore restore = new PendingRestore(backupId, backupDir, worldPath, tempRestore, previousWorld);
         pendingRestore = restore;
         WorldBackupMod.LOGGER.warn("Restore {} prepared. It will be applied when the server stops.", backupId);
         return restore;
@@ -148,6 +150,33 @@ public final class RestoreService {
     private static boolean isEmptyDirectory(Path dir) throws IOException {
         try (var stream = Files.list(dir)) {
             return stream.findAny().isEmpty();
+        }
+    }
+
+    private static void applyPreviousWorldRetention(Path backupDir, int keepCount) throws IOException {
+        if (!Files.isDirectory(backupDir)) {
+            return;
+        }
+
+        try (var stream = Files.list(backupDir)) {
+            List<Path> previousWorlds = stream
+                    .filter(Files::isDirectory)
+                    .filter(path -> path.getFileName().toString().startsWith(".previous-world-"))
+                    .sorted(Comparator.comparing(RestoreService::lastModifiedTime).reversed())
+                    .toList();
+
+            for (Path previousWorld : previousWorlds.stream().skip(keepCount).toList()) {
+                deleteIfExists(previousWorld);
+                WorldBackupMod.LOGGER.info("Deleted old previous-world restore safety copy: {}", previousWorld);
+            }
+        }
+    }
+
+    private static long lastModifiedTime(Path path) {
+        try {
+            return Files.getLastModifiedTime(path).toMillis();
+        } catch (IOException exception) {
+            return 0L;
         }
     }
 

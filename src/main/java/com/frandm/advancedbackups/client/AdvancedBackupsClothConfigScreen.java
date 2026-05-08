@@ -30,7 +30,10 @@ public final class AdvancedBackupsClothConfigScreen {
                         config.backupMode
                 )
                 .setDefaultValue(defaults.backupMode)
-                .setTooltip(Component.literal("FULL: copies the whole world every time. Safest and easiest to restore.\nPARTIAL: copies only files changed since the latest backup. Smaller, but depends on the backup chain.\nDIFFERENTIAL: copies files changed since the latest full backup. Larger than partial, simpler to restore."))
+                .setTooltip(Component.literal("""
+                        FULL: copies the whole world every time. Safest and easiest to restore.
+                        PARTIAL: copies only files changed since the latest backup. Smaller, but depends on the backup chain.
+                        DIFFERENTIAL: copies files changed since the latest full backup. Larger than partial, simpler to restore."""))
                 .setSaveConsumer(value -> config.backupMode = value)
                 .build());
 
@@ -78,6 +81,33 @@ public final class AdvancedBackupsClothConfigScreen {
                 .setMin(1)
                 .setTooltip(Component.literal("Minutes between automatic backups. The timer resets when this value is saved."))
                 .setSaveConsumer(value -> config.automaticIntervalMinutes = value)
+                .build());
+
+        category.addEntry(entries.startIntField(
+                        Component.literal("Command permission level"),
+                        config.commandPermissionLevel
+                )
+                .setDefaultValue(defaults.commandPermissionLevel)
+                .setMin(0)
+                .setMax(4)
+                .setTooltip(Component.literal("""
+                        Minimum Minecraft permission level required to use /advancedbackups.
+                        0: anyone can use it.
+                        1: low-level permissions.
+                        2: operators/gamemasters. Default.
+                        3: admins.
+                        4: server owners/highest permission level."""))
+                .setSaveConsumer(value -> config.commandPermissionLevel = value)
+                .build());
+
+        category.addEntry(entries.startIntField(
+                        Component.literal("Keep previous worlds"),
+                        config.previousWorldsToKeep
+                )
+                .setDefaultValue(defaults.previousWorldsToKeep)
+                .setMin(0)
+                .setTooltip(Component.literal("Number of old world folders kept after restores. These are safety copies created before replacing the world."))
+                .setSaveConsumer(value -> config.previousWorldsToKeep = value)
                 .build());
 
         category.addEntry(entries.startIntField(

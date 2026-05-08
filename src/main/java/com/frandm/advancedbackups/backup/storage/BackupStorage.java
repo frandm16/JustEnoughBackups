@@ -44,8 +44,36 @@ public final class BackupStorage {
         Files.createDirectories(backupDir);
 
         List<BackupManifest> manifests = readManifests(backupDir);
-        BackupManifest base = findBaseManifest(manifests, type);
         Map<String, BackupManifest.FileState> snapshot = WorldSnapshotter.snapshot(worldPath);
+        if (type != BackupType.FULL && hasNoFullBackup(manifests)) {
+            BackupManifest fullBase = writeBackup(
+                    worldPath,
+                    backupDir,
+                    worldName,
+                    worldDirectoryName,
+                    BackupType.FULL,
+                    null,
+                    snapshot,
+                    reason + " base"
+            );
+            manifests = new ArrayList<>(manifests);
+            manifests.add(fullBase);
+        }
+
+        BackupManifest base = findBaseManifest(manifests, type);
+        return writeBackup(worldPath, backupDir, worldName, worldDirectoryName, type, base, snapshot, reason);
+    }
+
+    private static BackupManifest writeBackup(
+            Path worldPath,
+            Path backupDir,
+            String worldName,
+            String worldDirectoryName,
+            BackupType type,
+            BackupManifest base,
+            Map<String, BackupManifest.FileState> snapshot,
+            String reason
+    ) throws IOException {
         List<String> includedFiles = includedFiles(type, snapshot, base);
 
         String timestamp = LocalDateTime.now().format(BackupConstants.FILE_TIME);
@@ -66,6 +94,10 @@ public final class BackupStorage {
         writeBackupZip(worldPath, backupFile, manifest, includedFiles);
         WorldBackupMod.LOGGER.info("{} backup {} created for reason: {}", type, id, reason);
         return manifest;
+    }
+
+    private static boolean hasNoFullBackup(List<BackupManifest> manifests) {
+        return manifests.stream().noneMatch(manifest -> manifest.type == BackupType.FULL);
     }
 
     public static List<BackupManifest> readManifests(Path backupDir) throws IOException {

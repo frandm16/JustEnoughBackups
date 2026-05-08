@@ -24,6 +24,8 @@ public final class BackupConfig {
     public boolean backupOnServerStart = false;
     public boolean backupOnServerStop = false;
     public int automaticIntervalMinutes = 15;
+    public int commandPermissionLevel = 2;
+    public int previousWorldsToKeep = 2;
     public Retention retention = new Retention();
     public String backupDirectory = BackupConstants.DEFAULT_BACKUP_DIRECTORY;
 
@@ -76,6 +78,8 @@ public final class BackupConfig {
         copy.backupOnServerStart = backupOnServerStart;
         copy.backupOnServerStop = backupOnServerStop;
         copy.automaticIntervalMinutes = automaticIntervalMinutes;
+        copy.commandPermissionLevel = commandPermissionLevel;
+        copy.previousWorldsToKeep = previousWorldsToKeep;
         copy.backupDirectory = backupDirectory;
         copy.retention = retention.copy();
         return copy;
@@ -113,6 +117,8 @@ public final class BackupConfig {
         if (automaticIntervalMinutes < 1) {
             automaticIntervalMinutes = defaults().automaticIntervalMinutes;
         }
+        commandPermissionLevel = Math.clamp(commandPermissionLevel, 0, 4);
+        previousWorldsToKeep = Math.max(0, previousWorldsToKeep);
         if (backupDirectory == null || backupDirectory.isBlank()) {
             backupDirectory = BackupConstants.DEFAULT_BACKUP_DIRECTORY;
         }

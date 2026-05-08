@@ -12,7 +12,8 @@ import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
-import net.minecraft.server.permissions.Permissions;
+import net.minecraft.server.permissions.Permission;
+import net.minecraft.server.permissions.PermissionLevel;
 
 import java.io.IOException;
 import java.util.List;
@@ -24,7 +25,7 @@ public final class BackupCommand {
     public static void register() {
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
                 dispatcher.register(Commands.literal("advancedbackups")
-                        .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
+                        .requires(BackupCommand::hasConfiguredPermission)
                         .then(Commands.literal("now")
                                 .executes(context -> create(context.getSource(), BackupConfig.get().backupMode)))
                         .then(Commands.literal("create")
@@ -48,6 +49,11 @@ public final class BackupCommand {
                         .then(Commands.literal("config")
                                 .then(Commands.literal("reload")
                                         .executes(context -> reloadConfig(context.getSource()))))));
+    }
+
+    private static boolean hasConfiguredPermission(CommandSourceStack source) {
+        PermissionLevel level = PermissionLevel.byId(BackupConfig.get().commandPermissionLevel);
+        return source.permissions().hasPermission(new Permission.HasCommandLevel(level));
     }
 
     private static int create(CommandSourceStack source, BackupType type) {
@@ -149,7 +155,8 @@ public final class BackupCommand {
         source.sendSuccess(
                 () -> Component.literal("Advanced Backups: config reloaded. Mode=" + config.backupMode
                         + ", automatic=" + config.automaticBackupsEnabled
-                        + ", interval=" + config.automaticIntervalMinutes + "m"),
+                        + ", interval=" + config.automaticIntervalMinutes + "m"
+                        + ", permissionLevel=" + config.commandPermissionLevel),
                 false
         );
         return 1;
