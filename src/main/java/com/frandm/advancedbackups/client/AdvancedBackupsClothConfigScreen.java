@@ -1,6 +1,5 @@
 package com.frandm.advancedbackups.client;
 
-import com.frandm.advancedbackups.backup.BackupConstants;
 import com.frandm.advancedbackups.backup.model.BackupType;
 import com.frandm.advancedbackups.config.BackupConfig;
 import me.shedaniel.clothconfig2.api.ConfigBuilder;
@@ -15,6 +14,7 @@ public final class AdvancedBackupsClothConfigScreen {
 
     public static Screen create(Screen parent) {
         BackupConfig config = BackupConfig.get().copy();
+        BackupConfig defaults = BackupConfig.defaults();
 
         ConfigBuilder builder = ConfigBuilder.create()
                 .setParentScreen(parent)
@@ -29,7 +29,7 @@ public final class AdvancedBackupsClothConfigScreen {
                         BackupType.class,
                         config.backupMode
                 )
-                .setDefaultValue(BackupType.FULL)
+                .setDefaultValue(defaults.backupMode)
                 .setTooltip(Component.literal("FULL: copies the whole world every time. Safest and easiest to restore.\nPARTIAL: copies only files changed since the latest backup. Smaller, but depends on the backup chain.\nDIFFERENTIAL: copies files changed since the latest full backup. Larger than partial, simpler to restore."))
                 .setSaveConsumer(value -> config.backupMode = value)
                 .build());
@@ -38,16 +38,34 @@ public final class AdvancedBackupsClothConfigScreen {
                         Component.literal("Automatic backups"),
                         config.automaticBackupsEnabled
                 )
-                .setDefaultValue(true)
+                .setDefaultValue(defaults.automaticBackupsEnabled)
                 .setTooltip(Component.literal("When enabled, the server creates backups automatically at the configured interval."))
                 .setSaveConsumer(value -> config.automaticBackupsEnabled = value)
+                .build());
+
+        category.addEntry(entries.startBooleanToggle(
+                        Component.literal("Backup when world starts"),
+                        config.backupOnServerStart
+                )
+                .setDefaultValue(defaults.backupOnServerStart)
+                .setTooltip(Component.literal("Creates one backup when the server finishes starting the world. Disabled by default."))
+                .setSaveConsumer(value -> config.backupOnServerStart = value)
+                .build());
+
+        category.addEntry(entries.startBooleanToggle(
+                        Component.literal("Backup when world closes"),
+                        config.backupOnServerStop
+                )
+                .setDefaultValue(defaults.backupOnServerStop)
+                .setTooltip(Component.literal("Creates one backup while the server is shutting down. Shutdown waits for it to finish. Disabled by default."))
+                .setSaveConsumer(value -> config.backupOnServerStop = value)
                 .build());
 
         category.addEntry(entries.startIntField(
                         Component.literal("Automatic interval minutes"),
                         config.automaticIntervalMinutes
                 )
-                .setDefaultValue(15)
+                .setDefaultValue(defaults.automaticIntervalMinutes)
                 .setMin(1)
                 .setTooltip(Component.literal("Minutes between automatic backups. The timer resets when this value is saved."))
                 .setSaveConsumer(value -> config.automaticIntervalMinutes = value)
@@ -57,7 +75,7 @@ public final class AdvancedBackupsClothConfigScreen {
                         Component.literal("Keep full backups"),
                         config.retention.full
                 )
-                .setDefaultValue(5)
+                .setDefaultValue(defaults.retention.full)
                 .setMin(1)
                 .setTooltip(Component.literal("Maximum number of full backups to keep. At least one full backup is always retained."))
                 .setSaveConsumer(value -> config.retention.full = value)
@@ -67,7 +85,7 @@ public final class AdvancedBackupsClothConfigScreen {
                         Component.literal("Keep partial backups"),
                         config.retention.incremental
                 )
-                .setDefaultValue(20)
+                .setDefaultValue(defaults.retention.incremental)
                 .setMin(0)
                 .setTooltip(Component.literal("Maximum number of partial backups to keep. Required base backups are protected."))
                 .setSaveConsumer(value -> config.retention.incremental = value)
@@ -77,7 +95,7 @@ public final class AdvancedBackupsClothConfigScreen {
                         Component.literal("Keep differential backups"),
                         config.retention.differential
                 )
-                .setDefaultValue(10)
+                .setDefaultValue(defaults.retention.differential)
                 .setMin(0)
                 .setTooltip(Component.literal("Maximum number of differential backups to keep. Required full backups are protected."))
                 .setSaveConsumer(value -> config.retention.differential = value)
@@ -87,7 +105,7 @@ public final class AdvancedBackupsClothConfigScreen {
                         Component.literal("Backup directory"),
                         config.backupDirectory
                 )
-                .setDefaultValue(BackupConstants.DEFAULT_BACKUP_DIRECTORY)
+                .setDefaultValue(defaults.backupDirectory)
                 .setTooltip(Component.literal("Directory where backups are stored. Relative paths are resolved from the game directory."))
                 .setSaveConsumer(value -> config.backupDirectory = value)
                 .build());

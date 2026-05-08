@@ -20,7 +20,9 @@ public final class BackupConfig {
 
     public BackupType backupMode = BackupType.FULL;
     public boolean automaticBackupsEnabled = true;
-    public int automaticIntervalMinutes = 60;
+    public boolean backupOnServerStart = false;
+    public boolean backupOnServerStop = false;
+    public int automaticIntervalMinutes = 15;
     public Retention retention = new Retention();
     public String backupDirectory = BackupConstants.DEFAULT_BACKUP_DIRECTORY;
 
@@ -30,6 +32,10 @@ public final class BackupConfig {
             config = reload();
         }
         return config;
+    }
+
+    public static BackupConfig defaults() {
+        return new BackupConfig();
     }
 
     public static BackupConfig reload() {
@@ -65,6 +71,8 @@ public final class BackupConfig {
         BackupConfig copy = new BackupConfig();
         copy.backupMode = backupMode;
         copy.automaticBackupsEnabled = automaticBackupsEnabled;
+        copy.backupOnServerStart = backupOnServerStart;
+        copy.backupOnServerStop = backupOnServerStop;
         copy.automaticIntervalMinutes = automaticIntervalMinutes;
         copy.backupDirectory = backupDirectory;
         copy.retention = retention.copy();
@@ -101,7 +109,7 @@ public final class BackupConfig {
             backupMode = BackupType.FULL;
         }
         if (automaticIntervalMinutes < 1) {
-            automaticIntervalMinutes = 60;
+            automaticIntervalMinutes = defaults().automaticIntervalMinutes;
         }
         if (backupDirectory == null || backupDirectory.isBlank()) {
             backupDirectory = BackupConstants.DEFAULT_BACKUP_DIRECTORY;
