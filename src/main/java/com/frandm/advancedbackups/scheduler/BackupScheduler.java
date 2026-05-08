@@ -4,6 +4,8 @@ import com.frandm.advancedbackups.WorldBackupMod;
 import com.frandm.advancedbackups.backup.BackupService;
 import com.frandm.advancedbackups.config.BackupConfig;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.MinecraftServer;
 
 public final class BackupScheduler {
     private static long ticksUntilNextCheck = 20L;
@@ -35,13 +37,25 @@ public final class BackupScheduler {
             }
 
             lastBackupMillis = now;
+            sendActionBar(server, "Advanced Backups: Initializing automatic backup...");
             BackupService.createBackup(server, config.backupMode, "automatic")
-                    .exceptionally(exception -> {
-                        lastBackupMillis = 0L;
-                        WorldBackupMod.LOGGER.error("Automatic backup failed.", exception);
-                        return null;
+                    .whenComplete((manifest, exception) -> {
+                        if (exception != null) {
+                            WorldBackupMod.LOGGER.error("Automatic backup failed.", exception);
+                            server.execute(() -> sendActionBar(server, "Advanced Backups: automatic backup failed."));
+                            return;
+                        }
+
+                        server.execute(() -> sendActionBar(
+                                server,
+                                "Advanced Backups: automatic backup completed: " + manifest.id
+                        ));
                     });
         });
+    }
+
+    private static void sendActionBar(MinecraftServer server, String message) {
+        server.getPlayerList().broadcastSystemMessage(Component.literal(message), true);
     }
 
     public static void resetTimer() {

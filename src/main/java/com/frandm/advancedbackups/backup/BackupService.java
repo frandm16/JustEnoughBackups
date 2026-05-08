@@ -40,13 +40,21 @@ public final class BackupService {
 
         server.saveEverything(true, true, true);
         Path worldPath = server.getWorldPath(LevelResource.ROOT);
-        String worldName = BackupPaths.worldName(worldPath);
+        String worldName = BackupPaths.worldName(server, worldPath);
+        String worldDirectoryName = BackupPaths.worldDirectoryName(server, worldPath);
         BackupConfig config = BackupConfig.get();
 
         return CompletableFuture.supplyAsync(() -> {
             try {
-                BackupManifest manifest = BackupStorage.createBackup(worldPath, worldName, config, type, reason);
-                RetentionPolicy.apply(worldName, config);
+                BackupManifest manifest = BackupStorage.createBackup(
+                        worldPath,
+                        worldName,
+                        worldDirectoryName,
+                        config,
+                        type,
+                        reason
+                );
+                RetentionPolicy.apply(worldDirectoryName, config);
                 WorldBackupMod.LOGGER.info("Backup created: {}", manifest.id);
                 return manifest;
             } catch (IOException exception) {

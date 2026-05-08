@@ -12,6 +12,7 @@ public final class BackupManifest {
     public BackupType type;
     public String createdAt;
     public String worldName;
+    public String worldDirectoryName;
     public String baseBackupId;
     public String zipFileName;
     public long includedBytes;

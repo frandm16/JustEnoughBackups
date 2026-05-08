@@ -35,11 +35,12 @@ public final class BackupStorage {
     public static BackupManifest createBackup(
             Path worldPath,
             String worldName,
+            String worldDirectoryName,
             BackupConfig config,
             BackupType type,
             String reason
     ) throws IOException {
-        Path backupDir = config.resolveBackupRoot().resolve(worldName);
+        Path backupDir = config.resolveBackupRoot().resolve(worldDirectoryName);
         Files.createDirectories(backupDir);
 
         List<BackupManifest> manifests = readManifests(backupDir);
@@ -56,6 +57,7 @@ public final class BackupStorage {
         manifest.type = type;
         manifest.createdAt = Instant.now().toString();
         manifest.worldName = worldName;
+        manifest.worldDirectoryName = worldDirectoryName;
         manifest.baseBackupId = base == null ? null : base.id;
         manifest.zipFileName = backupFile.getFileName().toString();
         manifest.includedFiles.addAll(includedFiles);
