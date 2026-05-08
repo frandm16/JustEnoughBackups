@@ -117,9 +117,32 @@ public final class RestoreService {
 
         deleteIfExists(restore.previousWorld());
         if (Files.exists(restore.worldPath())) {
-            Files.move(restore.worldPath(), restore.previousWorld(), StandardCopyOption.REPLACE_EXISTING);
+            copyDirectory(restore.worldPath(), restore.previousWorld());
+            deleteIfExists(restore.worldPath());
         }
-        Files.move(restore.tempRestore(), restore.worldPath(), StandardCopyOption.REPLACE_EXISTING);
+        copyDirectory(restore.tempRestore(), restore.worldPath());
+        deleteIfExists(restore.tempRestore());
+    }
+
+    private static void copyDirectory(Path source, Path target) throws IOException {
+        Path normalizedSource = source.toAbsolutePath().normalize();
+        Path normalizedTarget = target.toAbsolutePath().normalize();
+
+        Files.walkFileTree(normalizedSource, new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+                Path relative = normalizedSource.relativize(dir);
+                Files.createDirectories(normalizedTarget.resolve(relative));
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                Path relative = normalizedSource.relativize(file);
+                Files.copy(file, normalizedTarget.resolve(relative), StandardCopyOption.REPLACE_EXISTING);
+                return FileVisitResult.CONTINUE;
+            }
+        });
     }
 
     private static void pruneToSnapshot(Path targetDir, Map<String, BackupManifest.FileState> snapshot) throws IOException {

@@ -5,9 +5,10 @@
   "name": "Advanced Backups",
   "description": "Server-side full, incremental, and differential world backups.",
   "authors": [
-    "fran"
+    "frandm16"
   ],
   "license": "MIT",
+  "icon": "assets/advancedbackups/icon.png",
   "environment": "*",
   "entrypoints": {
     "main": [
