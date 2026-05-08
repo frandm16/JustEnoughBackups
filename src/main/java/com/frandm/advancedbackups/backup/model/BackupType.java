@@ -1,18 +1,25 @@
 package com.frandm.advancedbackups.backup.model;
 
 public enum BackupType {
-    FULL("full"),
-    INCREMENTAL("incremental"),
-    DIFFERENTIAL("differential");
+    FULL("full", "FULL"),
+    INCREMENTAL("incremental", "PARTIAL"),
+    DIFFERENTIAL("differential", "DIFFERENTIAL");
 
     private final String commandName;
+    private final String displayName;
 
-    BackupType(String commandName) {
+    BackupType(String commandName, String displayName) {
         this.commandName = commandName;
+        this.displayName = displayName;
     }
 
     public String commandName() {
         return commandName;
+    }
+
+    @Override
+    public String toString() {
+        return displayName;
     }
 
     public static BackupType fromCommandName(String value) {

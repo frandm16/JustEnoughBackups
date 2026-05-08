@@ -30,6 +30,7 @@ public final class AdvancedBackupsClothConfigScreen {
                         config.backupMode
                 )
                 .setDefaultValue(BackupType.FULL)
+                .setTooltip(Component.literal("FULL: copies the whole world every time. Safest and easiest to restore.\nPARTIAL: copies only files changed since the latest backup. Smaller, but depends on the backup chain.\nDIFFERENTIAL: copies files changed since the latest full backup. Larger than partial, simpler to restore."))
                 .setSaveConsumer(value -> config.backupMode = value)
                 .build());
 
@@ -38,6 +39,7 @@ public final class AdvancedBackupsClothConfigScreen {
                         config.automaticBackupsEnabled
                 )
                 .setDefaultValue(true)
+                .setTooltip(Component.literal("When enabled, the server creates backups automatically at the configured interval."))
                 .setSaveConsumer(value -> config.automaticBackupsEnabled = value)
                 .build());
 
@@ -47,33 +49,37 @@ public final class AdvancedBackupsClothConfigScreen {
                 )
                 .setDefaultValue(15)
                 .setMin(1)
+                .setTooltip(Component.literal("Minutes between automatic backups. The timer resets when this value is saved."))
                 .setSaveConsumer(value -> config.automaticIntervalMinutes = value)
                 .build());
 
         category.addEntry(entries.startIntField(
-                        Component.literal("Retain full backups"),
+                        Component.literal("Keep full backups"),
                         config.retention.full
                 )
                 .setDefaultValue(5)
                 .setMin(1)
+                .setTooltip(Component.literal("Maximum number of full backups to keep. At least one full backup is always retained."))
                 .setSaveConsumer(value -> config.retention.full = value)
                 .build());
 
         category.addEntry(entries.startIntField(
-                        Component.literal("Retain incremental backups"),
+                        Component.literal("Keep partial backups"),
                         config.retention.incremental
                 )
                 .setDefaultValue(20)
                 .setMin(0)
+                .setTooltip(Component.literal("Maximum number of partial backups to keep. Required base backups are protected."))
                 .setSaveConsumer(value -> config.retention.incremental = value)
                 .build());
 
         category.addEntry(entries.startIntField(
-                        Component.literal("Retain differential backups"),
+                        Component.literal("Keep differential backups"),
                         config.retention.differential
                 )
                 .setDefaultValue(10)
                 .setMin(0)
+                .setTooltip(Component.literal("Maximum number of differential backups to keep. Required full backups are protected."))
                 .setSaveConsumer(value -> config.retention.differential = value)
                 .build());
 
@@ -82,6 +88,7 @@ public final class AdvancedBackupsClothConfigScreen {
                         config.backupDirectory
                 )
                 .setDefaultValue(BackupConstants.DEFAULT_BACKUP_DIRECTORY)
+                .setTooltip(Component.literal("Directory where backups are stored. Relative paths are resolved from the game directory."))
                 .setSaveConsumer(value -> config.backupDirectory = value)
                 .build());
 
