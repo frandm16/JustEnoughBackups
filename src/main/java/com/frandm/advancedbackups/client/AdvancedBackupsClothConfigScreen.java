@@ -6,6 +6,10 @@ import com.frandm.advancedbackups.config.BackupConfig;
 import me.shedaniel.clothconfig2.api.ConfigBuilder;
 import me.shedaniel.clothconfig2.api.ConfigCategory;
 import me.shedaniel.clothconfig2.api.ConfigEntryBuilder;
+import me.shedaniel.clothconfig2.gui.entries.TextListEntry;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
@@ -22,10 +26,14 @@ public final class AdvancedBackupsClothConfigScreen {
                 .setTitle(Component.literal("Advanced Backups"));
         builder.setSavingRunnable(() -> BackupConfig.saveAndApply(config));
 
-        ConfigCategory category = builder.getOrCreateCategory(Component.literal("Backups"));
+        ConfigCategory backups = builder.getOrCreateCategory(Component.literal("Backups"));
+        ConfigCategory retention = builder.getOrCreateCategory(Component.literal("Retention"));
+        ConfigCategory permissions = builder.getOrCreateCategory(Component.literal("Permissions"));
+        ConfigCategory integrity = builder.getOrCreateCategory(Component.literal("Integrity"));
+        ConfigCategory popup = builder.getOrCreateCategory(Component.literal("Popup"));
         ConfigEntryBuilder entries = builder.entryBuilder();
 
-        category.addEntry(entries.startEnumSelector(
+        backups.addEntry(entries.startEnumSelector(
                         Component.literal("Backup mode"),
                         BackupType.class,
                         config.backupMode
@@ -38,7 +46,7 @@ public final class AdvancedBackupsClothConfigScreen {
                 .setSaveConsumer(value -> config.backupMode = value)
                 .build());
 
-        category.addEntry(entries.startBooleanToggle(
+        backups.addEntry(entries.startBooleanToggle(
                         Component.literal("Automatic backups"),
                         config.automaticBackupsEnabled
                 )
@@ -47,7 +55,7 @@ public final class AdvancedBackupsClothConfigScreen {
                 .setSaveConsumer(value -> config.automaticBackupsEnabled = value)
                 .build());
 
-        category.addEntry(entries.startBooleanToggle(
+        backups.addEntry(entries.startBooleanToggle(
                         Component.literal("Pause automatic backups when no players joined"),
                         config.pauseAutomaticBackupsWithoutPlayers
                 )
@@ -56,7 +64,7 @@ public final class AdvancedBackupsClothConfigScreen {
                 .setSaveConsumer(value -> config.pauseAutomaticBackupsWithoutPlayers = value)
                 .build());
 
-        category.addEntry(entries.startBooleanToggle(
+        backups.addEntry(entries.startBooleanToggle(
                         Component.literal("Backup when world starts"),
                         config.backupOnServerStart
                 )
@@ -65,7 +73,7 @@ public final class AdvancedBackupsClothConfigScreen {
                 .setSaveConsumer(value -> config.backupOnServerStart = value)
                 .build());
 
-        category.addEntry(entries.startBooleanToggle(
+        backups.addEntry(entries.startBooleanToggle(
                         Component.literal("Backup when world closes"),
                         config.backupOnServerStop
                 )
@@ -74,7 +82,7 @@ public final class AdvancedBackupsClothConfigScreen {
                 .setSaveConsumer(value -> config.backupOnServerStop = value)
                 .build());
 
-        category.addEntry(entries.startIntField(
+        backups.addEntry(entries.startIntField(
                         Component.literal("Automatic interval minutes"),
                         config.automaticIntervalMinutes
                 )
@@ -84,7 +92,16 @@ public final class AdvancedBackupsClothConfigScreen {
                 .setSaveConsumer(value -> config.automaticIntervalMinutes = value)
                 .build());
 
-        category.addEntry(entries.startIntField(
+        backups.addEntry(entries.startStrField(
+                        Component.literal("Backup directory"),
+                        config.backupDirectory
+                )
+                .setDefaultValue(defaults.backupDirectory)
+                .setTooltip(Component.literal("Directory where backups are stored. Relative paths are resolved from the game directory."))
+                .setSaveConsumer(value -> config.backupDirectory = value)
+                .build());
+
+        permissions.addEntry(entries.startIntField(
                         Component.literal("Command permission level"),
                         config.commandPermissionLevel
                 )
@@ -101,7 +118,7 @@ public final class AdvancedBackupsClothConfigScreen {
                 .setSaveConsumer(value -> config.commandPermissionLevel = value)
                 .build());
 
-        category.addEntry(entries.startEnumSelector(
+        integrity.addEntry(entries.startEnumSelector(
                         Component.literal("Integrity mode"),
                         BackupIntegrityMode.class,
                         config.integrityMode
@@ -114,7 +131,7 @@ public final class AdvancedBackupsClothConfigScreen {
                 .setSaveConsumer(value -> config.integrityMode = value)
                 .build());
 
-        category.addEntry(entries.startIntField(
+        retention.addEntry(entries.startIntField(
                         Component.literal("Keep full backups"),
                         config.retention.full
                 )
@@ -124,7 +141,7 @@ public final class AdvancedBackupsClothConfigScreen {
                 .setSaveConsumer(value -> config.retention.full = value)
                 .build());
 
-        category.addEntry(entries.startIntField(
+        retention.addEntry(entries.startIntField(
                         Component.literal("Keep partial backups"),
                         config.retention.incremental
                 )
@@ -134,7 +151,7 @@ public final class AdvancedBackupsClothConfigScreen {
                 .setSaveConsumer(value -> config.retention.incremental = value)
                 .build());
 
-        category.addEntry(entries.startIntField(
+        retention.addEntry(entries.startIntField(
                         Component.literal("Keep differential backups"),
                         config.retention.differential
                 )
@@ -144,15 +161,79 @@ public final class AdvancedBackupsClothConfigScreen {
                 .setSaveConsumer(value -> config.retention.differential = value)
                 .build());
 
-        category.addEntry(entries.startStrField(
-                        Component.literal("Backup directory"),
-                        config.backupDirectory
+        popup.addEntry(entries.startBooleanToggle(
+                        Component.literal("Show backup popup"),
+                        config.popup.enabled
                 )
-                .setDefaultValue(defaults.backupDirectory)
-                .setTooltip(Component.literal("Directory where backups are stored. Relative paths are resolved from the game directory."))
-                .setSaveConsumer(value -> config.backupDirectory = value)
+                .setDefaultValue(defaults.popup.enabled)
+                .setTooltip(Component.literal("Shows the backup progress HUD on clients with the mod installed."))
+                .setSaveConsumer(value -> config.popup.enabled = value)
+                .build());
+
+        popup.addEntry(new PopupEditorEntry(config));
+
+        popup.addEntry(entries.startStrField(Component.literal("Title"), config.popup.title)
+                .setDefaultValue(defaults.popup.title)
+                .setTooltip(Component.literal("Title shown at the top of the backup popup."))
+                .setSaveConsumer(value -> config.popup.title = value)
+                .build());
+
+        popup.addEntry(entries.startStrField(Component.literal("Running text"), config.popup.runningText)
+                .setDefaultValue(defaults.popup.runningText)
+                .setTooltip(Component.literal("Supports {reason}, {type}, {percent}, {bytesWritten}, and {totalBytes}."))
+                .setSaveConsumer(value -> config.popup.runningText = value)
+                .build());
+
+        popup.addEntry(entries.startStrField(Component.literal("Completed text"), config.popup.completedText)
+                .setDefaultValue(defaults.popup.completedText)
+                .setTooltip(Component.literal("Supports {reason}, {type}, {percent}, {bytesWritten}, and {totalBytes}."))
+                .setSaveConsumer(value -> config.popup.completedText = value)
+                .build());
+
+        popup.addEntry(entries.startStrField(Component.literal("Failed text"), config.popup.failedText)
+                .setDefaultValue(defaults.popup.failedText)
+                .setTooltip(Component.literal("Supports {reason}, {type}, {percent}, {bytesWritten}, and {totalBytes}."))
+                .setSaveConsumer(value -> config.popup.failedText = value)
                 .build());
 
         return builder.build();
+    }
+
+    private static final class PopupEditorEntry extends TextListEntry {
+        private final BackupConfig config;
+
+        private PopupEditorEntry(BackupConfig config) {
+            super(
+                    Component.literal("Edit popup layout"),
+                    Component.literal("Click to drag the popup preview and adjust colors with RGBA controls.")
+            );
+            this.config = config;
+        }
+
+        @Override
+        public void extractRenderState(
+                GuiGraphicsExtractor graphics,
+                int mouseX,
+                int mouseY,
+                int x,
+                int y,
+                int entryWidth,
+                int entryHeight,
+                int itemHeight,
+                boolean hovered,
+                float tickDelta
+        ) {
+            super.extractRenderState(graphics, mouseX, mouseY, x, y, entryWidth, entryHeight, itemHeight, hovered, tickDelta);
+            if (hovered) {
+                graphics.text(Minecraft.getInstance().font, Component.literal(">"), x + entryWidth - 12, y + 6, 0xFFFFFFFF, true);
+            }
+        }
+
+        @Override
+        public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+            Minecraft minecraft = Minecraft.getInstance();
+            minecraft.setScreen(new PopupEditorScreen(minecraft.screen, config));
+            return true;
+        }
     }
 }

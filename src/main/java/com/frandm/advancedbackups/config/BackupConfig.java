@@ -28,6 +28,7 @@ public final class BackupConfig {
     public int commandPermissionLevel = 2;
     public BackupIntegrityMode integrityMode = BackupIntegrityMode.STRICT;
     public Retention retention = new Retention();
+    public Popup popup = new Popup();
     public String backupDirectory = BackupConstants.DEFAULT_BACKUP_DIRECTORY;
 
     public static BackupConfig get() {
@@ -83,6 +84,7 @@ public final class BackupConfig {
         copy.integrityMode = integrityMode;
         copy.backupDirectory = backupDirectory;
         copy.retention = retention.copy();
+        copy.popup = popup.copy();
         return copy;
     }
 
@@ -129,6 +131,10 @@ public final class BackupConfig {
             retention = new Retention();
         }
         retention.normalize();
+        if (popup == null) {
+            popup = new Popup();
+        }
+        popup.normalize();
     }
 
     public static final class Retention {
@@ -148,6 +154,103 @@ public final class BackupConfig {
             copy.incremental = incremental;
             copy.differential = differential;
             return copy;
+        }
+    }
+
+    public static final class Popup {
+        public boolean enabled = true;
+        public int x = 8;
+        public int y = 8;
+        public String backgroundColor = "0xAA101010";
+        public String runningColor = "0xFF55FFFF";
+        public String completedColor = "0xFF55FF55";
+        public String failedColor = "0xFFFF5555";
+        public String textColor = "0xFFE0E0E0";
+        public String title = "Advanced Backups";
+        public String runningText = "Running {reason} {type}";
+        public String completedText = "Completed {reason} {type}";
+        public String failedText = "Backup failed";
+
+        public int backgroundColorArgb() {
+            return parseColor(backgroundColor, defaults().popup.backgroundColor);
+        }
+
+        public int runningColorArgb() {
+            return parseColor(runningColor, defaults().popup.runningColor);
+        }
+
+        public int completedColorArgb() {
+            return parseColor(completedColor, defaults().popup.completedColor);
+        }
+
+        public int failedColorArgb() {
+            return parseColor(failedColor, defaults().popup.failedColor);
+        }
+
+        public int textColorArgb() {
+            return parseColor(textColor, defaults().popup.textColor);
+        }
+
+        private void normalize() {
+            x = Math.max(0, x);
+            y = Math.max(0, y);
+            backgroundColor = normalizeColor(backgroundColor, defaults().popup.backgroundColor);
+            runningColor = normalizeColor(runningColor, defaults().popup.runningColor);
+            completedColor = normalizeColor(completedColor, defaults().popup.completedColor);
+            failedColor = normalizeColor(failedColor, defaults().popup.failedColor);
+            textColor = normalizeColor(textColor, defaults().popup.textColor);
+            title = normalizeText(title, defaults().popup.title);
+            runningText = normalizeText(runningText, defaults().popup.runningText);
+            completedText = normalizeText(completedText, defaults().popup.completedText);
+            failedText = normalizeText(failedText, defaults().popup.failedText);
+        }
+
+        public Popup copy() {
+            Popup copy = new Popup();
+            copy.enabled = enabled;
+            copy.x = x;
+            copy.y = y;
+            copy.backgroundColor = backgroundColor;
+            copy.runningColor = runningColor;
+            copy.completedColor = completedColor;
+            copy.failedColor = failedColor;
+            copy.textColor = textColor;
+            copy.title = title;
+            copy.runningText = runningText;
+            copy.completedText = completedText;
+            copy.failedText = failedText;
+            return copy;
+        }
+
+        private static String normalizeText(String value, String fallback) {
+            return value == null || value.isBlank() ? fallback : value;
+        }
+
+        private static String normalizeColor(String value, String fallback) {
+            try {
+                parseColor(value, fallback);
+                return value;
+            } catch (RuntimeException exception) {
+                return fallback;
+            }
+        }
+
+        private static int parseColor(String value, String fallback) {
+            String normalized = value == null ? fallback : value.trim();
+            if (normalized.startsWith("#")) {
+                normalized = normalized.substring(1);
+            } else if (normalized.startsWith("0x") || normalized.startsWith("0X")) {
+                normalized = normalized.substring(2);
+            }
+
+            if (normalized.length() == 6) {
+                normalized = "FF" + normalized;
+            }
+            if (normalized.length() != 8) {
+                return parseColor(fallback, "0xFFFFFFFF");
+            }
+
+            return (int) Long.parseLong(normalized, 16);
         }
     }
 }
