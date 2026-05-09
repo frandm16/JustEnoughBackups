@@ -41,6 +41,13 @@ final class BackupProgressHud {
 
         Minecraft minecraft = Minecraft.getInstance();
         Font font = minecraft.font;
-        BackupPopupRenderer.render(graphics, font, popup, progress, popup.x, popup.y);
+        PopupPositioning.Position position = PopupPositioning.resolve(
+                font,
+                popup,
+                progress,
+                minecraft.getWindow().getGuiScaledWidth(),
+                minecraft.getWindow().getGuiScaledHeight()
+        );
+        BackupPopupRenderer.render(graphics, font, popup, progress, position.x(), position.y());
     }
 }

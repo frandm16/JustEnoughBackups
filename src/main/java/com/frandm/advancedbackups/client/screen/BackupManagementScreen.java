@@ -32,6 +32,7 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
     private static final int ROW_GAP = 8;
     private static final int MARGIN = 14;
     private static final int ACTION_WIDTH = 86;
+    private static final int ROW_PADDING = 10;
     private static final DateTimeFormatter SHORT_DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm", Locale.ROOT)
             .withZone(ZoneId.systemDefault());
 
@@ -84,7 +85,7 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
         int listBottom = listBottom();
         for (int i = 0; i < visible.size(); i++) {
             int rowY = listTop + i * (ROW_HEIGHT + ROW_GAP) - scroll;
-            if (rowY + ROW_HEIGHT < listTop || rowY > listBottom) {
+            if (rowY < listTop || rowY + ROW_HEIGHT > listBottom) {
                 continue;
             }
             addRowButtons(visible.get(i), rowY);
@@ -92,7 +93,9 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
     }
 
     private void addRowButtons(BackupUiBackup backup, int rowY) {
-        int actionX = width - MARGIN - ACTION_WIDTH;
+        int rowX = rowX();
+        int rowW = rowWidth();
+        int actionX = rowX + rowW - ACTION_WIDTH - ROW_PADDING;
         int y = rowY + 10;
         addRenderableWidget(Button.builder(Component.literal("Restore"), button -> confirmRestore(backup))
                 .bounds(actionX, y, ACTION_WIDTH, 20)
@@ -114,7 +117,7 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
         graphics.text(font, Component.literal(status), MARGIN, TOOLBAR_HEIGHT + 4, statusOk ? 0xFFB8E986 : 0xFFFF7777, true);
 
         int listTop = listTop();
-        graphics.fill(MARGIN, listTop - 6, width - MARGIN, height - MARGIN, 0x88000000);
+        graphics.fill(rowX() - 4, listTop - 6, rowX() + rowWidth() + 4, height - MARGIN, 0x88000000);
         List<BackupUiBackup> visible = visibleBackups();
         if (visible.isEmpty()) {
             graphics.text(font, Component.literal(backups.isEmpty() ? "No backups found for this world." : "No backups match the search."),
@@ -133,13 +136,13 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
     }
 
     private void renderRow(GuiGraphicsExtractor graphics, BackupUiBackup backup, int rowY) {
-        int rowX = MARGIN + 4;
-        int rowW = width - MARGIN * 2 - 8;
-        int actionX = width - MARGIN - ACTION_WIDTH;
+        int rowX = rowX();
+        int rowW = rowWidth();
+        int actionX = rowX + rowW - ACTION_WIDTH - ROW_PADDING;
         graphics.fill(rowX, rowY, rowX + rowW, rowY + ROW_HEIGHT, 0xDD151515);
         graphics.outline(rowX, rowY, rowW, ROW_HEIGHT, 0xFF4A4A4A);
 
-        int textX = rowX + 10;
+        int textX = rowX + ROW_PADDING;
         int maxTextWidth = Math.max(80, actionX - textX - 12);
         graphics.text(font, Component.literal(trimToWidth(backup.displayName(), maxTextWidth)), textX, rowY + 9, 0xFFFFFFFF, true);
         String meta = backup.type() + " | " + shortDate(backup.createdAt()) + " | "
@@ -234,6 +237,14 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
 
     private int listBottom() {
         return height - MARGIN;
+    }
+
+    private int rowX() {
+        return MARGIN + 4;
+    }
+
+    private int rowWidth() {
+        return Math.max(ACTION_WIDTH + ROW_PADDING * 2, width - MARGIN * 2 - 8);
     }
 
     private int maxScroll() {

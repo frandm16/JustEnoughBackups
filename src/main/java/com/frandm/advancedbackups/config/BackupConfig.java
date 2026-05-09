@@ -164,6 +164,8 @@ public final class BackupConfig {
         public boolean showBorder = false;
         public int x = 8;
         public int y = 8;
+        public double xRatio = -1.0D;
+        public double yRatio = -1.0D;
         public String backgroundColor = "0xAA101010";
         public String runningColor = "0xFF55FFFF";
         public String completedColor = "0xFF55FF55";
@@ -197,6 +199,8 @@ public final class BackupConfig {
         private void normalize() {
             x = Math.max(0, x);
             y = Math.max(0, y);
+            xRatio = normalizeRatio(xRatio);
+            yRatio = normalizeRatio(yRatio);
             backgroundColor = normalizeColor(backgroundColor, defaults().popup.backgroundColor);
             runningColor = normalizeColor(runningColor, defaults().popup.runningColor);
             completedColor = normalizeColor(completedColor, defaults().popup.completedColor);
@@ -216,6 +220,8 @@ public final class BackupConfig {
             copy.showBorder = showBorder;
             copy.x = x;
             copy.y = y;
+            copy.xRatio = xRatio;
+            copy.yRatio = yRatio;
             copy.backgroundColor = backgroundColor;
             copy.runningColor = runningColor;
             copy.completedColor = completedColor;
@@ -230,6 +236,13 @@ public final class BackupConfig {
 
         private static String normalizeText(String value, String fallback) {
             return value == null || value.isBlank() ? fallback : value;
+        }
+
+        private static double normalizeRatio(double value) {
+            if (!Double.isFinite(value) || value < 0.0D) {
+                return -1.0D;
+            }
+            return Math.clamp(value, 0.0D, 1.0D);
         }
 
         private static String normalizeColor(String value, String fallback) {

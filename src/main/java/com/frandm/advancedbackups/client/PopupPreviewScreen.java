@@ -11,6 +11,8 @@ import org.lwjgl.glfw.GLFW;
 
 final class PopupPreviewScreen extends Screen {
     private static final int SNAP_DISTANCE = 6;
+    private static final int GUIDE_SEGMENT = 1;
+    private static final int GUIDE_GAP = 2;
 
     private final AdvancedBackupsConfigScreen parent;
     private final BackupConfig.Popup popup;
@@ -28,20 +30,19 @@ final class PopupPreviewScreen extends Screen {
 
     @Override
     protected void init() {
+        PopupPositioning.applyRatios(font, popup, previewPayload, width, height);
         clampPosition();
     }
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-        graphics.fill(0, 0, width, height, 0x00050505);
+        graphics.fill(0, 0, width, height, 0x00000000); // background (transparent)
 
-        BackupPopupRenderer.Dimensions dimensions = BackupPopupRenderer.measure(font, popup, previewPayload);
-        boolean nearCenterX = Math.abs(centerX(dimensions) - width / 2) <= SNAP_DISTANCE;
-        boolean nearCenterY = Math.abs(centerY(dimensions) - height / 2) <= SNAP_DISTANCE;
-        int verticalColor = nearCenterX ? 0xAA55FFFF : 0x55707070;
-        int horizontalColor = nearCenterY ? 0xAA55FFFF : 0x55707070;
-        graphics.fill(width / 2, 0, width / 2 + 1, height, verticalColor);
-        graphics.fill(0, height / 2, width, height / 2 + 1, horizontalColor);
+        int LineColor = 0x65BCBCBC; // lines colors 0x55707070
+        drawVerticalGuide(graphics, width / 3, LineColor);
+        drawVerticalGuide(graphics, 2 * width / 3, LineColor);
+        drawHorizontalGuide(graphics, height / 3, LineColor);
+        drawHorizontalGuide(graphics, 2 * height / 3, LineColor);
 
         BackupPopupRenderer.render(graphics, font, popup, previewPayload, popup.x, popup.y);
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);
@@ -80,6 +81,7 @@ final class PopupPreviewScreen extends Screen {
     @Override
     public boolean keyPressed(KeyEvent event) {
         if (event.key() == GLFW.GLFW_KEY_ESCAPE) {
+            PopupPositioning.rememberRatios(font, popup, previewPayload, width, height);
             onClose();
             return true;
         }
@@ -142,10 +144,12 @@ final class PopupPreviewScreen extends Screen {
             popup.y = targetY;
         }
         clampPosition(dimensions);
+        PopupPositioning.rememberRatios(font, popup, previewPayload, width, height);
     }
 
     private void clampPosition() {
         clampPosition(BackupPopupRenderer.measure(font, popup, previewPayload));
+        PopupPositioning.rememberRatios(font, popup, previewPayload, width, height);
     }
 
     private void clampPosition(BackupPopupRenderer.Dimensions dimensions) {
@@ -159,5 +163,17 @@ final class PopupPreviewScreen extends Screen {
 
     private int centerY(BackupPopupRenderer.Dimensions dimensions) {
         return popup.y + dimensions.height() / 2;
+    }
+
+    private void drawVerticalGuide(GuiGraphicsExtractor graphics, int x, int color) {
+        for (int y = 0; y < height; y += GUIDE_SEGMENT + GUIDE_GAP) {
+            graphics.fill(x, y, x + 1, Math.min(height, y + GUIDE_SEGMENT), color);
+        }
+    }
+
+    private void drawHorizontalGuide(GuiGraphicsExtractor graphics, int y, int color) {
+        for (int x = 0; x < width; x += GUIDE_SEGMENT + GUIDE_GAP) {
+            graphics.fill(x, y, Math.min(width, x + GUIDE_SEGMENT), y + 1, color);
+        }
     }
 }

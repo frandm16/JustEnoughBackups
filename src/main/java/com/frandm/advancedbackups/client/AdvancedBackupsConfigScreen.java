@@ -28,12 +28,14 @@ import java.util.function.Supplier;
 
 public final class AdvancedBackupsConfigScreen extends Screen {
     private static final int OUTER_MARGIN = 12;
-    private static final int TAB_WIDTH = 112;
     private static final int FOOTER_HEIGHT = 36;
     private static final int ROW_HEIGHT = 32;
     private static final int ROW_GAP = 6;
     private static final int HEADER_HEIGHT = 34;
     private static final int CONTROL_HEIGHT = 20;
+    private static final int TAB_GAP = 4;
+    private static final int ROW_INSET = 8;
+    private static final int COLUMN_GAP = 8;
     private static final int DEFAULT_PREVIEW_BYTES = 128 * 1024 * 1024;
     private static final int DEFAULT_TOTAL_BYTES = 304 * 1024 * 1024;
 
@@ -65,26 +67,33 @@ public final class AdvancedBackupsConfigScreen extends Screen {
         clearWidgets();
         rows.clear();
         sliders.clear();
+        PopupPositioning.applyRatios(font, working.popup, previewPayload(), width, height);
 
+        int tabY = OUTER_MARGIN + 22;
+        int tabWidth = Math.max(48, (width - OUTER_MARGIN * 2 - TAB_GAP * (ConfigTab.values().length - 1)) / ConfigTab.values().length);
         int tabX = OUTER_MARGIN;
-        int tabY = OUTER_MARGIN + 24;
         for (ConfigTab tab : ConfigTab.values()) {
             ConfigTab captured = tab;
             Button button = Button.builder(Component.literal(tab.label), ignored -> {
+                        if (captured == ConfigTab.PREVIEW) {
+                            selectedTab = ConfigTab.HUD;
+                            minecraft.setScreen(new PopupPreviewScreen(this, working.popup, previewPayload()));
+                            return;
+                        }
                         selectedTab = captured;
                         rebuildWidgets();
                     })
-                    .bounds(tabX, tabY, TAB_WIDTH, CONTROL_HEIGHT)
+                    .bounds(tabX, tabY, tabWidth, CONTROL_HEIGHT)
                     .build();
             button.active = selectedTab != tab;
             addRenderableWidget(button);
-            tabY += 24;
+            tabX += tabWidth + TAB_GAP;
         }
 
         int contentX = contentX();
         int contentY = contentTop();
         int contentW = contentWidth();
-        int controlsW = Math.max(120, Math.min(220, contentW / 2));
+        int controlsW = Math.min(contentW, Math.min(240, Math.max(80, contentW / 2)));
         int y = contentY + HEADER_HEIGHT - currentScroll();
 
         switch (selectedTab) {
@@ -93,20 +102,23 @@ public final class AdvancedBackupsConfigScreen extends Screen {
             case PERMISSIONS -> y = buildPermissions(contentX, y, contentW, controlsW);
             case INTEGRITY -> y = buildIntegrity(contentX, y, contentW, controlsW);
             case HUD -> y = buildHud(contentX, y, contentW, controlsW);
+            case PREVIEW -> {
+            }
         }
 
         int footerY = height - OUTER_MARGIN - CONTROL_HEIGHT;
+        int footerX = Math.max(OUTER_MARGIN, width - OUTER_MARGIN - 282);
         saveButton = addRenderableWidget(Button.builder(Component.literal("Save"), ignored -> saveAndClose())
-                .bounds(width - OUTER_MARGIN - 282, footerY, 58, CONTROL_HEIGHT)
+                .bounds(footerX, footerY, 58, CONTROL_HEIGHT)
                 .build());
         addRenderableWidget(Button.builder(Component.literal("Cancel"), ignored -> onClose())
-                .bounds(width - OUTER_MARGIN - 218, footerY, 58, CONTROL_HEIGHT)
+                .bounds(footerX + 64, footerY, 58, CONTROL_HEIGHT)
                 .build());
         addRenderableWidget(Button.builder(Component.literal("Reset Tab"), ignored -> resetCurrentTab())
-                .bounds(width - OUTER_MARGIN - 154, footerY, 72, CONTROL_HEIGHT)
+                .bounds(footerX + 128, footerY, 72, CONTROL_HEIGHT)
                 .build());
         addRenderableWidget(Button.builder(Component.literal("Reset All"), ignored -> resetAll())
-                .bounds(width - OUTER_MARGIN - 76, footerY, 76, CONTROL_HEIGHT)
+                .bounds(footerX + 206, footerY, 76, CONTROL_HEIGHT)
                 .build());
 
         clampPreviewPosition();
@@ -138,37 +150,91 @@ public final class AdvancedBackupsConfigScreen extends Screen {
     }
 
     private int buildHud(int x, int y, int width, int controlsW) {
+        if (width < 430) {
+            return buildHudColumn(x, y, width, controlsW);
+        }
+
+        int leftW = (width - COLUMN_GAP) / 2;
+        int rightW = width - leftW - COLUMN_GAP;
+        int leftX = x;
+        int rightX = x + leftW + COLUMN_GAP;
+        int leftControlsW = Math.min(controlsW, Math.max(80, leftW / 2));
+        int rightControlsW = Math.min(controlsW, Math.max(80, rightW / 2));
+
+        int leftY = y;
+        leftY = addBooleanRow(leftX, leftY, leftW, leftControlsW, "Show backup popup", () -> working.popup.enabled, value -> working.popup.enabled = value);
+        leftY = addBooleanRow(leftX, leftY, leftW, leftControlsW, "Show title", () -> working.popup.showTitle, value -> working.popup.showTitle = value);
+        leftY = addBooleanRow(leftX, leftY, leftW, leftControlsW, "Center text", () -> working.popup.centerText, value -> working.popup.centerText = value);
+        leftY = addBooleanRow(leftX, leftY, leftW, leftControlsW, "Show border", () -> working.popup.showBorder, value -> working.popup.showBorder = value);
+        leftY = addPreviewStateRow(leftX, leftY, leftW, leftControlsW);
+        leftY = addIntRow(leftX, leftY, leftW, leftControlsW, "Popup X", () -> working.popup.x, value -> {
+            working.popup.x = value;
+            clampPreviewPosition();
+            rememberPreviewPosition();
+        }, 0, Integer.MAX_VALUE);
+        leftY = addIntRow(leftX, leftY, leftW, leftControlsW, "Popup Y", () -> working.popup.y, value -> {
+            working.popup.y = value;
+            clampPreviewPosition();
+            rememberPreviewPosition();
+        }, 0, Integer.MAX_VALUE);
+
+        int rightY = y;
+        rightY = addTextRow(rightX, rightY, rightW, rightControlsW, "Title", () -> working.popup.title, value -> working.popup.title = value, true);
+        rightY = addTextRow(rightX, rightY, rightW, rightControlsW, "Running text", () -> working.popup.runningText, value -> working.popup.runningText = value, true);
+        rightY = addTextRow(rightX, rightY, rightW, rightControlsW, "Completed text", () -> working.popup.completedText, value -> working.popup.completedText = value, true);
+        rightY = addTextRow(rightX, rightY, rightW, rightControlsW, "Failed text", () -> working.popup.failedText, value -> working.popup.failedText = value, true);
+
+        rightY += 6;
+        for (ColorTarget target : ColorTarget.values()) {
+            rightY = addColorRow(rightX, rightY, rightW, rightControlsW, target);
+        }
+
+        rightY += 6;
+        int sliderW = rowControlWidth(rightW, rightControlsW);
+        int controlX = rowControlX(rightX, rightW, sliderW);
+        for (ColorChannel channel : ColorChannel.values()) {
+            rows.add(new RowInfo(rightX, rightY, rightW, ROW_HEIGHT, channel.label + " channel", tooltipFor(channel.label + " channel")));
+            if (isRowInteractive(rightY)) {
+                ColorSlider slider = new ColorSlider(controlX, rightY + 6, sliderW, CONTROL_HEIGHT, channel, this::setSelectedChannel);
+                sliders.put(channel, addRenderableWidget(slider));
+            }
+            rightY += ROW_HEIGHT + ROW_GAP;
+        }
+        syncSlidersFromSelectedColor();
+        return Math.max(leftY, rightY);
+    }
+
+    private int buildHudColumn(int x, int y, int width, int controlsW) {
         y = addBooleanRow(x, y, width, controlsW, "Show backup popup", () -> working.popup.enabled, value -> working.popup.enabled = value);
         y = addBooleanRow(x, y, width, controlsW, "Show title", () -> working.popup.showTitle, value -> working.popup.showTitle = value);
         y = addBooleanRow(x, y, width, controlsW, "Center text", () -> working.popup.centerText, value -> working.popup.centerText = value);
         y = addBooleanRow(x, y, width, controlsW, "Show border", () -> working.popup.showBorder, value -> working.popup.showBorder = value);
         y = addPreviewStateRow(x, y, width, controlsW);
-        y = addPreviewLayoutRow(x, y, width, controlsW);
         y = addIntRow(x, y, width, controlsW, "Popup X", () -> working.popup.x, value -> {
             working.popup.x = value;
             clampPreviewPosition();
+            rememberPreviewPosition();
         }, 0, Integer.MAX_VALUE);
         y = addIntRow(x, y, width, controlsW, "Popup Y", () -> working.popup.y, value -> {
             working.popup.y = value;
             clampPreviewPosition();
+            rememberPreviewPosition();
         }, 0, Integer.MAX_VALUE);
-
         y = addTextRow(x, y, width, controlsW, "Title", () -> working.popup.title, value -> working.popup.title = value, true);
         y = addTextRow(x, y, width, controlsW, "Running text", () -> working.popup.runningText, value -> working.popup.runningText = value, true);
         y = addTextRow(x, y, width, controlsW, "Completed text", () -> working.popup.completedText, value -> working.popup.completedText = value, true);
         y = addTextRow(x, y, width, controlsW, "Failed text", () -> working.popup.failedText, value -> working.popup.failedText = value, true);
-
         y += 6;
         for (ColorTarget target : ColorTarget.values()) {
             y = addColorRow(x, y, width, controlsW, target);
         }
-
         y += 6;
-        int controlX = x + width - controlsW;
+        int sliderW = rowControlWidth(width, controlsW);
+        int controlX = rowControlX(x, width, sliderW);
         for (ColorChannel channel : ColorChannel.values()) {
-            rows.add(new RowInfo(y, ROW_HEIGHT, channel.label + " channel", tooltipFor(channel.label + " channel")));
+            rows.add(new RowInfo(x, y, width, ROW_HEIGHT, channel.label + " channel", tooltipFor(channel.label + " channel")));
             if (isRowInteractive(y)) {
-                ColorSlider slider = new ColorSlider(controlX, y, controlsW, CONTROL_HEIGHT, channel, this::setSelectedChannel);
+                ColorSlider slider = new ColorSlider(controlX, y + 6, sliderW, CONTROL_HEIGHT, channel, this::setSelectedChannel);
                 sliders.put(channel, addRenderableWidget(slider));
             }
             y += ROW_HEIGHT + ROW_GAP;
@@ -178,39 +244,42 @@ public final class AdvancedBackupsConfigScreen extends Screen {
     }
 
     private int addBooleanRow(int x, int y, int width, int controlsW, String label, Supplier<Boolean> getter, Consumer<Boolean> setter) {
-        addRow(label, y, false);
+        addRow(x, y, width, label);
         if (!isRowInteractive(y)) {
             return y + ROW_HEIGHT + ROW_GAP;
         }
-        int controlX = x + width - controlsW;
+        int controlW = rowControlWidth(width, controlsW);
+        int controlX = rowControlX(x, width, controlW);
         Button button = Button.builder(toggleMessage(getter.get()), ignored -> {
                     setter.accept(!getter.get());
                     rebuildWidgets();
                 })
-                .bounds(controlX, y + 6, controlsW, CONTROL_HEIGHT)
+                .bounds(controlX, y + 6, controlW, CONTROL_HEIGHT)
                 .build();
         addRenderableWidget(button);
         return y + ROW_HEIGHT + ROW_GAP;
     }
 
     private <T extends Enum<T>> int addEnumRow(int x, int y, int width, int controlsW, String label, T selected, T[] values, Consumer<T> setter) {
-        addRow(label, y, false);
+        addRow(x, y, width, label);
         if (!isRowInteractive(y)) {
             return y + ROW_HEIGHT + ROW_GAP;
         }
-        int controlX = x + width - controlsW;
+        int controlW = rowControlWidth(width, controlsW);
+        int controlX = rowControlX(x, width, controlW);
         addRenderableWidget(CycleButton.builder((T value) -> Component.literal(value.toString()), selected)
                 .withValues(values)
-                .create(controlX, y + 6, controlsW, CONTROL_HEIGHT, Component.literal(label), (button, value) -> setter.accept(value)));
+                .create(controlX, y + 6, controlW, CONTROL_HEIGHT, Component.literal(label), (button, value) -> setter.accept(value)));
         return y + ROW_HEIGHT + ROW_GAP;
     }
 
     private int addIntRow(int x, int y, int width, int controlsW, String label, IntSupplier getter, IntConsumer setter, int min, int max) {
-        addRow(label, y, false);
+        addRow(x, y, width, label);
         if (!isRowInteractive(y)) {
             return y + ROW_HEIGHT + ROW_GAP;
         }
-        int controlX = x + width - controlsW;
+        int controlW = rowControlWidth(width, controlsW);
+        int controlX = rowControlX(x, width, controlW);
         int stepW = 22;
         addRenderableWidget(Button.builder(Component.literal("-"), ignored -> {
                     int next = Math.clamp(getter.getAsInt() - 1, min, max);
@@ -220,7 +289,7 @@ public final class AdvancedBackupsConfigScreen extends Screen {
                 })
                 .bounds(controlX, y + 6, stepW, CONTROL_HEIGHT)
                 .build());
-        EditBox field = new EditBox(font, controlX + stepW + 4, y + 6, controlsW - (stepW * 2) - 8, CONTROL_HEIGHT, Component.literal(label));
+        EditBox field = new EditBox(font, controlX + stepW + 4, y + 6, Math.max(20, controlW - (stepW * 2) - 8), CONTROL_HEIGHT, Component.literal(label));
         field.setValue(rawInputs.getOrDefault(label, String.valueOf(getter.getAsInt())));
         field.setResponder(value -> {
             rawInputs.put(label, value);
@@ -240,18 +309,19 @@ public final class AdvancedBackupsConfigScreen extends Screen {
                     rawInputs.put(label, String.valueOf(next));
                     rebuildWidgets();
                 })
-                .bounds(controlX + controlsW - stepW, y + 6, stepW, CONTROL_HEIGHT)
+                .bounds(controlX + controlW - stepW, y + 6, stepW, CONTROL_HEIGHT)
                 .build());
         return y + ROW_HEIGHT + ROW_GAP;
     }
 
     private int addTextRow(int x, int y, int width, int controlsW, String label, Supplier<String> getter, Consumer<String> setter, boolean allowBlankAsDefault) {
-        addRow(label, y, false);
+        addRow(x, y, width, label);
         if (!isRowInteractive(y)) {
             return y + ROW_HEIGHT + ROW_GAP;
         }
-        int controlX = x + width - controlsW;
-        EditBox field = new EditBox(font, controlX, y + 6, controlsW, CONTROL_HEIGHT, Component.literal(label));
+        int controlW = rowControlWidth(width, controlsW);
+        int controlX = rowControlX(x, width, controlW);
+        EditBox field = new EditBox(font, controlX, y + 6, controlW, CONTROL_HEIGHT, Component.literal(label));
         field.setValue(rawInputs.getOrDefault(label, value(getter.get())));
         field.setResponder(text -> {
             rawInputs.put(label, text);
@@ -263,12 +333,13 @@ public final class AdvancedBackupsConfigScreen extends Screen {
     }
 
     private int addPreviewStateRow(int x, int y, int width, int controlsW) {
-        addRow("Preview state", y, false);
+        addRow(x, y, width, "Preview state");
         if (!isRowInteractive(y)) {
             return y + ROW_HEIGHT + ROW_GAP;
         }
-        int controlX = x + width - controlsW;
-        int buttonW = Math.max(50, (controlsW - 8) / 3);
+        int controlW = rowControlWidth(width, controlsW);
+        int controlX = rowControlX(x, width, controlW);
+        int buttonW = Math.max(24, (controlW - 8) / 3);
         addRenderableWidget(Button.builder(Component.literal("Running"), ignored -> previewState = PreviewState.RUNNING)
                 .bounds(controlX, y + 6, buttonW, CONTROL_HEIGHT)
                 .build());
@@ -276,38 +347,27 @@ public final class AdvancedBackupsConfigScreen extends Screen {
                 .bounds(controlX + buttonW + 4, y + 6, buttonW, CONTROL_HEIGHT)
                 .build());
         addRenderableWidget(Button.builder(Component.literal("Failed"), ignored -> previewState = PreviewState.FAILED)
-                .bounds(controlX + (buttonW + 4) * 2, y + 6, buttonW, CONTROL_HEIGHT)
-                .build());
-        return y + ROW_HEIGHT + ROW_GAP;
-    }
-
-    private int addPreviewLayoutRow(int x, int y, int width, int controlsW) {
-        addRow("Preview Layout", y, false);
-        if (!isRowInteractive(y)) {
-            return y + ROW_HEIGHT + ROW_GAP;
-        }
-        int controlX = x + width - controlsW;
-        addRenderableWidget(Button.builder(Component.literal("Open"), ignored ->
-                        minecraft.setScreen(new PopupPreviewScreen(this, working.popup, previewPayload())))
-                .bounds(controlX, y + 6, controlsW, CONTROL_HEIGHT)
+                .bounds(controlX + controlW - buttonW, y + 6, buttonW, CONTROL_HEIGHT)
                 .build());
         return y + ROW_HEIGHT + ROW_GAP;
     }
 
     private int addColorRow(int x, int y, int width, int controlsW, ColorTarget target) {
-        addRow(target.label + " color", y, false);
+        addRow(x, y, width, target.label + " color");
         if (!isRowInteractive(y)) {
             return y + ROW_HEIGHT + ROW_GAP;
         }
-        int controlX = x + width - controlsW;
+        int controlW = rowControlWidth(width, controlsW);
+        int controlX = rowControlX(x, width, controlW);
+        int editW = Math.min(52, Math.max(34, controlW / 3));
         addRenderableWidget(Button.builder(Component.literal(target == selectedColor ? "Editing" : "Edit"), ignored -> {
                     selectedColor = target;
                     syncSlidersFromSelectedColor();
                     rebuildWidgets();
                 })
-                .bounds(controlX, y + 6, 52, CONTROL_HEIGHT)
+                .bounds(controlX, y + 6, editW, CONTROL_HEIGHT)
                 .build());
-        EditBox field = new EditBox(font, controlX + 58, y + 6, controlsW - 58, CONTROL_HEIGHT, Component.literal(target.label + " color"));
+        EditBox field = new EditBox(font, controlX + editW + 6, y + 6, Math.max(20, controlW - editW - 6), CONTROL_HEIGHT, Component.literal(target.label + " color"));
         field.setMaxLength(11);
         field.setValue(rawInputs.getOrDefault(target.label + " color", target.get(working.popup)));
         field.setResponder(text -> {
@@ -324,17 +384,14 @@ public final class AdvancedBackupsConfigScreen extends Screen {
         return y + ROW_HEIGHT + ROW_GAP;
     }
 
-    private void addRow(String label, int y, boolean invalid) {
-        rows.add(new RowInfo(y, ROW_HEIGHT, label, tooltipFor(label)));
+    private void addRow(int x, int y, int width, String label) {
+        rows.add(new RowInfo(x, y, width, ROW_HEIGHT, label, tooltipFor(label)));
     }
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         graphics.fill(0, 0, width, height, 0xCC050505);
         graphics.text(font, title, OUTER_MARGIN, 8, 0xFFFFFFFF, true);
-
-        graphics.fill(OUTER_MARGIN - 4, OUTER_MARGIN + 20, OUTER_MARGIN + TAB_WIDTH + 4, height - FOOTER_HEIGHT - 2, 0xDD111111);
-        graphics.outline(OUTER_MARGIN - 4, OUTER_MARGIN + 20, TAB_WIDTH + 8, height - FOOTER_HEIGHT - OUTER_MARGIN - 18, 0xFF4A4A4A);
 
         int panelX = contentX() - 4;
         int panelY = contentTop();
@@ -350,11 +407,11 @@ public final class AdvancedBackupsConfigScreen extends Screen {
                 continue;
             }
             int color = isInvalid(row.label) ? 0x66AA2222 : 0x66181818;
-            graphics.fill(contentX(), row.y, contentX() + contentWidth(), row.y + row.height, color);
-            graphics.outline(contentX(), row.y, contentWidth(), row.height, isInvalid(row.label) ? 0xFFFF5555 : 0xFF333333);
-            graphics.text(font, Component.literal(trimToWidth(row.label, Math.max(50, contentWidth() / 2 - 16))), contentX() + 8, row.y + 11, 0xFFE0E0E0, true);
+            graphics.fill(row.x, row.y, row.x + row.width, row.y + row.height, color);
+            graphics.outline(row.x, row.y, row.width, row.height, isInvalid(row.label) ? 0xFFFF5555 : 0xFF333333);
+            graphics.text(font, Component.literal(trimToWidth(row.label, Math.max(50, row.width / 2 - 16))), row.x + ROW_INSET, row.y + 11, 0xFFE0E0E0, true);
             drawColorSwatch(graphics, row);
-            if (mouseX >= contentX() && mouseX <= contentX() + contentWidth() && mouseY >= row.y && mouseY <= row.y + row.height) {
+            if (mouseX >= row.x && mouseX <= row.x + row.width && mouseY >= row.y && mouseY <= row.y + row.height) {
                 hoveredRow = row;
             }
         }
@@ -430,6 +487,8 @@ public final class AdvancedBackupsConfigScreen extends Screen {
                 working.popup = defaults.popup.copy();
                 selectedColor = ColorTarget.BACKGROUND;
                 previewState = PreviewState.RUNNING;
+            }
+            case PREVIEW -> {
             }
         }
         rawInputs.clear();
@@ -516,7 +575,7 @@ public final class AdvancedBackupsConfigScreen extends Screen {
         if (target == null) {
             return;
         }
-        int x = contentX() + Math.max(54, contentWidth() / 2 - 42);
+        int x = row.x + Math.max(54, row.width / 2 - 42);
         int y = row.y + 8;
         graphics.fill(x, y, x + 18, y + 18, 0xFF000000);
         graphics.fill(x + 1, y + 1, x + 17, y + 17, target.argb(working.popup));
@@ -566,9 +625,11 @@ public final class AdvancedBackupsConfigScreen extends Screen {
     }
 
     private void clampPreviewPosition() {
-        BackupPopupRenderer.Dimensions dimensions = BackupPopupRenderer.measure(font, working.popup, previewPayload());
-        working.popup.x = Math.clamp(working.popup.x, 4, Math.max(4, width - dimensions.width()));
-        working.popup.y = Math.clamp(working.popup.y, 4, Math.max(4, height - dimensions.height()));
+        PopupPositioning.clampAndRemember(font, working.popup, previewPayload(), width, height);
+    }
+
+    private void rememberPreviewPosition() {
+        PopupPositioning.rememberRatios(font, working.popup, previewPayload(), width, height);
     }
 
     private BackupProgressPayload previewPayload() {
@@ -582,15 +643,15 @@ public final class AdvancedBackupsConfigScreen extends Screen {
     }
 
     private int contentX() {
-        return OUTER_MARGIN + TAB_WIDTH + 16;
+        return OUTER_MARGIN;
     }
 
     private int contentTop() {
-        return OUTER_MARGIN + 24;
+        return OUTER_MARGIN + 56;
     }
 
     private int contentWidth() {
-        return Math.max(180, width - contentX() - OUTER_MARGIN);
+        return Math.max(1, width - OUTER_MARGIN * 2);
     }
 
     private int currentScroll() {
@@ -598,7 +659,11 @@ public final class AdvancedBackupsConfigScreen extends Screen {
     }
 
     private int maxScroll() {
-        int contentHeight = rows.isEmpty() ? 0 : rows.getLast().y + ROW_HEIGHT + currentScroll() - (contentTop() + HEADER_HEIGHT);
+        int maxRowBottom = 0;
+        for (RowInfo row : rows) {
+            maxRowBottom = Math.max(maxRowBottom, row.y + row.height + currentScroll());
+        }
+        int contentHeight = rows.isEmpty() ? 0 : maxRowBottom - (contentTop() + HEADER_HEIGHT);
         int viewport = Math.max(1, height - FOOTER_HEIGHT - contentTop() - HEADER_HEIGHT - 10);
         return Math.max(0, contentHeight - viewport);
     }
@@ -617,6 +682,15 @@ public final class AdvancedBackupsConfigScreen extends Screen {
             value = value.substring(0, value.length() - 1);
         }
         return value + suffix;
+    }
+
+    private int rowControlWidth(int rowWidth, int requestedWidth) {
+        int available = Math.max(1, rowWidth - ROW_INSET * 2);
+        return Math.clamp(requestedWidth, Math.min(available, 56), available);
+    }
+
+    private int rowControlX(int rowX, int rowWidth, int controlWidth) {
+        return rowX + rowWidth - ROW_INSET - controlWidth;
     }
 
     private static Component toggleMessage(boolean enabled) {
@@ -715,7 +789,8 @@ public final class AdvancedBackupsConfigScreen extends Screen {
         RETENTION("Retention"),
         PERMISSIONS("Permissions"),
         INTEGRITY("Integrity"),
-        HUD("HUD");
+        HUD("HUD"),
+        PREVIEW("Preview");
 
         private final String label;
 
@@ -886,7 +961,7 @@ public final class AdvancedBackupsConfigScreen extends Screen {
         void accept(ColorChannel channel, int value);
     }
 
-    private record RowInfo(int y, int height, String label, String tooltip) {
+    private record RowInfo(int x, int y, int width, int height, String label, String tooltip) {
     }
 
     private record ValidationError(String label, String message) {
