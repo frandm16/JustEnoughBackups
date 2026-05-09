@@ -54,7 +54,7 @@ public final class BackupConfig {
                     config = loaded;
                 }
             } catch (IOException | RuntimeException exception) {
-                WorldBackupMod.LOGGER.error("Failed to read advanced backups config. Defaults will be used.", exception);
+                WorldBackupMod.LOGGER.error("Failed to read Just Enough Backups config. Defaults will be used.", exception);
             }
         }
 
@@ -105,12 +105,12 @@ public final class BackupConfig {
                 GSON.toJson(config, writer);
             }
         } catch (IOException exception) {
-            WorldBackupMod.LOGGER.error("Failed to write advanced backups config.", exception);
+            WorldBackupMod.LOGGER.error("Failed to write Just Enough Backups config.", exception);
         }
     }
 
     private static Path configFile() {
-        return FabricLoader.getInstance().getConfigDir().resolve("advancedbackups.json");
+        return FabricLoader.getInstance().getConfigDir().resolve("justenoughbackups.json");
     }
 
     private void normalize() {

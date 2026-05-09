@@ -7,6 +7,7 @@ import com.frandm.justenoughbackups.network.BackupUiRequestPayload;
 import com.frandm.justenoughbackups.network.BackupUiResponsePayload;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
 
 import java.util.UUID;
 
@@ -56,7 +57,7 @@ public final class BackupUiClient {
         if (!canSendRequests()) {
             Minecraft minecraft = Minecraft.getInstance();
             if (minecraft.screen instanceof BackupUiResponseConsumer screen) {
-                screen.setStatus(false, "This server does not support the Advanced Backups UI channel.");
+                screen.setStatus(false, Component.translatable("text.justenoughbackups.backup_ui.unsupported_channel"));
             }
             return;
         }

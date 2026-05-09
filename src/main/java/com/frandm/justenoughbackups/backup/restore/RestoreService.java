@@ -159,7 +159,7 @@ public final class RestoreService {
         if (parent == null) {
             parent = normalizedWorld;
         }
-        return parent.resolve(".advancedbackups-staging-" + restore.backupId());
+        return parent.resolve(".justenoughbackups-staging-" + restore.backupId());
     }
 
     private static void copyDirectory(Path source, Path target, Path... skippedRoots) throws IOException {

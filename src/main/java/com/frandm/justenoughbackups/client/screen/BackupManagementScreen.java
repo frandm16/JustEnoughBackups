@@ -39,12 +39,12 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
     private final List<BackupUiBackup> backups = new ArrayList<>();
     private EditBox searchBox;
     private String filter = "";
-    private String status = "Loading backups...";
+    private Component status = Component.translatable("screen.justenoughbackups.backups.status.loading");
     private boolean statusOk = true;
     private int scroll;
 
     public BackupManagementScreen() {
-        super(Component.literal("Advanced Backups"));
+        super(Component.translatable("screen.justenoughbackups.backups.title"));
     }
 
     @Override
@@ -58,8 +58,8 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
         int x = MARGIN;
         int y = MARGIN;
 
-        searchBox = new EditBox(font, x, y, Math.min(260, width / 3), 20, Component.literal("Search"));
-        searchBox.setHint(Component.literal("Search..."));
+        searchBox = new EditBox(font, x, y, Math.min(260, width / 3), 20, Component.translatable("screen.justenoughbackups.backups.search"));
+        searchBox.setHint(Component.translatable("screen.justenoughbackups.backups.search_hint"));
         searchBox.setValue(filter);
         searchBox.setResponder(value -> {
             filter = value == null ? "" : value;
@@ -70,13 +70,13 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
         setInitialFocus(searchBox);
 
         int buttonX = searchBox.getX() + searchBox.getWidth() + 8;
-        addRenderableWidget(Button.builder(Component.literal("Create"), button -> minecraft.setScreen(new CreateBackupScreen(this)))
+        addRenderableWidget(Button.builder(Component.translatable("screen.justenoughbackups.backups.create"), button -> minecraft.setScreen(new CreateBackupScreen(this)))
                 .bounds(buttonX, y, 76, 20)
                 .build());
-        addRenderableWidget(Button.builder(Component.literal("Refresh"), button -> BackupUiClient.requestList())
+        addRenderableWidget(Button.builder(Component.translatable("screen.justenoughbackups.backups.refresh"), button -> BackupUiClient.requestList())
                 .bounds(buttonX + 82, y, 76, 20)
                 .build());
-        addRenderableWidget(Button.builder(Component.literal("Config"), button -> minecraft.setScreen(JEBConfigScreens.create(this)))
+        addRenderableWidget(Button.builder(Component.translatable("screen.justenoughbackups.backups.config"), button -> minecraft.setScreen(JEBConfigScreens.create(this)))
                 .bounds(width - MARGIN - 60, y, 60, 20)
                 .build());
 
@@ -97,13 +97,13 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
         int rowW = rowWidth();
         int actionX = rowX + rowW - ACTION_WIDTH - ROW_PADDING;
         int y = rowY + 10;
-        addRenderableWidget(Button.builder(Component.literal("Restore"), button -> confirmRestore(backup))
+        addRenderableWidget(Button.builder(Component.translatable("screen.justenoughbackups.backups.restore"), button -> confirmRestore(backup))
                 .bounds(actionX, y, ACTION_WIDTH, 20)
                 .build());
-        addRenderableWidget(Button.builder(Component.literal("Rename"), button -> minecraft.setScreen(new RenameBackupScreen(this, backup)))
+        addRenderableWidget(Button.builder(Component.translatable("screen.justenoughbackups.backups.rename"), button -> minecraft.setScreen(new RenameBackupScreen(this, backup)))
                 .bounds(actionX, y + 24, ACTION_WIDTH, 20)
                 .build());
-        Button delete = Button.builder(Component.literal("Delete"), button -> confirmDelete(backup))
+        Button delete = Button.builder(Component.translatable("screen.justenoughbackups.backups.delete"), button -> confirmDelete(backup))
                 .bounds(actionX, y + 48, ACTION_WIDTH, 20)
                 .build();
         delete.active = backup.canDelete();
@@ -114,13 +114,13 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         graphics.fill(0, 0, width, height, 0xCC080808);
         graphics.text(font, title, MARGIN, 6, 0xFFFFFFFF, true);
-        graphics.text(font, Component.literal(status), MARGIN, TOOLBAR_HEIGHT + 4, statusOk ? 0xFFB8E986 : 0xFFFF7777, true);
+        graphics.text(font, status, MARGIN, TOOLBAR_HEIGHT + 4, statusOk ? 0xFFB8E986 : 0xFFFF7777, true);
 
         int listTop = listTop();
         graphics.fill(rowX() - 4, listTop - 6, rowX() + rowWidth() + 4, height - MARGIN, 0x88000000);
         List<BackupUiBackup> visible = visibleBackups();
         if (visible.isEmpty()) {
-            graphics.text(font, Component.literal(backups.isEmpty() ? "No backups found for this world." : "No backups match the search."),
+            graphics.text(font, Component.translatable(backups.isEmpty() ? "screen.justenoughbackups.backups.empty" : "screen.justenoughbackups.backups.no_matches"),
                     MARGIN + 10, listTop + 12, 0xFFB0B0B0, true);
         }
 
@@ -145,10 +145,13 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
         int textX = rowX + ROW_PADDING;
         int maxTextWidth = Math.max(80, actionX - textX - 12);
         graphics.text(font, Component.literal(trimToWidth(backup.displayName(), maxTextWidth)), textX, rowY + 9, 0xFFFFFFFF, true);
-        String meta = backup.type() + " | " + shortDate(backup.createdAt()) + " | "
-                + backup.includedFiles() + " files | " + formatBytes(backup.includedBytes());
-        graphics.text(font, Component.literal(trimToWidth(meta, maxTextWidth)), textX, rowY + 29, 0xFFC8C8C8, true);
-        graphics.text(font, Component.literal(trimToWidth(reasonLine(backup), maxTextWidth)), textX, rowY + 47, 0xFF8FB3FF, true);
+        Component meta = Component.translatable("screen.justenoughbackups.backups.meta",
+                backup.type(),
+                shortDate(backup.createdAt()),
+                backup.includedFiles(),
+                formatBytes(backup.includedBytes()));
+        graphics.text(font, Component.literal(trimToWidth(meta.getString(), maxTextWidth)), textX, rowY + 29, 0xFFC8C8C8, true);
+        graphics.text(font, Component.literal(trimToWidth(reasonLine(backup).getString(), maxTextWidth)), textX, rowY + 47, 0xFF8FB3FF, true);
         if (!backup.canDelete() && !backup.deleteBlockedReason().isBlank()) {
             graphics.text(font, Component.literal(trimToWidth(backup.deleteBlockedReason(), maxTextWidth)), textX, rowY + 67, 0xFFFFC47A, true);
         }
@@ -184,9 +187,9 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
     }
 
     @Override
-    public void setStatus(boolean ok, String message) {
+    public void setStatus(boolean ok, Component message) {
         statusOk = ok;
-        status = message == null || message.isBlank() ? (ok ? "Ready" : "Request failed") : message;
+        status = message == null ? Component.translatable(ok ? "screen.justenoughbackups.backups.status.ready" : "screen.justenoughbackups.backups.status.failed") : message;
     }
 
     @Override
@@ -205,8 +208,8 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
                 if (second) {
                     BackupUiClient.restoreBackup(backup.id());
                 }
-            }, Component.literal("Restore backup?"), Component.literal("This will stop the server after preparing the restored world.")));
-        }, Component.literal("Restore " + backup.displayName() + "?"), Component.literal("The current world will be preserved as a full backup first.")));
+            }, Component.translatable("screen.justenoughbackups.backups.restore_second_title"), Component.translatable("screen.justenoughbackups.backups.restore_second_message")));
+        }, Component.translatable("screen.justenoughbackups.backups.restore_title", backup.displayName()), Component.translatable("screen.justenoughbackups.backups.restore_message")));
     }
 
     private void confirmDelete(BackupUiBackup backup) {
@@ -215,7 +218,7 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
             if (confirmed) {
                 BackupUiClient.deleteBackup(backup.id());
             }
-        }, Component.literal("Delete " + backup.displayName() + "?"), Component.literal("This permanently removes the ZIP file.")));
+        }, Component.translatable("screen.justenoughbackups.backups.delete_title", backup.displayName()), Component.translatable("screen.justenoughbackups.backups.delete_message")));
     }
 
     private List<BackupUiBackup> visibleBackups() {
@@ -265,10 +268,14 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
         return text + suffix;
     }
 
-    private static String reasonLine(BackupUiBackup backup) {
-        String reason = value(backup.reason()).isBlank() ? "manual" : value(backup.reason()).replace('_', ' ');
-        String base = value(backup.baseBackupId()).isBlank() ? "none" : backup.baseBackupId();
-        return "Reason: " + reason + " | Base: " + base;
+    private static Component reasonLine(BackupUiBackup backup) {
+        String reason = value(backup.reason()).isBlank()
+                ? Component.translatable("screen.justenoughbackups.backups.reason.manual").getString()
+                : value(backup.reason()).replace('_', ' ');
+        String base = value(backup.baseBackupId()).isBlank()
+                ? Component.translatable("screen.justenoughbackups.backups.base.none").getString()
+                : backup.baseBackupId();
+        return Component.translatable("screen.justenoughbackups.backups.reason_line", reason, base);
     }
 
     private static String value(String value) {
@@ -302,7 +309,7 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
         private BackupType selected = BackupConfig.get().backupMode;
 
         private CreateBackupScreen(BackupManagementScreen parent) {
-            super(Component.literal("Create Backup"));
+            super(Component.translatable("screen.justenoughbackups.backups.create_title"));
             this.parent = parent;
         }
 
@@ -313,12 +320,12 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
             int y = height / 2 - 42;
             addRenderableWidget(CycleButton.builder((BackupType type) -> Component.literal(type.toString()), selected)
                     .withValues(BackupType.values())
-                    .create(x + 20, y + 18, panelWidth - 40, 20, Component.literal("Type"), (button, value) -> selected = value));
-            addRenderableWidget(Button.builder(Component.literal("Create"), button -> {
+                    .create(x + 20, y + 18, panelWidth - 40, 20, Component.translatable("screen.justenoughbackups.backups.type"), (button, value) -> selected = value));
+            addRenderableWidget(Button.builder(Component.translatable("screen.justenoughbackups.backups.create"), button -> {
                 minecraft.setScreen(parent);
                 BackupUiClient.createBackup(selected);
             }).bounds(x + 38, y + 52, 84, 20).build());
-            addRenderableWidget(Button.builder(Component.literal("Cancel"), button -> minecraft.setScreen(parent))
+            addRenderableWidget(Button.builder(Component.translatable("screen.justenoughbackups.common.cancel"), button -> minecraft.setScreen(parent))
                     .bounds(x + 138, y + 52, 84, 20).build());
         }
 
@@ -341,7 +348,7 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
         private EditBox nameBox;
 
         private RenameBackupScreen(BackupManagementScreen parent, BackupUiBackup backup) {
-            super(Component.literal("Rename Backup"));
+            super(Component.translatable("screen.justenoughbackups.backups.rename_title"));
             this.parent = parent;
             this.backup = backup;
         }
@@ -351,14 +358,14 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
             int panelWidth = 300;
             int x = (width - panelWidth) / 2;
             int y = height / 2 - 42;
-            nameBox = new EditBox(font, x + 20, y + 24, panelWidth - 40, 20, Component.literal("Backup name"));
+            nameBox = new EditBox(font, x + 20, y + 24, panelWidth - 40, 20, Component.translatable("screen.justenoughbackups.backups.name"));
             nameBox.setValue(backup.displayName());
             addRenderableWidget(nameBox);
-            addRenderableWidget(Button.builder(Component.literal("Save"), button -> {
+            addRenderableWidget(Button.builder(Component.translatable("screen.justenoughbackups.common.save"), button -> {
                 minecraft.setScreen(parent);
                 BackupUiClient.renameBackup(backup.id(), nameBox.getValue());
             }).bounds(x + 58, y + 56, 84, 20).build());
-            addRenderableWidget(Button.builder(Component.literal("Cancel"), button -> minecraft.setScreen(parent))
+            addRenderableWidget(Button.builder(Component.translatable("screen.justenoughbackups.common.cancel"), button -> minecraft.setScreen(parent))
                     .bounds(x + 158, y + 56, 84, 20).build());
             setInitialFocus(nameBox);
         }

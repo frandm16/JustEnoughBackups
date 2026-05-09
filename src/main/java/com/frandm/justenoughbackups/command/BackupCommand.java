@@ -55,19 +55,19 @@ public final class BackupCommand {
 
     private static int create(CommandSourceStack source, BackupType type) {
         source.sendSuccess(
-                () -> Component.literal("Just Enough Backups: " + type.commandName() + " backup started."),
+                () -> Component.translatable("command.justenoughbackups.backup_started", type.commandName()),
                 false
         );
 
         BackupService.createBackup(source.getServer(), type, "manual")
                 .thenAccept(manifest -> source.getServer().execute(() -> source.sendSuccess(
-                        () -> Component.literal("Just Enough Backups: backup created: " + manifest.id),
+                        () -> Component.translatable("command.justenoughbackups.backup_created", manifest.id),
                         false
                 )))
                 .exceptionally(exception -> {
                     WorldBackupMod.LOGGER.error("Manual backup failed.", exception);
                     source.getServer().execute(() ->
-                            source.sendFailure(Component.literal("Just Enough Backups: backup failed. Check server logs."))
+                            source.sendFailure(Component.translatable("command.justenoughbackups.backup_failed"))
                     );
                     return null;
                 });
@@ -79,20 +79,20 @@ public final class BackupCommand {
         try {
             List<BackupManifest> backups = BackupService.listBackups(source.getServer());
             if (backups.isEmpty()) {
-                source.sendSuccess(() -> Component.literal("Just Enough Backups: no backups found."), false);
+                source.sendSuccess(() -> Component.translatable("command.justenoughbackups.no_backups"), false);
                 return 1;
             }
 
-            source.sendSuccess(() -> Component.literal("Just Enough Backups: " + backups.size() + " backup(s):"), false);
+            source.sendSuccess(() -> Component.translatable("command.justenoughbackups.backup_count", backups.size()), false);
             backups.stream()
                     .forEach(manifest -> source.sendSuccess(
-                            () -> Component.literal(formatBackup(manifest)),
+                            () -> formatBackup(manifest),
                             false
                     ));
             return backups.size();
         } catch (IOException exception) {
             WorldBackupMod.LOGGER.error("Failed to list backups.", exception);
-            source.sendFailure(Component.literal("Just Enough Backups: failed to list backups."));
+            source.sendFailure(Component.translatable("command.justenoughbackups.list_failed"));
             return 0;
         }
     }
@@ -101,7 +101,7 @@ public final class BackupCommand {
         NextBackupStatus status = BackupScheduler.nextBackupStatus();
         if (!status.enabled()) {
             source.sendSuccess(
-                    () -> Component.literal("Just Enough Backups: automatic backups are disabled."),
+                    () -> Component.translatable("command.justenoughbackups.next_disabled"),
                     false
             );
             return 1;
@@ -109,14 +109,14 @@ public final class BackupCommand {
 
         if (status.ready()) {
             source.sendSuccess(
-                    () -> Component.literal("Just Enough Backups: the next automatic backup is ready and will start on the next scheduler check."),
+                    () -> Component.translatable("command.justenoughbackups.next_ready"),
                     false
             );
             return 1;
         }
 
         source.sendSuccess(
-                () -> Component.literal("Just Enough Backups: next automatic backup in " + formatDuration(status.remainingMillis()) + "."),
+                () -> Component.translatable("command.justenoughbackups.next_waiting", formatDuration(status.remainingMillis())),
                 false
         );
         return 1;
@@ -124,15 +124,14 @@ public final class BackupCommand {
 
     private static int restore(CommandSourceStack source, String backupId) {
         source.sendSuccess(
-                () -> Component.literal("Just Enough Backups: restore started for " + backupId + "."),
+                () -> Component.translatable("command.justenoughbackups.restore_started", backupId),
                 true
         );
 
         BackupService.restoreBackup(source.getServer(), backupId)
                 .thenAccept(restore -> source.getServer().execute(() -> {
                     source.sendSuccess(
-                            () -> Component.literal("Just Enough Backups: restore prepared for " + restore.backupId()
-                                    + ". Stopping server now; restart it to load the restored world."),
+                            () -> Component.translatable("command.justenoughbackups.restore_prepared", restore.backupId()),
                             true
                     );
                     source.getServer().halt(false);
@@ -140,7 +139,7 @@ public final class BackupCommand {
                 .exceptionally(exception -> {
                     WorldBackupMod.LOGGER.error("Restore failed.", exception);
                     source.getServer().execute(() ->
-                            source.sendFailure(Component.literal("Just Enough Backups: restore failed: " + rootMessage(exception)))
+                            source.sendFailure(Component.translatable("command.justenoughbackups.restore_failed", rootMessage(exception)))
                     );
                     return null;
                 });
@@ -150,22 +149,24 @@ public final class BackupCommand {
     private static int reloadConfig(CommandSourceStack source) {
         BackupConfig config = BackupService.reloadConfig();
         source.sendSuccess(
-                () -> Component.literal("Just Enough Backups: config reloaded. Mode=" + config.backupMode
-                        + ", automatic=" + config.automaticBackupsEnabled
-                        + ", interval=" + config.automaticIntervalMinutes + "m"
-                        + ", permissionLevel=" + config.commandPermissionLevel),
+                () -> Component.translatable("command.justenoughbackups.config_reloaded",
+                        config.backupMode,
+                        config.automaticBackupsEnabled,
+                        config.automaticIntervalMinutes,
+                        config.commandPermissionLevel),
                 false
         );
         return 1;
     }
 
-    private static String formatBackup(BackupManifest manifest) {
+    private static Component formatBackup(BackupManifest manifest) {
         String base = manifest.baseBackupId == null ? "none" : manifest.baseBackupId;
-        return "- " + manifest.id
-                + " [" + manifest.type.commandName() + "]"
-                + " files=" + manifest.includedFiles.size()
-                + " base=" + base
-                + " at=" + manifest.createdAt;
+        return Component.translatable("command.justenoughbackups.backup_entry",
+                manifest.id,
+                manifest.type.commandName(),
+                manifest.includedFiles.size(),
+                base,
+                manifest.createdAt);
     }
 
     private static String formatDuration(long millis) {

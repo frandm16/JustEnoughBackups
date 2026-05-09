@@ -52,7 +52,7 @@ public final class JEBConfigScreen extends Screen {
     private Button saveButton;
 
     public JEBConfigScreen(Screen parent) {
-        super(Component.literal("Advanced Backups"));
+        super(Component.translatable("screen.justenoughbackups.config.title"));
         this.parent = parent;
         this.working = BackupConfig.get().copy();
     }
@@ -73,7 +73,7 @@ public final class JEBConfigScreen extends Screen {
         int tabWidth = Math.max(48, (width - OUTER_MARGIN * 2 - TAB_GAP * (ConfigTab.values().length - 1)) / ConfigTab.values().length);
         int tabX = OUTER_MARGIN;
         for (ConfigTab tab : ConfigTab.values()) {
-            Button button = Button.builder(Component.literal(tab.label), ignored -> {
+            Button button = Button.builder(Component.translatable(tab.key), ignored -> {
                         if (tab == ConfigTab.PREVIEW) {
                             selectedTab = ConfigTab.HUD;
                             minecraft.setScreen(new PopupPreviewScreen(this, working.popup, previewPayload()));
@@ -107,13 +107,13 @@ public final class JEBConfigScreen extends Screen {
 
         int footerY = height - OUTER_MARGIN - CONTROL_HEIGHT;
         int footerX = Math.max(OUTER_MARGIN, width - OUTER_MARGIN - 282);
-        saveButton = addRenderableWidget(Button.builder(Component.literal("Save"), ignored -> saveAndClose())
+        saveButton = addRenderableWidget(Button.builder(Component.translatable("screen.justenoughbackups.common.save"), ignored -> saveAndClose())
                 .bounds(footerX, footerY, 58, CONTROL_HEIGHT)
                 .build());
-        addRenderableWidget(Button.builder(Component.literal("Reset Tab"), ignored -> resetCurrentTab())
+        addRenderableWidget(Button.builder(Component.translatable("screen.justenoughbackups.config.reset_tab"), ignored -> resetCurrentTab())
                 .bounds(footerX + 128, footerY, 72, CONTROL_HEIGHT)
                 .build());
-        addRenderableWidget(Button.builder(Component.literal("Reset All"), ignored -> resetAll())
+        addRenderableWidget(Button.builder(Component.translatable("screen.justenoughbackups.config.reset_all"), ignored -> resetAll())
                 .bounds(footerX + 206, footerY, 76, CONTROL_HEIGHT)
                 .build());
 
@@ -224,7 +224,7 @@ public final class JEBConfigScreen extends Screen {
         int controlX = rowControlX(x, width, controlW);
         addRenderableWidget(CycleButton.builder((T value) -> Component.literal(value.toString()), selected)
                 .withValues(values)
-                .create(controlX, y + 6, controlW, CONTROL_HEIGHT, Component.literal(label), (_, value) -> setter.accept(value)));
+                .create(controlX, y + 6, controlW, CONTROL_HEIGHT, labelComponent(label), (_, value) -> setter.accept(value)));
         return y + ROW_HEIGHT + ROW_GAP;
     }
 
@@ -236,7 +236,7 @@ public final class JEBConfigScreen extends Screen {
         int controlW = rowControlWidth(width, controlsW);
         int controlX = rowControlX(x, width, controlW);
         int stepW = 22;
-        addRenderableWidget(Button.builder(Component.literal("-"), ignored -> {
+        addRenderableWidget(Button.builder(Component.translatable("screen.justenoughbackups.config.decrement"), ignored -> {
                     int next = Math.clamp(getter.getAsInt() - 1, min, max);
                     setter.accept(next);
                     rawInputs.put(label, String.valueOf(next));
@@ -244,7 +244,7 @@ public final class JEBConfigScreen extends Screen {
                 })
                 .bounds(controlX, y + 6, stepW, CONTROL_HEIGHT)
                 .build());
-        EditBox field = new EditBox(font, controlX + stepW + 4, y + 6, Math.max(20, controlW - (stepW * 2) - 8), CONTROL_HEIGHT, Component.literal(label));
+        EditBox field = new EditBox(font, controlX + stepW + 4, y + 6, Math.max(20, controlW - (stepW * 2) - 8), CONTROL_HEIGHT, labelComponent(label));
         field.setValue(rawInputs.getOrDefault(label, String.valueOf(getter.getAsInt())));
         field.setResponder(value -> {
             rawInputs.put(label, value);
@@ -258,7 +258,7 @@ public final class JEBConfigScreen extends Screen {
             validateAll();
         });
         addRenderableWidget(field);
-        addRenderableWidget(Button.builder(Component.literal("+"), ignored -> {
+        addRenderableWidget(Button.builder(Component.translatable("screen.justenoughbackups.config.increment"), ignored -> {
                     int next = Math.clamp(getter.getAsInt() + 1, min, max);
                     setter.accept(next);
                     rawInputs.put(label, String.valueOf(next));
@@ -276,7 +276,7 @@ public final class JEBConfigScreen extends Screen {
         }
         int controlW = rowControlWidth(width, controlsW);
         int controlX = rowControlX(x, width, controlW);
-        EditBox field = new EditBox(font, controlX, y + 6, controlW, CONTROL_HEIGHT, Component.literal(label));
+        EditBox field = new EditBox(font, controlX, y + 6, controlW, CONTROL_HEIGHT, labelComponent(label));
         field.setValue(rawInputs.getOrDefault(label, value(getter.get())));
         field.setResponder(text -> {
             rawInputs.put(label, text);
@@ -295,13 +295,13 @@ public final class JEBConfigScreen extends Screen {
         int controlW = rowControlWidth(width, controlsW);
         int controlX = rowControlX(x, width, controlW);
         int buttonW = Math.max(24, (controlW - 8) / 3);
-        addRenderableWidget(Button.builder(Component.literal("Running"), ignored -> previewState = PreviewState.RUNNING)
+        addRenderableWidget(Button.builder(Component.translatable("screen.justenoughbackups.config.preview_state.running"), ignored -> previewState = PreviewState.RUNNING)
                 .bounds(controlX, y + 6, buttonW, CONTROL_HEIGHT)
                 .build());
-        addRenderableWidget(Button.builder(Component.literal("Done"), ignored -> previewState = PreviewState.COMPLETED)
+        addRenderableWidget(Button.builder(Component.translatable("screen.justenoughbackups.config.preview_state.done"), ignored -> previewState = PreviewState.COMPLETED)
                 .bounds(controlX + buttonW + 4, y + 6, buttonW, CONTROL_HEIGHT)
                 .build());
-        addRenderableWidget(Button.builder(Component.literal("Failed"), ignored -> previewState = PreviewState.FAILED)
+        addRenderableWidget(Button.builder(Component.translatable("screen.justenoughbackups.config.preview_state.failed"), ignored -> previewState = PreviewState.FAILED)
                 .bounds(controlX + controlW - buttonW, y + 6, buttonW, CONTROL_HEIGHT)
                 .build());
         return y + ROW_HEIGHT + ROW_GAP;
@@ -315,14 +315,14 @@ public final class JEBConfigScreen extends Screen {
         int controlW = rowControlWidth(width, controlsW);
         int controlX = rowControlX(x, width, controlW);
         int editW = Math.clamp(controlW / 3, 34, 52);
-        addRenderableWidget(Button.builder(Component.literal(target == selectedColor ? "Editing" : "Edit"), ignored -> {
+        addRenderableWidget(Button.builder(Component.translatable(target == selectedColor ? "screen.justenoughbackups.config.editing" : "screen.justenoughbackups.config.edit"), ignored -> {
                     selectedColor = target;
                     syncSlidersFromSelectedColor();
                     rebuildWidgets();
                 })
                 .bounds(controlX, y + 6, editW, CONTROL_HEIGHT)
                 .build());
-        EditBox field = new EditBox(font, controlX + editW + 6, y + 6, Math.max(20, controlW - editW - 6), CONTROL_HEIGHT, Component.literal(target.label + " color"));
+        EditBox field = new EditBox(font, controlX + editW + 6, y + 6, Math.max(20, controlW - editW - 6), CONTROL_HEIGHT, labelComponent(target.label + " color"));
         field.setMaxLength(11);
         field.setValue(rawInputs.getOrDefault(target.label + " color", target.get(working.popup)));
         field.setResponder(text -> {
@@ -366,7 +366,7 @@ public final class JEBConfigScreen extends Screen {
         int panelH = height - FOOTER_HEIGHT - panelY - 4;
         graphics.fill(panelX, panelY, panelX + panelW, panelY + panelH, 0xBB101010);
         graphics.outline(panelX, panelY, panelW, panelH, 0xFF4A4A4A);
-        graphics.text(font, Component.literal(selectedTab.label), contentX(), panelY + 8, 0xFFFFFFFF, true);
+        graphics.text(font, Component.translatable(selectedTab.key), contentX(), panelY + 8, 0xFFFFFFFF, true);
 
         RowInfo hoveredRow = null;
         for (RowInfo row : rows) {
@@ -376,7 +376,7 @@ public final class JEBConfigScreen extends Screen {
             int color = isInvalid(row.label) ? 0x66AA2222 : 0x66181818;
             graphics.fill(row.x, row.y, row.x + row.width, row.y + row.height, color);
             graphics.outline(row.x, row.y, row.width, row.height, isInvalid(row.label) ? 0xFFFF5555 : 0xFF333333);
-            graphics.text(font, Component.literal(trimToWidth(row.label, Math.max(50, row.width / 2 - 16))), row.x + ROW_INSET, row.y + 11, 0xFFE0E0E0, true);
+            graphics.text(font, Component.literal(trimToWidth(labelText(row.label), Math.max(50, row.width / 2 - 16))), row.x + ROW_INSET, row.y + 11, 0xFFE0E0E0, true);
             drawColorSwatch(graphics, row);
             if (mouseX >= row.x && mouseX <= row.x + row.width && mouseY >= row.y && mouseY <= row.y + row.height) {
                 hoveredRow = row;
@@ -384,13 +384,13 @@ public final class JEBConfigScreen extends Screen {
         }
 
         if (!validationErrors.isEmpty()) {
-            String message = validationErrors.getFirst().message;
+            String message = validationErrors.getFirst().message().getString();
             graphics.text(font, Component.literal(trimToWidth(message, Math.max(100, width - 230))), contentX(), height - 22, 0xFFFF7777, true);
         }
 
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);
-        if (hoveredRow != null && !hoveredRow.tooltip.isBlank()) {
-            drawTooltipBox(graphics, hoveredRow.tooltip, mouseX, mouseY);
+        if (hoveredRow != null && !hoveredRow.tooltipKey.isBlank()) {
+            drawTooltipBox(graphics, Component.translatable(hoveredRow.tooltipKey).getString(), mouseX, mouseY);
         }
     }
 
@@ -480,28 +480,28 @@ public final class JEBConfigScreen extends Screen {
         validateIntInput("Command permission level", 0, 4);
 
         if (working.automaticIntervalMinutes < 1) {
-            validationErrors.add(new ValidationError("Automatic interval minutes", "Automatic interval minutes must be at least 1."));
+            validationErrors.add(new ValidationError("Automatic interval minutes", Component.translatable("screen.justenoughbackups.config.error.interval_min")));
         }
         if (working.commandPermissionLevel < 0 || working.commandPermissionLevel > 4) {
-            validationErrors.add(new ValidationError("Command permission level", "Command permission level must be between 0 and 4."));
+            validationErrors.add(new ValidationError("Command permission level", Component.translatable("screen.justenoughbackups.config.error.permission_range")));
         }
         if (working.retention.full < 1) {
-            validationErrors.add(new ValidationError("Keep full backups", "Keep full backups must be at least 1."));
+            validationErrors.add(new ValidationError("Keep full backups", Component.translatable("screen.justenoughbackups.config.error.full_min")));
         }
         if (working.retention.incremental < 0) {
-            validationErrors.add(new ValidationError("Keep partial backups", "Keep partial backups cannot be negative."));
+            validationErrors.add(new ValidationError("Keep partial backups", Component.translatable("screen.justenoughbackups.config.error.partial_min")));
         }
         if (working.retention.differential < 0) {
-            validationErrors.add(new ValidationError("Keep differential backups", "Keep differential backups cannot be negative."));
+            validationErrors.add(new ValidationError("Keep differential backups", Component.translatable("screen.justenoughbackups.config.error.differential_min")));
         }
         String backupDirectory = rawInputs.getOrDefault("Backup directory", value(working.backupDirectory));
         if (backupDirectory.isBlank()) {
-            validationErrors.add(new ValidationError("Backup directory", "Backup directory cannot be empty."));
+            validationErrors.add(new ValidationError("Backup directory", Component.translatable("screen.justenoughbackups.config.error.backup_directory_empty")));
         }
         for (ColorTarget target : ColorTarget.values()) {
             String label = target.label + " color";
             if (parseColor(rawInputs.getOrDefault(label, target.get(working.popup))).isEmpty()) {
-                validationErrors.add(new ValidationError(target.label + " color", target.label + " color must be #RRGGBB, #AARRGGBB, or 0xAARRGGBB."));
+                validationErrors.add(new ValidationError(target.label + " color", Component.translatable("screen.justenoughbackups.config.error.color", labelText(target.label + " color"))));
             }
         }
         saveButtonActive();
@@ -515,10 +515,10 @@ public final class JEBConfigScreen extends Screen {
         try {
             int parsed = Integer.parseInt(raw.trim());
             if (parsed < min || parsed > max) {
-                validationErrors.add(new ValidationError(label, label + " must be between " + min + " and " + max + "."));
+                validationErrors.add(new ValidationError(label, Component.translatable("screen.justenoughbackups.config.error.number_range", labelText(label), min, max)));
             }
         } catch (NumberFormatException exception) {
-            validationErrors.add(new ValidationError(label, label + " must be a whole number."));
+            validationErrors.add(new ValidationError(label, Component.translatable("screen.justenoughbackups.config.error.whole_number", labelText(label))));
         }
     }
 
@@ -653,7 +653,15 @@ public final class JEBConfigScreen extends Screen {
     }
 
     private static Component toggleMessage(boolean enabled) {
-        return Component.literal(enabled ? "ON" : "OFF");
+        return Component.translatable(enabled ? "screen.justenoughbackups.config.toggle.on" : "screen.justenoughbackups.config.toggle.off");
+    }
+
+    private Component labelComponent(String label) {
+        return Component.translatable(labelKey(label));
+    }
+
+    private String labelText(String label) {
+        return Component.translatable(labelKey(label)).getString();
     }
 
     private static String value(String value) {
@@ -687,51 +695,44 @@ public final class JEBConfigScreen extends Screen {
         return String.format(Locale.ROOT, "0x%08X", color);
     }
 
-    private static String tooltipFor(String label) {
+    private static String labelKey(String label) {
         return switch (label) {
-            case "Backup mode" -> """
-                    FULL: copies the whole world every time. Safest and easiest to restore.
-                    PARTIAL: copies only files changed since the latest backup. Smaller, but depends on the backup chain.
-                    DIFFERENTIAL: copies files changed since the latest full backup. Larger than partial, simpler to restore.""";
-            case "Automatic backups" -> "When enabled, the server creates backups automatically at the configured interval.";
-            case "Pause when no players joined" -> "Skips scheduled automatic backups if no player has been online since the last backup.";
-            case "Backup when world starts" -> "Creates one backup when the server finishes starting the world. Disabled by default.";
-            case "Backup when world closes" -> "Creates one backup while the server is shutting down. Shutdown waits for it to finish. Disabled by default.";
-            case "Automatic interval minutes" -> "Minutes between automatic backups. The timer resets when this value is saved.";
-            case "Backup directory" -> "Directory where backups are stored. Relative paths are resolved from the game directory.";
-            case "Command permission level" -> """
-                    Minimum Minecraft permission level required to use /advancedbackups.
-                    0: anyone can use it.
-                    1: low-level permissions.
-                    2: operators/gamemasters. Default.
-                    3: admins.
-                    4: server owners/highest permission level.""";
-            case "Integrity mode" -> """
-                    STRICT: failed backups are discarded and damaged restores are blocked.
-                    PERMISSIVE: partial backups may remain, but damaged restores are blocked.
-                    VERY_PERMISSIVE: damaged restores can continue with a warning. Use only for manual recovery.""";
-            case "Keep full backups" -> "Maximum number of full backups to keep. At least one full backup is always retained.";
-            case "Keep partial backups" -> "Maximum number of partial backups to keep. Required base backups are protected.";
-            case "Keep differential backups" -> "Maximum number of differential backups to keep. Required full backups are protected.";
-            case "Show backup popup" -> "Shows the backup progress HUD on clients with the mod installed.";
-            case "Show title" -> "Shows or hides the title line at the top of the backup popup.";
-            case "Center text" -> "Centers the popup title, status text, and progress line inside the popup.";
-            case "Show border" -> "Draws a thin popup border using the text color.";
-            case "Preview state" -> "Selects the sample state used by the popup preview editor.";
-            case "Preview Layout" -> "Opens a clean positioning screen with center guide lines and snap.";
-            case "Title" -> "Title shown at the top of the backup popup.";
-            case "Running text", "Completed text", "Failed text" -> "Supports {reason}, {type}, {percent}, {bytesWritten}, and {totalBytes}.";
-            case "Background color" -> "Popup background color. Accepts 0xAARRGGBB, #AARRGGBB, or #RRGGBB.";
-            case "Running color" -> "Status text color used while a backup is running.";
-            case "Completed color" -> "Status text color used when a backup completes.";
-            case "Failed color" -> "Status text color used when a backup fails.";
-            case "Text color" -> "Text color used for the title and progress line.";
-            case "A channel" -> "Alpha channel for the selected color.";
-            case "R channel" -> "Red channel for the selected color.";
-            case "G channel" -> "Green channel for the selected color.";
-            case "B channel" -> "Blue channel for the selected color.";
-            default -> "";
+            case "Backup mode" -> "screen.justenoughbackups.config.backup_mode";
+            case "Automatic backups" -> "screen.justenoughbackups.config.automatic_backups";
+            case "Pause when no players joined" -> "screen.justenoughbackups.config.pause_without_players";
+            case "Backup when world starts" -> "screen.justenoughbackups.config.backup_on_start";
+            case "Backup when world closes" -> "screen.justenoughbackups.config.backup_on_stop";
+            case "Automatic interval minutes" -> "screen.justenoughbackups.config.interval_minutes";
+            case "Backup directory" -> "screen.justenoughbackups.config.backup_directory";
+            case "Command permission level" -> "screen.justenoughbackups.config.permission_level";
+            case "Integrity mode" -> "screen.justenoughbackups.config.integrity_mode";
+            case "Keep full backups" -> "screen.justenoughbackups.config.keep_full";
+            case "Keep partial backups" -> "screen.justenoughbackups.config.keep_partial";
+            case "Keep differential backups" -> "screen.justenoughbackups.config.keep_differential";
+            case "Show backup popup" -> "screen.justenoughbackups.config.show_popup";
+            case "Show title" -> "screen.justenoughbackups.config.show_title";
+            case "Center text" -> "screen.justenoughbackups.config.center_text";
+            case "Show border" -> "screen.justenoughbackups.config.show_border";
+            case "Preview state" -> "screen.justenoughbackups.config.preview_state";
+            case "Title" -> "screen.justenoughbackups.config.popup_title";
+            case "Running text" -> "screen.justenoughbackups.config.running_text";
+            case "Completed text" -> "screen.justenoughbackups.config.completed_text";
+            case "Failed text" -> "screen.justenoughbackups.config.failed_text";
+            case "Background color" -> "screen.justenoughbackups.config.background_color";
+            case "Running color" -> "screen.justenoughbackups.config.running_color";
+            case "Completed color" -> "screen.justenoughbackups.config.completed_color";
+            case "Failed color" -> "screen.justenoughbackups.config.failed_color";
+            case "Text color" -> "screen.justenoughbackups.config.text_color";
+            case "A channel" -> "screen.justenoughbackups.config.a_channel";
+            case "R channel" -> "screen.justenoughbackups.config.r_channel";
+            case "G channel" -> "screen.justenoughbackups.config.g_channel";
+            case "B channel" -> "screen.justenoughbackups.config.b_channel";
+            default -> "screen.justenoughbackups.config.unknown";
         };
+    }
+
+    private static String tooltipFor(String label) {
+        return labelKey(label) + ".tooltip";
     }
 
     private static ColorTarget colorTargetForRow(String label) {
@@ -744,17 +745,17 @@ public final class JEBConfigScreen extends Screen {
     }
 
     private enum ConfigTab {
-        BACKUPS("Backups"),
-        RETENTION("Retention"),
-        PERMISSIONS("Permissions"),
-        INTEGRITY("Integrity"),
-        HUD("HUD"),
-        PREVIEW("Preview");
+        BACKUPS("screen.justenoughbackups.config.tab.backups"),
+        RETENTION("screen.justenoughbackups.config.tab.retention"),
+        PERMISSIONS("screen.justenoughbackups.config.tab.permissions"),
+        INTEGRITY("screen.justenoughbackups.config.tab.integrity"),
+        HUD("screen.justenoughbackups.config.tab.hud"),
+        PREVIEW("screen.justenoughbackups.config.tab.preview");
 
-        private final String label;
+        private final String key;
 
-        ConfigTab(String label) {
-            this.label = label;
+        ConfigTab(String key) {
+            this.key = key;
         }
     }
 
@@ -902,7 +903,7 @@ public final class JEBConfigScreen extends Screen {
 
         @Override
         protected void updateMessage() {
-            setMessage(Component.literal(channel.label + ": " + channelValue()));
+            setMessage(Component.translatable("screen.justenoughbackups.config.channel_value", channel.label, channelValue()));
         }
 
         @Override
@@ -920,9 +921,9 @@ public final class JEBConfigScreen extends Screen {
         void accept(ColorChannel channel, int value);
     }
 
-    private record RowInfo(int x, int y, int width, int height, String label, String tooltip) {
+    private record RowInfo(int x, int y, int width, int height, String label, String tooltipKey) {
     }
 
-    private record ValidationError(String label, String message) {
+    private record ValidationError(String label, Component message) {
     }
 }

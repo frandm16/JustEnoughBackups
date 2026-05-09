@@ -70,33 +70,33 @@ public final class BackupScheduler {
             }
 
             playersSeenSinceLastBackup = false;
-            sendActionBar(server, "Advanced Backups: Initializing automatic backup...");
+            sendActionBar(server, Component.translatable("text.justenoughbackups.scheduler.automatic_initializing"));
             BackupService.createBackup(server, config.backupMode, "automatic")
                     .whenComplete((manifest, exception) -> {
                         if (exception != null) {
                             WorldBackupMod.LOGGER.error("Automatic backup failed.", exception);
-                            server.execute(() -> sendActionBar(server, "Advanced Backups: automatic backup failed"));
+                            server.execute(() -> sendActionBar(server, Component.translatable("text.justenoughbackups.scheduler.automatic_failed")));
                             return;
                         }
 
-                        server.execute(() -> sendActionBar(server, "Advanced Backups: automatic backup completed"));
+                        server.execute(() -> sendActionBar(server, Component.translatable("text.justenoughbackups.scheduler.automatic_completed")));
                     });
         });
     }
 
     private static void runLifecycleBackup(MinecraftServer server, BackupConfig config, String reason, boolean waitForCompletion) {
         lastBackupMillis = System.currentTimeMillis();
-        sendActionBar(server, "Advanced Backups: Initializing " + reason + " backup...");
+        sendActionBar(server, Component.translatable("text.justenoughbackups.scheduler.lifecycle_initializing", reason));
 
         CompletableFuture<BackupManifest> backup = BackupService.createBackup(server, config.backupMode, reason)
                 .whenComplete((manifest, exception) -> {
                     if (exception != null) {
                         WorldBackupMod.LOGGER.error("{} backup failed.", reason, exception);
-                        server.execute(() -> sendActionBar(server, "Advanced Backups: " + reason + " backup failed"));
+                        server.execute(() -> sendActionBar(server, Component.translatable("text.justenoughbackups.scheduler.lifecycle_failed", reason)));
                         return;
                     }
 
-                    server.execute(() -> sendActionBar(server, "Advanced Backups: " + reason + " backup completed"));
+                    server.execute(() -> sendActionBar(server, Component.translatable("text.justenoughbackups.scheduler.lifecycle_completed", reason)));
                 });
 
         if (waitForCompletion) {
@@ -108,8 +108,8 @@ public final class BackupScheduler {
         }
     }
 
-    private static void sendActionBar(MinecraftServer server, String message) {
-        server.getPlayerList().broadcastSystemMessage(Component.literal(message), true);
+    private static void sendActionBar(MinecraftServer server, Component message) {
+        server.getPlayerList().broadcastSystemMessage(message, true);
     }
 
     private static boolean hasOnlinePlayers(MinecraftServer server) {

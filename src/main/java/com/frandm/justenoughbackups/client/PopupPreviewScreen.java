@@ -22,7 +22,7 @@ final class PopupPreviewScreen extends Screen {
     private int dragOffsetY;
 
     PopupPreviewScreen(JEBConfigScreen parent, BackupConfig.Popup popup, BackupProgressPayload previewPayload) {
-        super(Component.literal("Popup Preview"));
+        super(Component.translatable("screen.justenoughbackups.preview.title"));
         this.parent = parent;
         this.popup = popup;
         this.previewPayload = previewPayload;
