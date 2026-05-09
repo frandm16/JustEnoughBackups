@@ -1,6 +1,7 @@
 package com.frandm.advancedbackups.command;
 
 import com.frandm.advancedbackups.WorldBackupMod;
+import com.frandm.advancedbackups.backup.BackupPermissions;
 import com.frandm.advancedbackups.backup.BackupService;
 import com.frandm.advancedbackups.backup.model.BackupManifest;
 import com.frandm.advancedbackups.backup.model.BackupType;
@@ -12,8 +13,6 @@ import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
-import net.minecraft.server.permissions.Permission;
-import net.minecraft.server.permissions.PermissionLevel;
 
 import java.io.IOException;
 import java.util.List;
@@ -52,8 +51,7 @@ public final class BackupCommand {
     }
 
     private static boolean hasConfiguredPermission(CommandSourceStack source) {
-        PermissionLevel level = PermissionLevel.byId(BackupConfig.get().commandPermissionLevel);
-        return source.permissions().hasPermission(new Permission.HasCommandLevel(level));
+        return BackupPermissions.hasConfiguredPermission(source);
     }
 
     private static int create(CommandSourceStack source, BackupType type) {

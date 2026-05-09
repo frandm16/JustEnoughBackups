@@ -304,6 +304,64 @@ public final class BackupStorage {
         }
     }
 
+    public static void renameBackup(Path backupDir, String backupId, String requestedName) throws IOException {
+        BackupManifest manifest = findById(backupDir, backupId);
+        String newFileName = sanitizeBackupFileName(requestedName);
+        Path normalizedBackupDir = backupDir.toAbsolutePath().normalize();
+        Path current = normalizedBackupDir.resolve(manifest.zipFileName).normalize();
+        Path target = normalizedBackupDir.resolve(newFileName).normalize();
+        if (!target.getParent().equals(normalizedBackupDir)) {
+            throw new IOException("Backup name escapes backup directory.");
+        }
+        if (Files.exists(target)) {
+            throw new IOException("Backup already exists: " + newFileName);
+        }
+        Files.move(current, target);
+    }
+
+    public static void deleteBackup(Path backupDir, String backupId) throws IOException {
+        BackupManifest manifest = findById(backupDir, backupId);
+        Files.delete(backupDir.resolve(manifest.zipFileName));
+    }
+
+    public static String displayName(BackupManifest manifest) {
+        String fileName = manifest.zipFileName == null || manifest.zipFileName.isBlank()
+                ? manifest.id
+                : manifest.zipFileName;
+        return fileName.endsWith(".zip") ? fileName.substring(0, fileName.length() - 4) : fileName;
+    }
+
+    private static BackupManifest findById(Path backupDir, String backupId) throws IOException {
+        for (BackupManifest manifest : readManifests(backupDir)) {
+            if (Objects.equals(manifest.id, backupId)) {
+                return manifest;
+            }
+        }
+        throw new IOException("Backup not found: " + backupId);
+    }
+
+    private static String sanitizeBackupFileName(String requestedName) throws IOException {
+        String value = requestedName == null ? "" : requestedName.trim();
+        if (value.endsWith(".zip")) {
+            value = value.substring(0, value.length() - 4);
+        }
+        if (value.isBlank()
+                || value.equals(".")
+                || value.equals("..")
+                || value.contains("..")
+                || value.contains("/")
+                || value.contains("\\")
+                || value.endsWith(".zip.tmp")) {
+            throw new IOException("Invalid backup name.");
+        }
+
+        String cleaned = value.replaceAll("[^a-zA-Z0-9._ -]", "_").trim();
+        if (cleaned.isBlank() || cleaned.equals(".") || cleaned.equals("..") || cleaned.contains("..")) {
+            throw new IOException("Invalid backup name.");
+        }
+        return cleaned + ".zip";
+    }
+
     private static BackupManifest.FileState writeFileEntry(Path file, String relativeName, ZipOutputStream zipOut, ProgressTracker progress) throws IOException {
         MessageDigest digest = newDigest();
         long bytes = 0L;

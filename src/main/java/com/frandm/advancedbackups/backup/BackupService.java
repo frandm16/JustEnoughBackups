@@ -2,6 +2,7 @@ package com.frandm.advancedbackups.backup;
 
 import com.frandm.advancedbackups.WorldBackupMod;
 import com.frandm.advancedbackups.backup.model.BackupManifest;
+import com.frandm.advancedbackups.backup.model.BackupSummary;
 import com.frandm.advancedbackups.backup.model.BackupType;
 import com.frandm.advancedbackups.backup.model.PendingRestore;
 import com.frandm.advancedbackups.backup.progress.BackupProgress;
@@ -18,7 +19,10 @@ import net.minecraft.world.level.storage.LevelResource;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -89,6 +93,36 @@ public final class BackupService {
                 .toList();
     }
 
+    public static List<BackupSummary> listBackupSummaries(MinecraftServer server) throws IOException {
+        List<BackupManifest> manifests = BackupStorage.readManifests(BackupPaths.worldBackupDir(server)).stream()
+                .sorted(Comparator.comparing((BackupManifest manifest) -> value(manifest.createdAt)).reversed())
+                .toList();
+        Map<String, String> displayNames = new HashMap<>();
+        for (BackupManifest manifest : manifests) {
+            displayNames.put(manifest.id, BackupStorage.displayName(manifest));
+        }
+
+        return manifests.stream()
+                .map(manifest -> summary(manifest, manifests, displayNames))
+                .toList();
+    }
+
+    public static void renameBackup(MinecraftServer server, String backupId, String requestedName) throws IOException {
+        BackupStorage.renameBackup(BackupPaths.worldBackupDir(server), backupId, requestedName);
+    }
+
+    public static void deleteBackup(MinecraftServer server, String backupId) throws IOException {
+        List<BackupManifest> manifests = BackupStorage.readManifests(BackupPaths.worldBackupDir(server));
+        BackupManifest dependent = manifests.stream()
+                .filter(manifest -> Objects.equals(manifest.baseBackupId, backupId))
+                .findFirst()
+                .orElse(null);
+        if (dependent != null) {
+            throw new IOException("Required by backup " + BackupStorage.displayName(dependent));
+        }
+        BackupStorage.deleteBackup(BackupPaths.worldBackupDir(server), backupId);
+    }
+
     public static CompletableFuture<PendingRestore> restoreBackup(MinecraftServer server, String backupId) {
         if (!BACKUP_RUNNING.compareAndSet(false, true)) {
             return CompletableFuture.failedFuture(new IllegalStateException("A backup or restore is already running."));
@@ -113,6 +147,33 @@ public final class BackupService {
         BackupConfig config = BackupConfig.reload();
         BackupScheduler.resetTimer();
         return config;
+    }
+
+    private static BackupSummary summary(BackupManifest manifest, List<BackupManifest> allManifests, Map<String, String> displayNames) {
+        BackupManifest dependent = allManifests.stream()
+                .filter(candidate -> Objects.equals(candidate.baseBackupId, manifest.id))
+                .findFirst()
+                .orElse(null);
+        boolean canDelete = dependent == null;
+        String deleteBlockedReason = dependent == null ? "" : "Required by backup " + displayNames.getOrDefault(dependent.id, dependent.id);
+        return new BackupSummary(
+                manifest.id,
+                BackupStorage.displayName(manifest),
+                manifest.type,
+                manifest.createdAt,
+                manifest.worldName,
+                manifest.reason,
+                manifest.baseBackupId,
+                manifest.includedBytes,
+                manifest.includedFiles == null ? 0 : manifest.includedFiles.size(),
+                true,
+                canDelete,
+                deleteBlockedReason
+        );
+    }
+
+    private static String value(String value) {
+        return value == null ? "" : value;
     }
 
     private static void restoreSaving(MinecraftServer server, boolean previousAutoSave, WorldSavingState previousWorldSavingState) {
