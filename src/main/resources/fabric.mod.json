@@ -1,24 +1,24 @@
 {
   "schemaVersion": 1,
-  "id": "advancedbackups",
+  "id": "justenoughbackups",
   "version": "${version}",
-  "name": "Advanced Backups",
+  "name": "Just Enough Backups",
   "description": "Server-side full, incremental, and differential world backups.",
   "authors": [
     "frandm16"
   ],
   "license": "MIT",
-  "icon": "assets/advancedbackups/icon.png",
+  "icon": "assets/justenoughbackups/icon.png",
   "environment": "*",
   "entrypoints": {
     "main": [
-      "com.frandm.advancedbackups.WorldBackupMod"
+      "com.frandm.justenoughbackups.WorldBackupMod"
     ],
     "client": [
-      "com.frandm.advancedbackups.client.AdvancedBackupsClient"
+      "com.frandm.justenoughbackups.client.JEBClient"
     ],
     "modmenu": [
-      "com.frandm.advancedbackups.client.AdvancedBackupsModMenu"
+      "com.frandm.justenoughbackups.client.JEBModMenu"
     ]
   },
   "depends": {
