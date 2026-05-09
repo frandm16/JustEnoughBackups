@@ -81,6 +81,7 @@ public final class BackupUiNetworking {
         try {
             List<BackupUiBackup> backups = BackupService.listBackupSummaries(server).stream()
                     .map(BackupUiBackup::new)
+                    .filter(backup -> isSendable(backup, server))
                     .toList();
             send(player, request, true, success, messageKey, List.of(args), backups);
         } catch (IOException exception) {
@@ -108,5 +109,21 @@ public final class BackupUiNetworking {
         }
         String message = current.getMessage();
         return message == null || message.isBlank() ? current.getClass().getSimpleName() : message;
+    }
+
+    private static boolean isSendable(BackupUiBackup backup, MinecraftServer server) {
+        if (backup == null) {
+            WorldBackupMod.LOGGER.warn("Skipping null backup entry in UI response.");
+            return false;
+        }
+        if (backup.id() == null || backup.id().isBlank()) {
+            WorldBackupMod.LOGGER.warn("Skipping backup with missing id in UI response for world {}.", server.getWorldData().getLevelName());
+            return false;
+        }
+        if (backup.type() == null) {
+            WorldBackupMod.LOGGER.warn("Skipping backup {} with missing type in UI response.", backup.id());
+            return false;
+        }
+        return true;
     }
 }

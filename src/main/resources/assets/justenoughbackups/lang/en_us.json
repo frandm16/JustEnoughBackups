@@ -35,7 +35,7 @@
   "screen.justenoughbackups.backups.type": "Type",
   "screen.justenoughbackups.backups.name": "Backup name",
 
-  "screen.justenoughbackups.config.title": "Just Enough Backups",
+  "screen.justenoughbackups.config.title": "Just Enough Backups Config",
   "screen.justenoughbackups.config.tab.backups": "Backups",
   "screen.justenoughbackups.config.tab.retention": "Retention",
   "screen.justenoughbackups.config.tab.permissions": "Permissions",

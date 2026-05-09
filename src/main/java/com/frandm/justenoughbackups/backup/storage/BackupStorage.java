@@ -280,7 +280,20 @@ public final class BackupStorage {
             }
 
             try (Reader reader = new InputStreamReader(zipFile.getInputStream(entry), StandardCharsets.UTF_8)) {
-                return GSON.fromJson(reader, BackupManifest.class);
+                BackupManifest manifest = GSON.fromJson(reader, BackupManifest.class);
+                if (manifest == null) {
+                    WorldBackupMod.LOGGER.warn("Skipping backup with empty manifest: {}", backupFile);
+                    return null;
+                }
+                if (manifest.id == null || manifest.id.isBlank()) {
+                    WorldBackupMod.LOGGER.warn("Skipping backup with missing id in manifest: {}", backupFile);
+                    return null;
+                }
+                if (manifest.type == null) {
+                    WorldBackupMod.LOGGER.warn("Skipping backup with missing type in manifest: {}", backupFile);
+                    return null;
+                }
+                return manifest;
             }
         } catch (IOException | RuntimeException exception) {
             WorldBackupMod.LOGGER.warn("Skipping unreadable backup manifest: {}", backupFile, exception);

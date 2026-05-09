@@ -38,7 +38,7 @@ public record BackupUiBackup(
     static void write(RegistryFriendlyByteBuf buffer, BackupUiBackup backup) {
         buffer.writeUtf(value(backup.id()));
         buffer.writeUtf(value(backup.displayName()));
-        buffer.writeEnum(backup.type());
+        buffer.writeEnum(backup.type() == null ? BackupType.FULL : backup.type());
         buffer.writeUtf(value(backup.createdAt()));
         buffer.writeUtf(value(backup.worldName()));
         buffer.writeUtf(value(backup.reason()));

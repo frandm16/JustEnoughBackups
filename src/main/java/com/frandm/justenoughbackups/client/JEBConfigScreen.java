@@ -42,14 +42,13 @@ public final class JEBConfigScreen extends Screen {
     private static final int DEFAULT_PREVIEW_BYTES = 128 * 1024 * 1024;
     private static final int DEFAULT_TOTAL_BYTES = 304 * 1024 * 1024;
 
-    private static final int BG = 0xCC050505;
-    private static final int PANEL = 0xAA101010;
-    private static final int FIXED_BAND = 0xF0050505;
-    private static final int LINE = 0xFF606060;
-    private static final int ROW = 0x66181818;
-    private static final int ROW_BAD = 0x66AA2222;
-    private static final int OUTLINE = 0xFF333333;
-    private static final int OUTLINE_BAD = 0xFFFF5555;
+    private static final int BG_COLOR = 0xCC050505;
+    private static final int TITLE_COLOR = 0xFFFFFFFF;
+    private static final int LINE_COLOR = 0x00606060;
+    private static final int ROW_COLOR = 0x66181818;
+    private static final int ROW_BAD_COLOR = 0x66AA2222;
+    private static final int OUTLINE_COLOR = 0xFF333333;
+    private static final int OUTLINE_BAD_COLOR = 0xFFFF5555;
 
     private final Screen parent;
     private final Map<ConfigTab, Integer> scrollByTab = new EnumMap<>(ConfigTab.class);
@@ -105,15 +104,13 @@ public final class JEBConfigScreen extends Screen {
                 y = booleanRow(x, y, w, controlsW, "Backup when world starts", () -> working.backupOnServerStart, value -> working.backupOnServerStart = value);
                 y = booleanRow(x, y, w, controlsW, "Backup when world closes", () -> working.backupOnServerStop, value -> working.backupOnServerStop = value);
                 y = intRow(x, y, w, controlsW, "Automatic interval minutes", () -> working.automaticIntervalMinutes, value -> working.automaticIntervalMinutes = value, 1, Integer.MAX_VALUE);
-                textRow(x, y, w, controlsW, "Backup directory", () -> working.backupDirectory, value -> working.backupDirectory = value);
-            }
-            case RETENTION -> {
                 y = intRow(x, y, w, controlsW, "Keep full backups", () -> working.retention.full, value -> working.retention.full = value, 1, Integer.MAX_VALUE);
                 y = intRow(x, y, w, controlsW, "Keep partial backups", () -> working.retention.incremental, value -> working.retention.incremental = value, 0, Integer.MAX_VALUE);
-                intRow(x, y, w, controlsW, "Keep differential backups", () -> working.retention.differential, value -> working.retention.differential = value, 0, Integer.MAX_VALUE);
+                y = intRow(x, y, w, controlsW, "Keep differential backups", () -> working.retention.differential, value -> working.retention.differential = value, 0, Integer.MAX_VALUE);
+                y = intRow(x, y, w, controlsW, "Command permission level", () -> working.commandPermissionLevel, value -> working.commandPermissionLevel = value, 0, 4);
+                y = enumRow(x, y, w, controlsW, "Integrity mode", working.integrityMode, BackupIntegrityMode.values(), value -> working.integrityMode = value);
+                textRow(x, y, w, controlsW, "Backup directory", () -> working.backupDirectory, value -> working.backupDirectory = value);
             }
-            case PERMISSIONS -> intRow(x, y, w, controlsW, "Command permission level", () -> working.commandPermissionLevel, value -> working.commandPermissionLevel = value, 0, 4);
-            case INTEGRITY -> enumRow(x, y, w, controlsW, "Integrity mode", working.integrityMode, BackupIntegrityMode.values(), value -> working.integrityMode = value);
             case HUD -> buildHudRows(x, y, w, controlsW);
             case PREVIEW -> {
             }
@@ -335,26 +332,22 @@ public final class JEBConfigScreen extends Screen {
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-        graphics.fill(0, 0, width, height, 0X00000000);
-        int panelX = OUTER;
-        int panelW = Math.max(1, width - OUTER * 2);
-        graphics.fill(panelX, VIEW_TOP, panelX + panelW, footerTop(), PANEL);
-        graphics.text(font, title, OUTER, TITLE_Y, 0xFFFFFFFF, true);
+        graphics.fill(0, 0, width, height, BG_COLOR); // Background
+        graphics.centeredText(font, title,  width / 2, TITLE_Y, TITLE_COLOR); // Title: Just Enough Backups Config
         renderTabs(graphics, mouseX, mouseY);
-        graphics.text(font, Component.translatable(selectedTab.key), OUTER, VIEW_TOP - 12, 0xFFFFFFFF, true);
-        graphics.horizontalLine(0, width, viewportTop(), 0xFF606060);
-        graphics.horizontalLine(0, width, viewportBottom(), 0xFF606060);
+        graphics.horizontalLine(0, width, viewportTop(), LINE_COLOR);
+        graphics.horizontalLine(0, width, viewportBottom(), LINE_COLOR);
 
         graphics.enableScissor(viewportX(), viewportTop() + 1, viewportRight(), viewportBottom());
         ConfigRow hovered = null;
         for (ConfigRow row : rows) {
-            int y = rowScreenY(row);
+            int y = rowScreenY(row) + 1;
             if (y + row.h <= viewportTop() || y >= viewportBottom()) {
                 continue;
             }
-            int color = isInvalid(row.label) ? ROW_BAD : ROW;
+            int color = isInvalid(row.label) ? ROW_BAD_COLOR : ROW_COLOR;
             graphics.fill(row.x, y, row.x + row.w, y + row.h, color);
-            graphics.outline(row.x, y, row.w, row.h, isInvalid(row.label) ? OUTLINE_BAD : OUTLINE);
+            graphics.outline(row.x, y, row.w, row.h, isInvalid(row.label) ? OUTLINE_BAD_COLOR : OUTLINE_COLOR);
             graphics.text(font, Component.literal(trimToWidth(labelText(row.label), Math.max(50, row.w / 2 - 16))), row.x + ROW_INSET, y + 11, 0xFFE0E0E0, true);
             row.renderer.render(graphics, row, y, mouseX, mouseY);
             if (isInsideViewport(mouseY) && mouseX >= row.x && mouseX <= row.x + row.w && mouseY >= y && mouseY <= y + row.h) {
@@ -371,14 +364,12 @@ public final class JEBConfigScreen extends Screen {
     }
 
     private void renderTabs(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
-        int tabW = Math.max(48, (width - OUTER * 2 - 4 * (ConfigTab.values().length - 1)) / ConfigTab.values().length);
-        int x = OUTER;
         for (ConfigTab tab : ConfigTab.values()) {
-            Rect rect = new Rect(x, TAB_Y, tabW, TAB_H);
+            Rect rect = tabRect(tab);
             drawButton(graphics, rect, Component.translatable(tab.key), selectedTab != tab, rect.contains(mouseX, mouseY));
-            x += tabW + 4;
         }
     }
+
 
     private void renderFooter(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
         graphics.fill(0, footerTop(), width, height, 0x00000000);
@@ -447,10 +438,8 @@ public final class JEBConfigScreen extends Screen {
     }
 
     private boolean handleTabClick(double mouseX, double mouseY) {
-        int tabW = Math.max(48, (width - OUTER * 2 - 4 * (ConfigTab.values().length - 1)) / ConfigTab.values().length);
-        int x = OUTER;
         for (ConfigTab tab : ConfigTab.values()) {
-            if (new Rect(x, TAB_Y, tabW, TAB_H).contains(mouseX, mouseY)) {
+            if (tabRect(tab).contains(mouseX, mouseY)) {
                 if (tab == ConfigTab.PREVIEW) {
                     selectedTab = ConfigTab.HUD;
                     minecraft.setScreen(new PopupPreviewScreen(this, working.popup, previewPayload()));
@@ -460,9 +449,23 @@ public final class JEBConfigScreen extends Screen {
                 }
                 return true;
             }
-            x += tabW + 4;
         }
         return false;
+    }
+
+    private Rect tabRect(ConfigTab tab) {
+        int areaX = width / 3;
+        int areaW = width / 3;
+        int gap = 4;
+        int tabCount = ConfigTab.values().length;
+
+        int tabW = Math.max(48, (areaW - gap * (tabCount - 1)) / tabCount);
+        int totalW = tabW * tabCount + gap * (tabCount - 1);
+        int x = areaX + (areaW - totalW) / 2;
+
+        int index = tab.ordinal();
+        int tabX = x + index * (tabW + gap);
+        return new Rect(tabX, TAB_Y, tabW, TAB_H);
     }
 
     private boolean handleFooterClick(double mouseX, double mouseY) {
@@ -644,15 +647,13 @@ public final class JEBConfigScreen extends Screen {
                 working.backupOnServerStart = defaults.backupOnServerStart;
                 working.backupOnServerStop = defaults.backupOnServerStop;
                 working.automaticIntervalMinutes = defaults.automaticIntervalMinutes;
-                working.backupDirectory = defaults.backupDirectory;
-            }
-            case RETENTION -> {
                 working.retention.full = defaults.retention.full;
                 working.retention.incremental = defaults.retention.incremental;
                 working.retention.differential = defaults.retention.differential;
+                working.commandPermissionLevel = defaults.commandPermissionLevel;
+                working.integrityMode = defaults.integrityMode;
+                working.backupDirectory = defaults.backupDirectory;
             }
-            case PERMISSIONS -> working.commandPermissionLevel = defaults.commandPermissionLevel;
-            case INTEGRITY -> working.integrityMode = defaults.integrityMode;
             case HUD -> working.popup = defaults.popup.copy();
             case PREVIEW -> {
             }
@@ -1016,9 +1017,6 @@ public final class JEBConfigScreen extends Screen {
 
     private enum ConfigTab {
         BACKUPS("screen.justenoughbackups.config.tab.backups"),
-        RETENTION("screen.justenoughbackups.config.tab.retention"),
-        PERMISSIONS("screen.justenoughbackups.config.tab.permissions"),
-        INTEGRITY("screen.justenoughbackups.config.tab.integrity"),
         HUD("screen.justenoughbackups.config.tab.hud"),
         PREVIEW("screen.justenoughbackups.config.tab.preview");
 
