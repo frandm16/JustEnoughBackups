@@ -159,6 +159,9 @@ public final class BackupConfig {
 
     public static final class Popup {
         public boolean enabled = true;
+        public boolean showTitle = true;
+        public boolean centerText = false;
+        public boolean showBorder = false;
         public int x = 8;
         public int y = 8;
         public String backgroundColor = "0xAA101010";
@@ -208,6 +211,9 @@ public final class BackupConfig {
         public Popup copy() {
             Popup copy = new Popup();
             copy.enabled = enabled;
+            copy.showTitle = showTitle;
+            copy.centerText = centerText;
+            copy.showBorder = showBorder;
             copy.x = x;
             copy.y = y;
             copy.backgroundColor = backgroundColor;

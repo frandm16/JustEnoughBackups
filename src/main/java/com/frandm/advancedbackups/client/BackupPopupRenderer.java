@@ -13,23 +13,33 @@ final class BackupPopupRenderer {
     }
 
     static Dimensions measure(Font font, BackupConfig.Popup popup, BackupProgressPayload progress) {
-        String title = applyTemplate(popup.title, progress);
         String detail = detail(progress, popup);
         String progressLine = progressLine(progress);
-        int width = Math.max(font.width(title), Math.max(font.width(detail), font.width(progressLine))) + 12;
-        return new Dimensions(width, 34);
+        int contentWidth = Math.max(font.width(detail), font.width(progressLine));
+        if (popup.showTitle) {
+            contentWidth = Math.max(contentWidth, font.width(applyTemplate(popup.title, progress)));
+        }
+        int height = popup.showTitle ? 34 : 23;
+        return new Dimensions(contentWidth + 12, height);
     }
 
     static void render(GuiGraphicsExtractor graphics, Font font, BackupConfig.Popup popup, BackupProgressPayload progress, int x, int y) {
-        String title = applyTemplate(popup.title, progress);
         String detail = detail(progress, popup);
         String progressLine = progressLine(progress);
         Dimensions dimensions = measure(font, popup, progress);
 
         graphics.fill(x - 4, y - 4, x + dimensions.width(), y + dimensions.height(), popup.backgroundColorArgb());
-        graphics.text(font, title, x, y, 0xFFFFFFFF, true);
-        graphics.text(font, detail, x, y + 11, color(progress, popup), true);
-        graphics.text(font, progressLine, x, y + 22, popup.textColorArgb(), true);
+        if (popup.showBorder) {
+            graphics.outline(x - 4, y - 4, dimensions.width() + 4, dimensions.height() + 4, popup.textColorArgb());
+        }
+
+        int textY = y;
+        if (popup.showTitle) {
+            drawText(graphics, font, popup, applyTemplate(popup.title, progress), x, textY, dimensions.width(), popup.textColorArgb());
+            textY += 11;
+        }
+        drawText(graphics, font, popup, detail, x, textY, dimensions.width(), color(progress, popup));
+        drawText(graphics, font, popup, progressLine, x, textY + 11, dimensions.width(), popup.textColorArgb());
     }
 
     static String formatBytes(long bytes) {
@@ -76,6 +86,11 @@ final class BackupPopupRenderer {
             case COMPLETED -> popup.completedColorArgb();
             default -> popup.runningColorArgb();
         };
+    }
+
+    private static void drawText(GuiGraphicsExtractor graphics, Font font, BackupConfig.Popup popup, String text, int x, int y, int popupWidth, int color) {
+        int textX = popup.centerText ? x + Math.max(0, popupWidth - 8 - font.width(text)) / 2 : x;
+        graphics.text(font, text, textX, y, color, true);
     }
 
     private static String applyTemplate(String template, BackupProgressPayload progress) {

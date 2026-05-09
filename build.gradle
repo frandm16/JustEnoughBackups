@@ -33,7 +33,6 @@ dependencies {
     implementation "net.fabricmc:fabric-loader:${loader_version}"
     implementation "net.fabricmc.fabric-api:fabric-api:${fabric_api_version}"
     compileOnly "maven.modrinth:modmenu:${modmenu_version}"
-    compileOnly "maven.modrinth:cloth-config:${cloth_config_version}"
 }
 
 tasks.withType(JavaCompile).configureEach {
