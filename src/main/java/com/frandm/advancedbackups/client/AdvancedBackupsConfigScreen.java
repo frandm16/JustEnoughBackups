@@ -15,6 +15,7 @@ import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
 
+import java.time.Year;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
@@ -73,14 +74,13 @@ public final class AdvancedBackupsConfigScreen extends Screen {
         int tabWidth = Math.max(48, (width - OUTER_MARGIN * 2 - TAB_GAP * (ConfigTab.values().length - 1)) / ConfigTab.values().length);
         int tabX = OUTER_MARGIN;
         for (ConfigTab tab : ConfigTab.values()) {
-            ConfigTab captured = tab;
             Button button = Button.builder(Component.literal(tab.label), ignored -> {
-                        if (captured == ConfigTab.PREVIEW) {
+                        if (tab == ConfigTab.PREVIEW) {
                             selectedTab = ConfigTab.HUD;
                             minecraft.setScreen(new PopupPreviewScreen(this, working.popup, previewPayload()));
                             return;
                         }
-                        selectedTab = captured;
+                        selectedTab = tab;
                         rebuildWidgets();
                     })
                     .bounds(tabX, tabY, tabWidth, CONTROL_HEIGHT)
@@ -93,15 +93,15 @@ public final class AdvancedBackupsConfigScreen extends Screen {
         int contentX = contentX();
         int contentY = contentTop();
         int contentW = contentWidth();
-        int controlsW = Math.min(contentW, Math.min(240, Math.max(80, contentW / 2)));
+        int controlsW = Math.min(contentW, Math.clamp(contentW / 2, 80, 240));
         int y = contentY + HEADER_HEIGHT - currentScroll();
 
         switch (selectedTab) {
-            case BACKUPS -> y = buildBackups(contentX, y, contentW, controlsW);
-            case RETENTION -> y = buildRetention(contentX, y, contentW, controlsW);
-            case PERMISSIONS -> y = buildPermissions(contentX, y, contentW, controlsW);
-            case INTEGRITY -> y = buildIntegrity(contentX, y, contentW, controlsW);
-            case HUD -> y = buildHud(contentX, y, contentW, controlsW);
+            case BACKUPS -> buildBackups(contentX, y, contentW, controlsW);
+            case RETENTION -> buildRetention(contentX, y, contentW, controlsW);
+            case PERMISSIONS -> buildPermissions(contentX, y, contentW, controlsW);
+            case INTEGRITY -> buildIntegrity(contentX, y, contentW, controlsW);
+            case HUD -> buildHud(contentX, y, contentW, controlsW);
             case PREVIEW -> {
             }
         }
@@ -110,9 +110,6 @@ public final class AdvancedBackupsConfigScreen extends Screen {
         int footerX = Math.max(OUTER_MARGIN, width - OUTER_MARGIN - 282);
         saveButton = addRenderableWidget(Button.builder(Component.literal("Save"), ignored -> saveAndClose())
                 .bounds(footerX, footerY, 58, CONTROL_HEIGHT)
-                .build());
-        addRenderableWidget(Button.builder(Component.literal("Cancel"), ignored -> onClose())
-                .bounds(footerX + 64, footerY, 58, CONTROL_HEIGHT)
                 .build());
         addRenderableWidget(Button.builder(Component.literal("Reset Tab"), ignored -> resetCurrentTab())
                 .bounds(footerX + 128, footerY, 72, CONTROL_HEIGHT)
@@ -132,7 +129,7 @@ public final class AdvancedBackupsConfigScreen extends Screen {
         y = addBooleanRow(x, y, width, controlsW, "Backup when world starts", () -> working.backupOnServerStart, value -> working.backupOnServerStart = value);
         y = addBooleanRow(x, y, width, controlsW, "Backup when world closes", () -> working.backupOnServerStop, value -> working.backupOnServerStop = value);
         y = addIntRow(x, y, width, controlsW, "Automatic interval minutes", () -> working.automaticIntervalMinutes, value -> working.automaticIntervalMinutes = value, 1, Integer.MAX_VALUE);
-        return addTextRow(x, y, width, controlsW, "Backup directory", () -> working.backupDirectory, value -> working.backupDirectory = value, false);
+        return addTextRow(x, y, width, controlsW, "Backup directory", () -> working.backupDirectory, value -> working.backupDirectory = value);
     }
 
     private int buildRetention(int x, int y, int width, int controlsW) {
@@ -158,8 +155,8 @@ public final class AdvancedBackupsConfigScreen extends Screen {
         int rightW = width - leftW - COLUMN_GAP;
         int leftX = x;
         int rightX = x + leftW + COLUMN_GAP;
-        int leftControlsW = Math.min(controlsW, Math.max(80, leftW / 2));
-        int rightControlsW = Math.min(controlsW, Math.max(80, rightW / 2));
+        int leftControlsW = Math.clamp(leftW / 2, 80, controlsW);
+        int rightControlsW = Math.clamp(rightW / 2, 80, controlsW);
 
         int leftY = y;
         leftY = addBooleanRow(leftX, leftY, leftW, leftControlsW, "Show backup popup", () -> working.popup.enabled, value -> working.popup.enabled = value);
@@ -167,39 +164,17 @@ public final class AdvancedBackupsConfigScreen extends Screen {
         leftY = addBooleanRow(leftX, leftY, leftW, leftControlsW, "Center text", () -> working.popup.centerText, value -> working.popup.centerText = value);
         leftY = addBooleanRow(leftX, leftY, leftW, leftControlsW, "Show border", () -> working.popup.showBorder, value -> working.popup.showBorder = value);
         leftY = addPreviewStateRow(leftX, leftY, leftW, leftControlsW);
-        leftY = addIntRow(leftX, leftY, leftW, leftControlsW, "Popup X", () -> working.popup.x, value -> {
-            working.popup.x = value;
-            clampPreviewPosition();
-            rememberPreviewPosition();
-        }, 0, Integer.MAX_VALUE);
-        leftY = addIntRow(leftX, leftY, leftW, leftControlsW, "Popup Y", () -> working.popup.y, value -> {
-            working.popup.y = value;
-            clampPreviewPosition();
-            rememberPreviewPosition();
-        }, 0, Integer.MAX_VALUE);
+        leftY += 6;
+        leftY = addColorChannelRow(leftX, leftY, leftW, leftControlsW, ColorChannel.ALPHA);
+        leftY = addColorChannelRow(leftX, leftY, leftW, leftControlsW, ColorChannel.RED);
 
         int rightY = y;
-        rightY = addTextRow(rightX, rightY, rightW, rightControlsW, "Title", () -> working.popup.title, value -> working.popup.title = value, true);
-        rightY = addTextRow(rightX, rightY, rightW, rightControlsW, "Running text", () -> working.popup.runningText, value -> working.popup.runningText = value, true);
-        rightY = addTextRow(rightX, rightY, rightW, rightControlsW, "Completed text", () -> working.popup.completedText, value -> working.popup.completedText = value, true);
-        rightY = addTextRow(rightX, rightY, rightW, rightControlsW, "Failed text", () -> working.popup.failedText, value -> working.popup.failedText = value, true);
-
-        rightY += 6;
         for (ColorTarget target : ColorTarget.values()) {
             rightY = addColorRow(rightX, rightY, rightW, rightControlsW, target);
         }
-
         rightY += 6;
-        int sliderW = rowControlWidth(rightW, rightControlsW);
-        int controlX = rowControlX(rightX, rightW, sliderW);
-        for (ColorChannel channel : ColorChannel.values()) {
-            rows.add(new RowInfo(rightX, rightY, rightW, ROW_HEIGHT, channel.label + " channel", tooltipFor(channel.label + " channel")));
-            if (isRowInteractive(rightY)) {
-                ColorSlider slider = new ColorSlider(controlX, rightY + 6, sliderW, CONTROL_HEIGHT, channel, this::setSelectedChannel);
-                sliders.put(channel, addRenderableWidget(slider));
-            }
-            rightY += ROW_HEIGHT + ROW_GAP;
-        }
+        rightY = addColorChannelRow(rightX, rightY, rightW, rightControlsW, ColorChannel.GREEN);
+        rightY = addColorChannelRow(rightX, rightY, rightW, rightControlsW, ColorChannel.BLUE);
         syncSlidersFromSelectedColor();
         return Math.max(leftY, rightY);
     }
@@ -210,34 +185,15 @@ public final class AdvancedBackupsConfigScreen extends Screen {
         y = addBooleanRow(x, y, width, controlsW, "Center text", () -> working.popup.centerText, value -> working.popup.centerText = value);
         y = addBooleanRow(x, y, width, controlsW, "Show border", () -> working.popup.showBorder, value -> working.popup.showBorder = value);
         y = addPreviewStateRow(x, y, width, controlsW);
-        y = addIntRow(x, y, width, controlsW, "Popup X", () -> working.popup.x, value -> {
-            working.popup.x = value;
-            clampPreviewPosition();
-            rememberPreviewPosition();
-        }, 0, Integer.MAX_VALUE);
-        y = addIntRow(x, y, width, controlsW, "Popup Y", () -> working.popup.y, value -> {
-            working.popup.y = value;
-            clampPreviewPosition();
-            rememberPreviewPosition();
-        }, 0, Integer.MAX_VALUE);
-        y = addTextRow(x, y, width, controlsW, "Title", () -> working.popup.title, value -> working.popup.title = value, true);
-        y = addTextRow(x, y, width, controlsW, "Running text", () -> working.popup.runningText, value -> working.popup.runningText = value, true);
-        y = addTextRow(x, y, width, controlsW, "Completed text", () -> working.popup.completedText, value -> working.popup.completedText = value, true);
-        y = addTextRow(x, y, width, controlsW, "Failed text", () -> working.popup.failedText, value -> working.popup.failedText = value, true);
         y += 6;
+
+        
         for (ColorTarget target : ColorTarget.values()) {
             y = addColorRow(x, y, width, controlsW, target);
         }
         y += 6;
-        int sliderW = rowControlWidth(width, controlsW);
-        int controlX = rowControlX(x, width, sliderW);
         for (ColorChannel channel : ColorChannel.values()) {
-            rows.add(new RowInfo(x, y, width, ROW_HEIGHT, channel.label + " channel", tooltipFor(channel.label + " channel")));
-            if (isRowInteractive(y)) {
-                ColorSlider slider = new ColorSlider(controlX, y + 6, sliderW, CONTROL_HEIGHT, channel, this::setSelectedChannel);
-                sliders.put(channel, addRenderableWidget(slider));
-            }
-            y += ROW_HEIGHT + ROW_GAP;
+            y = addColorChannelRow(x, y, width, controlsW, channel);
         }
         syncSlidersFromSelectedColor();
         return y;
@@ -269,7 +225,7 @@ public final class AdvancedBackupsConfigScreen extends Screen {
         int controlX = rowControlX(x, width, controlW);
         addRenderableWidget(CycleButton.builder((T value) -> Component.literal(value.toString()), selected)
                 .withValues(values)
-                .create(controlX, y + 6, controlW, CONTROL_HEIGHT, Component.literal(label), (button, value) -> setter.accept(value)));
+                .create(controlX, y + 6, controlW, CONTROL_HEIGHT, Component.literal(label), (_, value) -> setter.accept(value)));
         return y + ROW_HEIGHT + ROW_GAP;
     }
 
@@ -314,7 +270,7 @@ public final class AdvancedBackupsConfigScreen extends Screen {
         return y + ROW_HEIGHT + ROW_GAP;
     }
 
-    private int addTextRow(int x, int y, int width, int controlsW, String label, Supplier<String> getter, Consumer<String> setter, boolean allowBlankAsDefault) {
+    private int addTextRow(int x, int y, int width, int controlsW, String label, Supplier<String> getter, Consumer<String> setter) {
         addRow(x, y, width, label);
         if (!isRowInteractive(y)) {
             return y + ROW_HEIGHT + ROW_GAP;
@@ -359,7 +315,7 @@ public final class AdvancedBackupsConfigScreen extends Screen {
         }
         int controlW = rowControlWidth(width, controlsW);
         int controlX = rowControlX(x, width, controlW);
-        int editW = Math.min(52, Math.max(34, controlW / 3));
+        int editW = Math.clamp(controlW / 3, 34, 52);
         addRenderableWidget(Button.builder(Component.literal(target == selectedColor ? "Editing" : "Edit"), ignored -> {
                     selectedColor = target;
                     syncSlidersFromSelectedColor();
@@ -381,6 +337,18 @@ public final class AdvancedBackupsConfigScreen extends Screen {
             validateAll();
         });
         addRenderableWidget(field);
+        return y + ROW_HEIGHT + ROW_GAP;
+    }
+
+    private int addColorChannelRow(int x, int y, int width, int controlsW, ColorChannel channel) {
+        rows.add(new RowInfo(x, y, width, ROW_HEIGHT, channel.label + " channel", tooltipFor(channel.label + " channel")));
+        if (!isRowInteractive(y)) {
+            return y + ROW_HEIGHT + ROW_GAP;
+        }
+        int sliderW = rowControlWidth(width, controlsW);
+        int controlX = rowControlX(x, width, sliderW);
+        ColorSlider slider = new ColorSlider(controlX, y + 6, sliderW, CONTROL_HEIGHT, channel, this::setSelectedChannel);
+        sliders.put(channel, addRenderableWidget(slider));
         return y + ROW_HEIGHT + ROW_GAP;
     }
 
@@ -614,14 +582,6 @@ public final class AdvancedBackupsConfigScreen extends Screen {
                 slider.setChannelValue(channel.extract(color));
             }
         }
-    }
-
-    private boolean isInsidePreview(double mouseX, double mouseY) {
-        BackupPopupRenderer.Dimensions dimensions = BackupPopupRenderer.measure(font, working.popup, previewPayload());
-        return mouseX >= working.popup.x - 5
-                && mouseX <= working.popup.x + dimensions.width()
-                && mouseY >= working.popup.y - 5
-                && mouseY <= working.popup.y + dimensions.height();
     }
 
     private void clampPreviewPosition() {

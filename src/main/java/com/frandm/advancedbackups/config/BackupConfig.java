@@ -160,8 +160,8 @@ public final class BackupConfig {
     public static final class Popup {
         public boolean enabled = true;
         public boolean showTitle = true;
-        public boolean centerText = false;
-        public boolean showBorder = false;
+        public boolean centerText = true;
+        public boolean showBorder = true;
         public int x = 8;
         public int y = 8;
         public double xRatio = -1.0D;
@@ -171,10 +171,10 @@ public final class BackupConfig {
         public String completedColor = "0xFF55FF55";
         public String failedColor = "0xFFFF5555";
         public String textColor = "0xFFE0E0E0";
-        public String title = "Advanced Backups";
+        public String title = "Just Enough Backups";
         public String runningText = "Running {reason} {type}";
         public String completedText = "Completed {reason} {type}";
-        public String failedText = "Backup failed";
+        public String failedText = "Unable to Backup";
 
         public int backgroundColorArgb() {
             return parseColor(backgroundColor, defaults().popup.backgroundColor);

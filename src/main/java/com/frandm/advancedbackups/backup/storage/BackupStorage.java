@@ -434,7 +434,7 @@ public final class BackupStorage {
         }
 
         return manifests.stream()
-                .filter(manifest -> type == BackupType.INCREMENTAL || manifest.type == BackupType.FULL)
+                .filter(manifest -> type == BackupType.PARTIAL || manifest.type == BackupType.FULL)
                 .max(Comparator.comparing(manifest -> manifest.createdAt))
                 .orElse(null);
     }

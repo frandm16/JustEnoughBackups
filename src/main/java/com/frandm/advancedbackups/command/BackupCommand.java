@@ -23,15 +23,15 @@ public final class BackupCommand {
 
     public static void register() {
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
-                dispatcher.register(Commands.literal("advancedbackups")
+                dispatcher.register(Commands.literal("jeb")
                         .requires(BackupCommand::hasConfiguredPermission)
                         .then(Commands.literal("now")
                                 .executes(context -> create(context.getSource(), BackupConfig.get().backupMode)))
                         .then(Commands.literal("create")
                                 .then(Commands.literal("full")
                                         .executes(context -> create(context.getSource(), BackupType.FULL)))
-                                .then(Commands.literal("incremental")
-                                        .executes(context -> create(context.getSource(), BackupType.INCREMENTAL)))
+                                .then(Commands.literal("partial")
+                                        .executes(context -> create(context.getSource(), BackupType.PARTIAL)))
                                 .then(Commands.literal("differential")
                                         .executes(context -> create(context.getSource(), BackupType.DIFFERENTIAL))))
                         .then(Commands.literal("list")
@@ -40,11 +40,10 @@ public final class BackupCommand {
                                 .executes(context -> next(context.getSource())))
                         .then(Commands.literal("restore")
                                 .then(Commands.argument("backupId", StringArgumentType.word())
-                                        .then(Commands.literal("confirm")
-                                                .executes(context -> restore(
-                                                        context.getSource(),
-                                                        StringArgumentType.getString(context, "backupId")
-                                                )))))
+                                        .executes(context -> restore(
+                                                context.getSource(),
+                                                StringArgumentType.getString(context, "backupId")
+                                        ))))
                         .then(Commands.literal("config")
                                 .then(Commands.literal("reload")
                                         .executes(context -> reloadConfig(context.getSource()))))));
@@ -56,19 +55,19 @@ public final class BackupCommand {
 
     private static int create(CommandSourceStack source, BackupType type) {
         source.sendSuccess(
-                () -> Component.literal("Advanced Backups: " + type.commandName() + " backup started."),
+                () -> Component.literal("Just Enough Backups: " + type.commandName() + " backup started."),
                 false
         );
 
         BackupService.createBackup(source.getServer(), type, "manual")
                 .thenAccept(manifest -> source.getServer().execute(() -> source.sendSuccess(
-                        () -> Component.literal("Advanced Backups: backup created: " + manifest.id),
+                        () -> Component.literal("Just Enough Backups: backup created: " + manifest.id),
                         false
                 )))
                 .exceptionally(exception -> {
                     WorldBackupMod.LOGGER.error("Manual backup failed.", exception);
                     source.getServer().execute(() ->
-                            source.sendFailure(Component.literal("Advanced Backups: backup failed. Check server logs."))
+                            source.sendFailure(Component.literal("Just Enough Backups: backup failed. Check server logs."))
                     );
                     return null;
                 });
@@ -80,11 +79,11 @@ public final class BackupCommand {
         try {
             List<BackupManifest> backups = BackupService.listBackups(source.getServer());
             if (backups.isEmpty()) {
-                source.sendSuccess(() -> Component.literal("Advanced Backups: no backups found."), false);
+                source.sendSuccess(() -> Component.literal("Just Enough Backups: no backups found."), false);
                 return 1;
             }
 
-            source.sendSuccess(() -> Component.literal("Advanced Backups: " + backups.size() + " backup(s):"), false);
+            source.sendSuccess(() -> Component.literal("Just Enough Backups: " + backups.size() + " backup(s):"), false);
             backups.stream()
                     .forEach(manifest -> source.sendSuccess(
                             () -> Component.literal(formatBackup(manifest)),
@@ -93,7 +92,7 @@ public final class BackupCommand {
             return backups.size();
         } catch (IOException exception) {
             WorldBackupMod.LOGGER.error("Failed to list backups.", exception);
-            source.sendFailure(Component.literal("Advanced Backups: failed to list backups."));
+            source.sendFailure(Component.literal("Just Enough Backups: failed to list backups."));
             return 0;
         }
     }
@@ -102,7 +101,7 @@ public final class BackupCommand {
         NextBackupStatus status = BackupScheduler.nextBackupStatus();
         if (!status.enabled()) {
             source.sendSuccess(
-                    () -> Component.literal("Advanced Backups: automatic backups are disabled."),
+                    () -> Component.literal("Just Enough Backups: automatic backups are disabled."),
                     false
             );
             return 1;
@@ -110,14 +109,14 @@ public final class BackupCommand {
 
         if (status.ready()) {
             source.sendSuccess(
-                    () -> Component.literal("Advanced Backups: the next automatic backup is ready and will start on the next scheduler check."),
+                    () -> Component.literal("Just Enough Backups: the next automatic backup is ready and will start on the next scheduler check."),
                     false
             );
             return 1;
         }
 
         source.sendSuccess(
-                () -> Component.literal("Advanced Backups: next automatic backup in " + formatDuration(status.remainingMillis()) + "."),
+                () -> Component.literal("Just Enough Backups: next automatic backup in " + formatDuration(status.remainingMillis()) + "."),
                 false
         );
         return 1;
@@ -125,14 +124,14 @@ public final class BackupCommand {
 
     private static int restore(CommandSourceStack source, String backupId) {
         source.sendSuccess(
-                () -> Component.literal("Advanced Backups: restore started for " + backupId + "."),
+                () -> Component.literal("Just Enough Backups: restore started for " + backupId + "."),
                 true
         );
 
         BackupService.restoreBackup(source.getServer(), backupId)
                 .thenAccept(restore -> source.getServer().execute(() -> {
                     source.sendSuccess(
-                            () -> Component.literal("Advanced Backups: restore prepared for " + restore.backupId()
+                            () -> Component.literal("Just Enough Backups: restore prepared for " + restore.backupId()
                                     + ". Stopping server now; restart it to load the restored world."),
                             true
                     );
@@ -141,7 +140,7 @@ public final class BackupCommand {
                 .exceptionally(exception -> {
                     WorldBackupMod.LOGGER.error("Restore failed.", exception);
                     source.getServer().execute(() ->
-                            source.sendFailure(Component.literal("Advanced Backups: restore failed: " + rootMessage(exception)))
+                            source.sendFailure(Component.literal("Just Enough Backups: restore failed: " + rootMessage(exception)))
                     );
                     return null;
                 });
@@ -151,7 +150,7 @@ public final class BackupCommand {
     private static int reloadConfig(CommandSourceStack source) {
         BackupConfig config = BackupService.reloadConfig();
         source.sendSuccess(
-                () -> Component.literal("Advanced Backups: config reloaded. Mode=" + config.backupMode
+                () -> Component.literal("Just Enough Backups: config reloaded. Mode=" + config.backupMode
                         + ", automatic=" + config.automaticBackupsEnabled
                         + ", interval=" + config.automaticIntervalMinutes + "m"
                         + ", permissionLevel=" + config.commandPermissionLevel),

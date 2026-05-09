@@ -50,7 +50,7 @@ public final class RetentionPolicy {
 
         Set<String> keep = new HashSet<>();
         keep.addAll(newestIds(manifests, BackupType.FULL, config.retention.full));
-        keep.addAll(newestIds(manifests, BackupType.INCREMENTAL, config.retention.incremental));
+        keep.addAll(newestIds(manifests, BackupType.PARTIAL, config.retention.incremental));
         keep.addAll(newestIds(manifests, BackupType.DIFFERENTIAL, config.retention.differential));
 
         Set<String> required = new HashSet<>(keep);
@@ -84,7 +84,7 @@ public final class RetentionPolicy {
     private static boolean isOverLimit(BackupManifest candidate, List<BackupManifest> manifests, Set<String> protectedIds, BackupConfig config) {
         int limit = switch (candidate.type) {
             case FULL -> config.retention.full;
-            case INCREMENTAL -> config.retention.incremental;
+            case PARTIAL -> config.retention.incremental;
             case DIFFERENTIAL -> config.retention.differential;
         };
         if (limit <= 0) {

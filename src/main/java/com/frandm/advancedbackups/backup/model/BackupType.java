@@ -2,7 +2,7 @@ package com.frandm.advancedbackups.backup.model;
 
 public enum BackupType {
     FULL("full", "FULL"),
-    INCREMENTAL("incremental", "PARTIAL"),
+    PARTIAL("partial", "PARTIAL"),
     DIFFERENTIAL("differential", "DIFFERENTIAL");
 
     private final String commandName;
