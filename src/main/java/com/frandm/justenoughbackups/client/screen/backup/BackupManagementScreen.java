@@ -1,9 +1,9 @@
-package com.frandm.justenoughbackups.client.screen;
+package com.frandm.justenoughbackups.client.screen.backup;
 
 import com.frandm.justenoughbackups.backup.model.BackupType;
-import com.frandm.justenoughbackups.client.JEBConfigScreens;
-import com.frandm.justenoughbackups.client.BackupUiClient;
-import com.frandm.justenoughbackups.client.BackupUiResponseConsumer;
+import com.frandm.justenoughbackups.client.net.BackupUiClient;
+import com.frandm.justenoughbackups.client.net.BackupUiResponseConsumer;
+import com.frandm.justenoughbackups.client.screen.config.JEBConfigScreens;
 import com.frandm.justenoughbackups.config.BackupConfig;
 import com.frandm.justenoughbackups.network.BackupUiBackup;
 import com.frandm.justenoughbackups.network.BackupUiResponsePayload;

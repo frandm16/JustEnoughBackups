@@ -141,11 +141,13 @@ public final class BackupConfig {
         public int full = 5;
         public int incremental = 20;
         public int differential = 10;
+        public int maxTotalSizeMb = 0;
 
         private void normalize() {
             full = Math.max(1, full);
             incremental = Math.max(0, incremental);
             differential = Math.max(0, differential);
+            maxTotalSizeMb = Math.max(0, maxTotalSizeMb);
         }
 
         private Retention copy() {
@@ -153,6 +155,7 @@ public final class BackupConfig {
             copy.full = full;
             copy.incremental = incremental;
             copy.differential = differential;
+            copy.maxTotalSizeMb = maxTotalSizeMb;
             return copy;
         }
     }
@@ -177,23 +180,23 @@ public final class BackupConfig {
         public String failedText = "Unable to Backup";
 
         public int backgroundColorArgb() {
-            return parseColor(backgroundColor, defaults().popup.backgroundColor);
+            return ConfigColor.parseOrDefault(backgroundColor, defaults().popup.backgroundColor);
         }
 
         public int runningColorArgb() {
-            return parseColor(runningColor, defaults().popup.runningColor);
+            return ConfigColor.parseOrDefault(runningColor, defaults().popup.runningColor);
         }
 
         public int completedColorArgb() {
-            return parseColor(completedColor, defaults().popup.completedColor);
+            return ConfigColor.parseOrDefault(completedColor, defaults().popup.completedColor);
         }
 
         public int failedColorArgb() {
-            return parseColor(failedColor, defaults().popup.failedColor);
+            return ConfigColor.parseOrDefault(failedColor, defaults().popup.failedColor);
         }
 
         public int textColorArgb() {
-            return parseColor(textColor, defaults().popup.textColor);
+            return ConfigColor.parseOrDefault(textColor, defaults().popup.textColor);
         }
 
         private void normalize() {
@@ -246,30 +249,7 @@ public final class BackupConfig {
         }
 
         private static String normalizeColor(String value, String fallback) {
-            try {
-                parseColor(value, fallback);
-                return value;
-            } catch (RuntimeException exception) {
-                return fallback;
-            }
-        }
-
-        private static int parseColor(String value, String fallback) {
-            String normalized = value == null ? fallback : value.trim();
-            if (normalized.startsWith("#")) {
-                normalized = normalized.substring(1);
-            } else if (normalized.startsWith("0x") || normalized.startsWith("0X")) {
-                normalized = normalized.substring(2);
-            }
-
-            if (normalized.length() == 6) {
-                normalized = "FF" + normalized;
-            }
-            if (normalized.length() != 8) {
-                return parseColor(fallback, "0xFFFFFFFF");
-            }
-
-            return (int) Long.parseLong(normalized, 16);
+            return ConfigColor.normalize(value, fallback);
         }
     }
 }

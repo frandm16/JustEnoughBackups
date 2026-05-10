@@ -1,7 +1,7 @@
 package com.frandm.justenoughbackups.client.input;
 
-import com.frandm.justenoughbackups.client.JEBConfigScreens;
-import com.frandm.justenoughbackups.client.BackupUiClient;
+import com.frandm.justenoughbackups.client.net.BackupUiClient;
+import com.frandm.justenoughbackups.client.screen.config.JEBConfigScreens;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;

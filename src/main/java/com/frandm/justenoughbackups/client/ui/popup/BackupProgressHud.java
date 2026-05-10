@@ -1,4 +1,4 @@
-package com.frandm.justenoughbackups.client;
+package com.frandm.justenoughbackups.client.ui.popup;
 
 import com.frandm.justenoughbackups.backup.progress.BackupProgressPayload;
 import com.frandm.justenoughbackups.backup.progress.BackupProgressState;
@@ -8,7 +8,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 
-final class BackupProgressHud {
+public final class BackupProgressHud {
     private static final long FINISHED_VISIBLE_MILLIS = 5_000L;
     private static final long RUNNING_TIMEOUT_MILLIS = 2_000L;
     private static volatile BackupProgressPayload current;
@@ -17,12 +17,12 @@ final class BackupProgressHud {
     private BackupProgressHud() {
     }
 
-    static void update(BackupProgressPayload payload) {
+    public static void update(BackupProgressPayload payload) {
         current = payload;
         lastUpdateMillis = System.currentTimeMillis();
     }
 
-    static void render(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker) {
+    public static void render(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker) {
         BackupProgressPayload progress = current;
         BackupConfig.Popup popup = BackupConfig.get().popup;
         if (progress == null || !popup.enabled) {

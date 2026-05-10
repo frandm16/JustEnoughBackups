@@ -3,6 +3,8 @@ package com.frandm.justenoughbackups.client;
 import com.frandm.justenoughbackups.WorldBackupMod;
 import com.frandm.justenoughbackups.backup.progress.BackupProgressPayload;
 import com.frandm.justenoughbackups.client.input.BackupKeyBindings;
+import com.frandm.justenoughbackups.client.net.BackupUiClient;
+import com.frandm.justenoughbackups.client.ui.popup.BackupProgressHud;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;

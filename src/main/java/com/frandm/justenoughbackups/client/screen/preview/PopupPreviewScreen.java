@@ -1,6 +1,9 @@
-package com.frandm.justenoughbackups.client;
+package com.frandm.justenoughbackups.client.screen.preview;
 
 import com.frandm.justenoughbackups.backup.progress.BackupProgressPayload;
+import com.frandm.justenoughbackups.client.screen.config.JEBConfigScreen;
+import com.frandm.justenoughbackups.client.ui.popup.BackupPopupRenderer;
+import com.frandm.justenoughbackups.client.ui.popup.PopupPositioning;
 import com.frandm.justenoughbackups.config.BackupConfig;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
@@ -9,7 +12,8 @@ import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
 
-final class PopupPreviewScreen extends Screen {
+public final class PopupPreviewScreen extends Screen {
+    public static final int LINE_COLOR = 0x65BCBCBC;
     private static final int SNAP_DISTANCE = 6;
     private static final int GUIDE_SEGMENT = 1;
     private static final int GUIDE_GAP = 2;
@@ -21,7 +25,7 @@ final class PopupPreviewScreen extends Screen {
     private int dragOffsetX;
     private int dragOffsetY;
 
-    PopupPreviewScreen(JEBConfigScreen parent, BackupConfig.Popup popup, BackupProgressPayload previewPayload) {
+    public PopupPreviewScreen(JEBConfigScreen parent, BackupConfig.Popup popup, BackupProgressPayload previewPayload) {
         super(Component.translatable("screen.justenoughbackups.preview.title"));
         this.parent = parent;
         this.popup = popup;
@@ -36,13 +40,12 @@ final class PopupPreviewScreen extends Screen {
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-        graphics.fill(0, 0, width, height, 0x00000000); // background (transparent)
+        graphics.fill(0, 0, width, height, 0x00000000);
 
-        int LineColor = 0x65BCBCBC; // lines colors 0x55707070
-        drawVerticalGuide(graphics, width / 3, LineColor);
-        drawVerticalGuide(graphics, 2 * width / 3, LineColor);
-        drawHorizontalGuide(graphics, height / 3, LineColor);
-        drawHorizontalGuide(graphics, 2 * height / 3, LineColor);
+        drawVerticalGuide(graphics, width / 3, LINE_COLOR);
+        drawVerticalGuide(graphics, 2 * width / 3, LINE_COLOR);
+        drawHorizontalGuide(graphics, height / 3, LINE_COLOR);
+        drawHorizontalGuide(graphics, 2 * height / 3, LINE_COLOR);
 
         BackupPopupRenderer.render(graphics, font, popup, previewPayload, popup.x, popup.y);
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);
@@ -117,7 +120,7 @@ final class PopupPreviewScreen extends Screen {
     @Override
     public void onClose() {
         minecraft.setScreen(parent);
-        parent.rebuildWidgets();
+        parent.refreshAfterPreview();
     }
 
     @Override

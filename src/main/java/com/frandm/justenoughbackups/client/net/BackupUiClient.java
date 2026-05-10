@@ -1,7 +1,7 @@
-package com.frandm.justenoughbackups.client;
+package com.frandm.justenoughbackups.client.net;
 
 import com.frandm.justenoughbackups.backup.model.BackupType;
-import com.frandm.justenoughbackups.client.screen.BackupManagementScreen;
+import com.frandm.justenoughbackups.client.screen.backup.BackupManagementScreen;
 import com.frandm.justenoughbackups.network.BackupUiAction;
 import com.frandm.justenoughbackups.network.BackupUiRequestPayload;
 import com.frandm.justenoughbackups.network.BackupUiResponsePayload;

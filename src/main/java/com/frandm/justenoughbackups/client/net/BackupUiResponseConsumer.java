@@ -1,4 +1,4 @@
-package com.frandm.justenoughbackups.client;
+package com.frandm.justenoughbackups.client.net;
 
 import com.frandm.justenoughbackups.network.BackupUiResponsePayload;
 import net.minecraft.network.chat.Component;

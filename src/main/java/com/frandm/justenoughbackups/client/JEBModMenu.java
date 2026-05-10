@@ -1,5 +1,6 @@
 package com.frandm.justenoughbackups.client;
 
+import com.frandm.justenoughbackups.client.screen.config.JEBConfigScreens;
 import com.terraformersmc.modmenu.api.ConfigScreenFactory;
 import com.terraformersmc.modmenu.api.ModMenuApi;
 

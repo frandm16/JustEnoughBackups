@@ -1,16 +1,16 @@
-package com.frandm.justenoughbackups.client;
+package com.frandm.justenoughbackups.client.ui.popup;
 
 import com.frandm.justenoughbackups.backup.progress.BackupProgressPayload;
 import com.frandm.justenoughbackups.config.BackupConfig;
 import net.minecraft.client.gui.Font;
 
-final class PopupPositioning {
+public final class PopupPositioning {
     private static final int MIN_POSITION = 4;
 
     private PopupPositioning() {
     }
 
-    static Position resolve(Font font, BackupConfig.Popup popup, BackupProgressPayload progress, int screenWidth, int screenHeight) {
+    public static Position resolve(Font font, BackupConfig.Popup popup, BackupProgressPayload progress, int screenWidth, int screenHeight) {
         BackupPopupRenderer.Dimensions dimensions = BackupPopupRenderer.measure(font, popup, progress);
         if (hasRatios(popup)) {
             return new Position(
@@ -24,20 +24,20 @@ final class PopupPositioning {
         );
     }
 
-    static void applyRatios(Font font, BackupConfig.Popup popup, BackupProgressPayload progress, int screenWidth, int screenHeight) {
+    public static void applyRatios(Font font, BackupConfig.Popup popup, BackupProgressPayload progress, int screenWidth, int screenHeight) {
         Position position = resolve(font, popup, progress, screenWidth, screenHeight);
         popup.x = position.x();
         popup.y = position.y();
     }
 
-    static void clampAndRemember(Font font, BackupConfig.Popup popup, BackupProgressPayload progress, int screenWidth, int screenHeight) {
+    public static void clampAndRemember(Font font, BackupConfig.Popup popup, BackupProgressPayload progress, int screenWidth, int screenHeight) {
         BackupPopupRenderer.Dimensions dimensions = BackupPopupRenderer.measure(font, popup, progress);
         popup.x = clamp(popup.x, screenWidth, dimensions.width());
         popup.y = clamp(popup.y, screenHeight, dimensions.height());
         rememberRatios(popup, dimensions, screenWidth, screenHeight);
     }
 
-    static void rememberRatios(Font font, BackupConfig.Popup popup, BackupProgressPayload progress, int screenWidth, int screenHeight) {
+    public static void rememberRatios(Font font, BackupConfig.Popup popup, BackupProgressPayload progress, int screenWidth, int screenHeight) {
         rememberRatios(popup, BackupPopupRenderer.measure(font, popup, progress), screenWidth, screenHeight);
     }
 
@@ -75,6 +75,6 @@ final class PopupPositioning {
         return Math.clamp((position - min) / (double) span, 0.0D, 1.0D);
     }
 
-    record Position(int x, int y) {
+    public record Position(int x, int y) {
     }
 }

@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -22,24 +23,69 @@ public final class RetentionPolicy {
 
     public static void apply(String worldName, BackupConfig config) throws IOException {
         Path backupDir = config.resolveBackupRoot().resolve(worldName);
-        List<BackupManifest> manifests = BackupStorage.readManifests(backupDir).stream()
+        RetentionDecision decision = plan(backupDir, BackupStorage.readManifests(backupDir), config);
+        for (BackupEntry entry : decision.deletions()) {
+            if (entry.existingFile()) {
+                Files.deleteIfExists(entry.path());
+                WorldBackupMod.LOGGER.info("Deleted old backup by retention policy: {}", entry.manifest().id);
+            }
+        }
+    }
+
+    public static RetentionDecision plan(Path backupDir, List<BackupManifest> manifests, BackupConfig config) throws IOException {
+        return plan(backupDir, manifests, config, null, 0L);
+    }
+
+    public static RetentionDecision planWithPending(Path backupDir, List<BackupManifest> manifests, BackupConfig config, BackupManifest pendingManifest, long pendingBytes) throws IOException {
+        return plan(backupDir, manifests, config, pendingManifest, pendingBytes);
+    }
+
+    private static RetentionDecision plan(Path backupDir, List<BackupManifest> manifests, BackupConfig config, BackupManifest pendingManifest, long pendingBytes) throws IOException {
+        List<BackupManifest> orderedManifests = manifests.stream()
                 .sorted(Comparator.comparing(manifest -> manifest.createdAt))
                 .toList();
-        if (manifests.isEmpty()) {
-            return;
+        if (orderedManifests.isEmpty() && pendingManifest == null) {
+            return new RetentionDecision(List.of(), Set.of(), 0L, 0L, false);
         }
 
-        Set<String> protectedIds = requiredChainIds(manifests, config);
-        for (BackupManifest manifest : manifests) {
-            if (protectedIds.contains(manifest.id)) {
+        List<BackupEntry> entries = loadEntries(backupDir, orderedManifests, pendingManifest, pendingBytes);
+        List<BackupManifest> manifestsForRules = entries.stream()
+                .map(BackupEntry::manifest)
+                .sorted(Comparator.comparing(manifest -> manifest.createdAt))
+                .toList();
+
+        Set<String> protectedIds = requiredChainIds(manifestsForRules, config);
+        LinkedHashSet<String> deletionIds = new LinkedHashSet<>();
+        for (BackupEntry entry : entries) {
+            if (protectedIds.contains(entry.id())) {
                 continue;
             }
-
-            if (isOverLimit(manifest, manifests, protectedIds, config)) {
-                Files.deleteIfExists(backupDir.resolve(manifest.zipFileName));
-                WorldBackupMod.LOGGER.info("Deleted old backup by retention policy: {}", manifest.id);
+            if (isOverLimit(entry.manifest(), manifestsForRules, protectedIds, config)) {
+                deletionIds.add(entry.id());
             }
         }
+
+        long capBytes = toCapBytes(config);
+        long projectedBytes = projectedBytes(entries, deletionIds);
+        if (capBytes > 0L && projectedBytes > capBytes) {
+            for (BackupEntry entry : entries) {
+                if (projectedBytes <= capBytes) {
+                    break;
+                }
+                if (protectedIds.contains(entry.id()) || deletionIds.contains(entry.id())) {
+                    continue;
+                }
+                deletionIds.add(entry.id());
+                projectedBytes -= entry.zipBytes();
+            }
+        }
+
+        List<BackupEntry> deletions = entries.stream()
+                .filter(entry -> deletionIds.contains(entry.id()))
+                .toList();
+        long totalBytes = entries.stream().mapToLong(BackupEntry::zipBytes).sum();
+        boolean exceedsSpaceLimit = capBytes > 0L && projectedBytes > capBytes;
+        return new RetentionDecision(deletions, Set.copyOf(protectedIds), totalBytes, projectedBytes, exceedsSpaceLimit);
     }
 
     private static Set<String> requiredChainIds(List<BackupManifest> manifests, BackupConfig config) {
@@ -96,5 +142,65 @@ public final class RetentionPolicy {
                 .filter(manifest -> protectedIds.contains(manifest.id) || manifest.createdAt.compareTo(candidate.createdAt) >= 0)
                 .count();
         return newerOrSame > limit;
+    }
+
+    private static List<BackupEntry> loadEntries(Path backupDir, List<BackupManifest> manifests, BackupManifest pendingManifest, long pendingBytes) throws IOException {
+        List<BackupEntry> entries = manifests.stream()
+                .map(manifest -> new BackupEntry(
+                        manifest,
+                        backupDir.resolve(manifest.zipFileName),
+                        fileSize(backupDir.resolve(manifest.zipFileName)),
+                        true
+                ))
+                .sorted(Comparator.comparing(entry -> entry.manifest().createdAt))
+                .toList();
+        if (pendingManifest == null) {
+            return entries;
+        }
+
+        java.util.ArrayList<BackupEntry> combined = new java.util.ArrayList<>(entries);
+        combined.add(new BackupEntry(
+                pendingManifest,
+                backupDir.resolve(pendingManifest.zipFileName),
+                Math.max(0L, pendingBytes),
+                false
+        ));
+        combined.sort(Comparator.comparing(entry -> entry.manifest().createdAt));
+        return combined;
+    }
+
+    private static long fileSize(Path file) {
+        try {
+            return Files.exists(file) ? Files.size(file) : 0L;
+        } catch (IOException exception) {
+            return 0L;
+        }
+    }
+
+    private static long projectedBytes(List<BackupEntry> entries, Set<String> deletionIds) {
+        return entries.stream()
+                .filter(entry -> !deletionIds.contains(entry.id()))
+                .mapToLong(BackupEntry::zipBytes)
+                .sum();
+    }
+
+    private static long toCapBytes(BackupConfig config) {
+        long mb = Math.max(0L, config.retention.maxTotalSizeMb);
+        return mb <= 0L ? 0L : mb * 1024L * 1024L;
+    }
+
+    public record RetentionDecision(
+            List<BackupEntry> deletions,
+            Set<String> protectedIds,
+            long totalBytes,
+            long projectedBytes,
+            boolean exceedsSpaceLimit
+    ) {
+    }
+
+    public record BackupEntry(BackupManifest manifest, Path path, long zipBytes, boolean existingFile) {
+        public String id() {
+            return manifest.id;
+        }
     }
 }

@@ -1,4 +1,4 @@
-package com.frandm.justenoughbackups.client;
+package com.frandm.justenoughbackups.client.screen.config;
 
 import net.minecraft.client.gui.screens.Screen;
 import org.jetbrains.annotations.Nullable;

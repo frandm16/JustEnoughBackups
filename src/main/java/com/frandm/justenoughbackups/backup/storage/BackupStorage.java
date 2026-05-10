@@ -9,6 +9,7 @@ import com.frandm.justenoughbackups.backup.model.BackupType;
 import com.frandm.justenoughbackups.backup.progress.BackupProgress;
 import com.frandm.justenoughbackups.backup.progress.BackupProgressListener;
 import com.frandm.justenoughbackups.backup.progress.BackupProgressState;
+import com.frandm.justenoughbackups.backup.retention.RetentionPolicy;
 import com.frandm.justenoughbackups.config.BackupConfig;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -78,7 +79,7 @@ public final class BackupStorage {
                     null,
                     snapshot,
                     reason + " base",
-                    config.integrityMode,
+                    config,
                     progressListener
             );
             manifests = new ArrayList<>(manifests);
@@ -86,7 +87,7 @@ public final class BackupStorage {
         }
 
         BackupManifest base = findBaseManifest(manifests, type);
-        return writeBackup(worldPath, backupDir, worldName, worldDirectoryName, type, base, snapshot, reason, config.integrityMode, progressListener);
+        return writeBackup(worldPath, backupDir, worldName, worldDirectoryName, type, base, snapshot, reason, config, progressListener);
     }
 
     private static BackupManifest writeBackup(
@@ -98,7 +99,7 @@ public final class BackupStorage {
             BackupManifest base,
             Map<String, BackupManifest.FileState> snapshot,
             String reason,
-            BackupIntegrityMode integrityMode,
+            BackupConfig config,
             BackupProgressListener progressListener
     ) throws IOException {
         List<String> includedFiles = includedFiles(type, snapshot, base);
@@ -118,11 +119,11 @@ public final class BackupStorage {
         manifest.zipFileName = backupFile.getFileName().toString();
         manifest.reason = reason;
         manifest.integrityStatusEntry = BackupConstants.STATUS_ENTRY;
-        manifest.integrityMode = integrityMode;
+        manifest.integrityMode = config.integrityMode;
         manifest.includedFiles.addAll(includedFiles);
         manifest.snapshot.putAll(snapshot);
 
-        writeBackupZipToTemp(worldPath, tempBackupFile, backupFile, manifest, includedFiles, snapshot, integrityMode, progressListener);
+        writeBackupZipToTemp(worldPath, backupDir, tempBackupFile, backupFile, manifest, includedFiles, snapshot, config, progressListener);
         WorldBackupMod.LOGGER.info("{} backup {} created for reason: {}", type, id, reason);
         return manifest;
     }
@@ -241,21 +242,37 @@ public final class BackupStorage {
 
     private static void writeBackupZipToTemp(
             Path worldPath,
+            Path backupDir,
             Path tempBackupFile,
             Path backupFile,
             BackupManifest manifest,
             List<String> includedFiles,
             Map<String, BackupManifest.FileState> currentSnapshot,
-            BackupIntegrityMode integrityMode,
+            BackupConfig config,
             BackupProgressListener progressListener
     ) throws IOException {
         Files.deleteIfExists(tempBackupFile);
         try {
-            writeBackupZip(worldPath, tempBackupFile, manifest, includedFiles, currentSnapshot, integrityMode, progressListener);
+            writeBackupZip(worldPath, tempBackupFile, manifest, includedFiles, currentSnapshot, config.integrityMode, progressListener);
+            enforceSpaceLimitBeforePublish(backupDir, tempBackupFile, manifest, config);
             moveCompletedBackup(tempBackupFile, backupFile);
         } catch (IOException exception) {
             Files.deleteIfExists(tempBackupFile);
             throw exception;
+        }
+    }
+
+    private static void enforceSpaceLimitBeforePublish(Path backupDir, Path tempBackupFile, BackupManifest pendingManifest, BackupConfig config) throws IOException {
+        long pendingBytes = Files.exists(tempBackupFile) ? Files.size(tempBackupFile) : 0L;
+        RetentionPolicy.RetentionDecision decision = RetentionPolicy.planWithPending(
+                backupDir,
+                readManifests(backupDir),
+                config,
+                pendingManifest,
+                pendingBytes
+        );
+        if (decision.exceedsSpaceLimit()) {
+            throw new IOException("Backup exceeds the configured per-world size limit (" + config.retention.maxTotalSizeMb + " MB).");
         }
     }
 

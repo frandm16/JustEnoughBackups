@@ -1,4 +1,4 @@
-package com.frandm.justenoughbackups.client;
+package com.frandm.justenoughbackups.client.ui.popup;
 
 import com.frandm.justenoughbackups.backup.progress.BackupProgressPayload;
 import com.frandm.justenoughbackups.backup.progress.BackupProgressState;
@@ -8,11 +8,11 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 import java.util.Locale;
 
-final class BackupPopupRenderer {
+public final class BackupPopupRenderer {
     private BackupPopupRenderer() {
     }
 
-    static Dimensions measure(Font font, BackupConfig.Popup popup, BackupProgressPayload progress) {
+    public static Dimensions measure(Font font, BackupConfig.Popup popup, BackupProgressPayload progress) {
         String detail = detail(progress, popup);
         String progressLine = progressLine(progress);
         int contentWidth = Math.max(font.width(detail), font.width(progressLine));
@@ -23,7 +23,7 @@ final class BackupPopupRenderer {
         return new Dimensions(contentWidth + 12, height);
     }
 
-    static void render(GuiGraphicsExtractor graphics, Font font, BackupConfig.Popup popup, BackupProgressPayload progress, int x, int y) {
+    public static void render(GuiGraphicsExtractor graphics, Font font, BackupConfig.Popup popup, BackupProgressPayload progress, int x, int y) {
         String detail = detail(progress, popup);
         String progressLine = progressLine(progress);
         Dimensions dimensions = measure(font, popup, progress);
@@ -42,7 +42,7 @@ final class BackupPopupRenderer {
         drawText(graphics, font, popup, progressLine, x, textY + 11, dimensions.width(), popup.textColorArgb());
     }
 
-    static String formatBytes(long bytes) {
+    public static String formatBytes(long bytes) {
         if (bytes < 1024L) {
             return bytes + " B";
         }
@@ -114,6 +114,6 @@ final class BackupPopupRenderer {
                 : (int) Math.min(100L, (progress.bytesWritten() * 100L) / progress.totalBytes());
     }
 
-    record Dimensions(int width, int height) {
+    public record Dimensions(int width, int height) {
     }
 }
