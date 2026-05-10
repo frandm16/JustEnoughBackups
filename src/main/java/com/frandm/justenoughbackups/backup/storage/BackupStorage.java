@@ -52,7 +52,7 @@ public final class BackupStorage {
             BackupType type,
             String reason
     ) throws IOException {
-        return createBackup(worldPath, worldName, worldDirectoryName, config, type, reason, BackupProgressListener.noop());
+        return createBackup(worldPath, worldName, worldDirectoryName, config, type, reason, "", BackupProgressListener.noop());
     }
 
     public static BackupManifest createBackup(
@@ -62,6 +62,7 @@ public final class BackupStorage {
             BackupConfig config,
             BackupType type,
             String reason,
+            String requestedName,
             BackupProgressListener progressListener
     ) throws IOException {
         Path backupDir = config.resolveBackupRoot().resolve(worldDirectoryName);
@@ -80,6 +81,7 @@ public final class BackupStorage {
                     snapshot,
                     reason + " base",
                     config,
+                    "",
                     progressListener
             );
             manifests = new ArrayList<>(manifests);
@@ -87,7 +89,7 @@ public final class BackupStorage {
         }
 
         BackupManifest base = findBaseManifest(manifests, type);
-        return writeBackup(worldPath, backupDir, worldName, worldDirectoryName, type, base, snapshot, reason, config, progressListener);
+        return writeBackup(worldPath, backupDir, worldName, worldDirectoryName, type, base, snapshot, reason, config, requestedName, progressListener);
     }
 
     private static BackupManifest writeBackup(
@@ -100,14 +102,16 @@ public final class BackupStorage {
             Map<String, BackupManifest.FileState> snapshot,
             String reason,
             BackupConfig config,
+            String requestedName,
             BackupProgressListener progressListener
     ) throws IOException {
         List<String> includedFiles = includedFiles(type, snapshot, base);
 
         String timestamp = LocalDateTime.now().format(BackupConstants.FILE_TIME);
         String id = type.commandName() + "-" + timestamp;
-        Path backupFile = backupDir.resolve(id + ".zip");
-        Path tempBackupFile = backupDir.resolve(id + ".zip.tmp");
+        String zipFileName = resolveBackupFileName(backupDir, requestedName, id + ".zip");
+        Path backupFile = backupDir.resolve(zipFileName);
+        Path tempBackupFile = backupDir.resolve(zipFileName + ".tmp");
 
         BackupManifest manifest = new BackupManifest();
         manifest.id = id;
@@ -116,7 +120,7 @@ public final class BackupStorage {
         manifest.worldName = worldName;
         manifest.worldDirectoryName = worldDirectoryName;
         manifest.baseBackupId = base == null ? null : base.id;
-        manifest.zipFileName = backupFile.getFileName().toString();
+        manifest.zipFileName = zipFileName;
         manifest.reason = reason;
         manifest.integrityStatusEntry = BackupConstants.STATUS_ENTRY;
         manifest.integrityMode = config.integrityMode;
@@ -368,6 +372,17 @@ public final class BackupStorage {
             }
         }
         throw new IOException("Backup not found: " + backupId);
+    }
+
+    private static String resolveBackupFileName(Path backupDir, String requestedName, String fallbackFileName) throws IOException {
+        if (requestedName == null || requestedName.isBlank()) {
+            return fallbackFileName;
+        }
+        String fileName = sanitizeBackupFileName(requestedName);
+        if (Files.exists(backupDir.resolve(fileName))) {
+            throw new IOException("Backup already exists: " + fileName);
+        }
+        return fileName;
     }
 
     private static String sanitizeBackupFileName(String requestedName) throws IOException {

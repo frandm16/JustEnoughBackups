@@ -44,6 +44,7 @@
   "screen.justenoughbackups.backups.rename_title": "Rename Backup",
   "screen.justenoughbackups.backups.type": "Type",
   "screen.justenoughbackups.backups.name": "Backup name",
+  "screen.justenoughbackups.backups.name_hint": "Leave empty for automatic name",
 
   "screen.justenoughbackups.config.title": "Just Enough Backups Config",
   "screen.justenoughbackups.config.tab.backups": "Backups",
@@ -165,7 +166,7 @@
 
   "command.justenoughbackups.backup_started": "Just Enough Backups: %s backup started.",
   "command.justenoughbackups.backup_created": "Just Enough Backups: backup created: %s",
-  "command.justenoughbackups.backup_failed": "Just Enough Backups: backup failed. Check server logs.",
+  "command.justenoughbackups.backup_failed": "Just Enough Backups: backup failed: %s",
   "command.justenoughbackups.no_backups": "Just Enough Backups: no backups found.",
   "command.justenoughbackups.backup_count": "Just Enough Backups: %s backup(s):",
   "command.justenoughbackups.backup_entry": "- %s [%s] files=%s base=%s at=%s",

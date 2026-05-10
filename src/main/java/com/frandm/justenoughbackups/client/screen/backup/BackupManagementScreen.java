@@ -604,6 +604,7 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
     private static final class CreateBackupScreen extends Screen {
         private final BackupManagementScreen parent;
         private BackupType selected = BackupConfig.get().backupMode;
+        private EditBox nameBox;
 
         private CreateBackupScreen(BackupManagementScreen parent) {
             super(Component.translatable("screen.justenoughbackups.backups.create_title"));
@@ -612,28 +613,32 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
 
         @Override
         protected void init() {
-            int panelWidth = 260;
+            int panelWidth = 300;
             int x = (width - panelWidth) / 2;
-            int y = height / 2 - 42;
+            int y = height / 2 - 56;
             addRenderableWidget(CycleButton.builder((BackupType type) -> Component.literal(type.toString()), selected)
                     .withValues(BackupType.values())
                     .create(x + 20, y + 18, panelWidth - 40, 20, Component.translatable("screen.justenoughbackups.backups.type"), (button, value) -> selected = value));
+            nameBox = new EditBox(font, x + 20, y + 48, panelWidth - 40, 20, Component.translatable("screen.justenoughbackups.backups.name"));
+            nameBox.setHint(Component.translatable("screen.justenoughbackups.backups.name_hint"));
+            addRenderableWidget(nameBox);
             addRenderableWidget(Button.builder(Component.translatable("screen.justenoughbackups.backups.create"), button -> {
                 minecraft.setScreen(parent);
-                BackupUiClient.createBackup(selected);
-            }).bounds(x + 38, y + 52, 84, 20).build());
+                BackupUiClient.createBackup(selected, nameBox.getValue());
+            }).bounds(x + 58, y + 80, 84, 20).build());
             addRenderableWidget(Button.builder(Component.translatable("screen.justenoughbackups.common.cancel"), button -> minecraft.setScreen(parent))
-                    .bounds(x + 138, y + 52, 84, 20).build());
+                    .bounds(x + 158, y + 80, 84, 20).build());
+            setInitialFocus(nameBox);
         }
 
         @Override
         public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
             graphics.fill(0, 0, width, height, 0xAA000000);
-            int panelWidth = 260;
+            int panelWidth = 300;
             int x = (width - panelWidth) / 2;
-            int y = height / 2 - 42;
-            graphics.fill(x, y, x + panelWidth, y + 88, 0xEE151515);
-            graphics.outline(x, y, panelWidth, 88, 0xFF4A4A4A);
+            int y = height / 2 - 56;
+            graphics.fill(x, y, x + panelWidth, y + 116, 0xEE151515);
+            graphics.outline(x, y, panelWidth, 116, 0xFF4A4A4A);
             graphics.centeredText(font, title, width / 2, y + 7, 0xFFFFFFFF);
             super.extractRenderState(graphics, mouseX, mouseY, partialTick);
         }

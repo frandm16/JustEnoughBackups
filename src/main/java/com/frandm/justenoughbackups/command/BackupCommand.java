@@ -5,6 +5,7 @@ import com.frandm.justenoughbackups.backup.BackupPermissions;
 import com.frandm.justenoughbackups.backup.BackupService;
 import com.frandm.justenoughbackups.backup.model.BackupManifest;
 import com.frandm.justenoughbackups.backup.model.BackupType;
+import com.frandm.justenoughbackups.backup.storage.BackupStorage;
 import com.frandm.justenoughbackups.config.BackupConfig;
 import com.frandm.justenoughbackups.scheduler.BackupScheduler;
 import com.frandm.justenoughbackups.scheduler.NextBackupStatus;
@@ -26,14 +27,22 @@ public final class BackupCommand {
                 dispatcher.register(Commands.literal("jeb")
                         .requires(BackupCommand::hasConfiguredPermission)
                         .then(Commands.literal("now")
-                                .executes(context -> create(context.getSource(), BackupConfig.get().backupMode)))
+                                .executes(context -> create(context.getSource(), BackupConfig.get().backupMode, ""))
+                                .then(Commands.argument("name", StringArgumentType.greedyString())
+                                        .executes(context -> create(context.getSource(), BackupConfig.get().backupMode, StringArgumentType.getString(context, "name")))))
                         .then(Commands.literal("create")
                                 .then(Commands.literal("full")
-                                        .executes(context -> create(context.getSource(), BackupType.FULL)))
+                                        .executes(context -> create(context.getSource(), BackupType.FULL, ""))
+                                        .then(Commands.argument("name", StringArgumentType.greedyString())
+                                                .executes(context -> create(context.getSource(), BackupType.FULL, StringArgumentType.getString(context, "name")))))
                                 .then(Commands.literal("partial")
-                                        .executes(context -> create(context.getSource(), BackupType.PARTIAL)))
+                                        .executes(context -> create(context.getSource(), BackupType.PARTIAL, ""))
+                                        .then(Commands.argument("name", StringArgumentType.greedyString())
+                                                .executes(context -> create(context.getSource(), BackupType.PARTIAL, StringArgumentType.getString(context, "name")))))
                                 .then(Commands.literal("differential")
-                                        .executes(context -> create(context.getSource(), BackupType.DIFFERENTIAL))))
+                                        .executes(context -> create(context.getSource(), BackupType.DIFFERENTIAL, ""))
+                                        .then(Commands.argument("name", StringArgumentType.greedyString())
+                                                .executes(context -> create(context.getSource(), BackupType.DIFFERENTIAL, StringArgumentType.getString(context, "name"))))))
                         .then(Commands.literal("list")
                                 .executes(context -> list(context.getSource())))
                         .then(Commands.literal("next")
@@ -53,21 +62,21 @@ public final class BackupCommand {
         return BackupPermissions.hasConfiguredPermission(source);
     }
 
-    private static int create(CommandSourceStack source, BackupType type) {
+    private static int create(CommandSourceStack source, BackupType type, String requestedName) {
         source.sendSuccess(
                 () -> Component.translatable("command.justenoughbackups.backup_started", type.commandName()),
                 false
         );
 
-        BackupService.createBackup(source.getServer(), type, "manual")
+        BackupService.createBackup(source.getServer(), type, "manual", requestedName)
                 .thenAccept(manifest -> source.getServer().execute(() -> source.sendSuccess(
-                        () -> Component.translatable("command.justenoughbackups.backup_created", manifest.id),
+                        () -> Component.translatable("command.justenoughbackups.backup_created", BackupStorage.displayName(manifest)),
                         false
                 )))
                 .exceptionally(exception -> {
                     WorldBackupMod.LOGGER.error("Manual backup failed.", exception);
                     source.getServer().execute(() ->
-                            source.sendFailure(Component.translatable("command.justenoughbackups.backup_failed"))
+                            source.sendFailure(Component.translatable("command.justenoughbackups.backup_failed", rootMessage(exception)))
                     );
                     return null;
                 });

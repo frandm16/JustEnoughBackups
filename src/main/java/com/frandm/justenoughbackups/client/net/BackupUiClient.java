@@ -37,8 +37,8 @@ public final class BackupUiClient {
         send(BackupUiAction.LIST, BackupType.FULL, "", "");
     }
 
-    public static void createBackup(BackupType type) {
-        send(BackupUiAction.CREATE, type, "", "");
+    public static void createBackup(BackupType type, String requestedName) {
+        send(BackupUiAction.CREATE, type, "", requestedName);
     }
 
     public static void renameBackup(String backupId, String displayName) {

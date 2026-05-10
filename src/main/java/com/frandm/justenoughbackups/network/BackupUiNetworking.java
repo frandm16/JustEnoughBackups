@@ -3,6 +3,7 @@ package com.frandm.justenoughbackups.network;
 import com.frandm.justenoughbackups.WorldBackupMod;
 import com.frandm.justenoughbackups.backup.BackupPermissions;
 import com.frandm.justenoughbackups.backup.BackupService;
+import com.frandm.justenoughbackups.backup.storage.BackupStorage;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.server.MinecraftServer;
@@ -53,8 +54,8 @@ public final class BackupUiNetworking {
     }
 
     private static void createBackup(BackupUiRequestPayload payload, MinecraftServer server, ServerPlayer player) {
-        BackupService.createBackup(server, payload.backupType(), "manual")
-                .thenAccept(manifest -> server.execute(() -> sendList(server, player, payload, true, "text.justenoughbackups.backup_ui.created", manifest.id)))
+        BackupService.createBackup(server, payload.backupType(), "manual", payload.value())
+                .thenAccept(manifest -> server.execute(() -> sendList(server, player, payload, true, "text.justenoughbackups.backup_ui.created", BackupStorage.displayName(manifest))))
                 .exceptionally(exception -> {
                     WorldBackupMod.LOGGER.error("Backup UI create failed.", exception);
                     server.execute(() -> sendList(server, player, payload, false, "text.justenoughbackups.backup_ui.backup_failed", rootMessage(exception)));

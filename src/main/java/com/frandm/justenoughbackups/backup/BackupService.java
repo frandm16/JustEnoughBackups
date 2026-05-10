@@ -41,6 +41,10 @@ public final class BackupService {
     }
 
     public static CompletableFuture<BackupManifest> createBackup(MinecraftServer server, BackupType type, String reason) {
+        return createBackup(server, type, reason, "");
+    }
+
+    public static CompletableFuture<BackupManifest> createBackup(MinecraftServer server, BackupType type, String reason, String requestedName) {
         if (!BACKUP_RUNNING.compareAndSet(false, true)) {
             return CompletableFuture.failedFuture(new IllegalStateException("A backup is already running."));
         }
@@ -63,6 +67,7 @@ public final class BackupService {
                         config,
                         type,
                         reason,
+                        requestedName,
                         progress -> BackupProgressBroadcaster.broadcast(server, progress)
                 );
                 RetentionPolicy.apply(worldDirectoryName, config);
