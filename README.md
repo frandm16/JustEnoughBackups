@@ -9,6 +9,7 @@ It supports:
 - full, partial, and differential backups
 - manual backups through commands and UI
 - automatic scheduled backups
+- configurable public backup/restore announcements
 - retention by backup count
 - retention by total backup size per world
 - restore preparation from the backup browser
@@ -31,10 +32,13 @@ Dependencies between backups are tracked. Retention and delete operations respec
 
 Automatic backups are driven by the scheduler and can be configured to:
 
-- run every `N` minutes
+- run every `X` minutes (60 by default)
+- send one optional public warning before an automatic backup starts
 - pause when no players have been online since the last backup
 - run on server start
 - run on server stop
+
+Public announcements can be sent to chat, sent to the action bar, or disabled.
 
 ### Retention policy
 
@@ -101,13 +105,14 @@ Available commands:
 
 /jeb list
 /jeb next
-/jeb restore <backupId>
+/jeb restore <backup>
 /jeb config reload
 ```
 
 Notes:
 
 - `<name>` is optional and becomes the real `.zip` file name after sanitization.
+- `<backup>` is the visible backup name, with or without the `.zip` suffix. Tab completion suggests the visible name.
 - restore is prepared asynchronously and then the server shuts down so the restore can be applied safely on the next startup.
 - command access follows the configured permission level.
 
@@ -136,7 +141,10 @@ Main config areas:
 - `backupOnServerStart`
 - `backupOnServerStop`
 - `automaticIntervalMinutes`
+- `automaticBackupWarningEnabled`
+- `automaticBackupWarningMinutes`
 - `commandPermissionLevel`
+- `messageChannel`
 - `integrityMode`
 - `backupDirectory`
 - `retention`
@@ -159,6 +167,16 @@ If no custom name is provided, the mod uses the automatic naming scheme based on
 
 Rename uses the same sanitization rules as manual creation to keep naming behavior consistent.
 
+## Backup ZIP metadata
+
+New backups store their internal metadata in a single ZIP entry:
+
+```text
+justenoughbackups.data
+```
+
+This entry contains both the backup manifest and integrity status data as JSON. It is not encrypted or protected against manual edits.
+
 ## Requirements
 
 From the current project configuration:
@@ -171,53 +189,6 @@ From the current project configuration:
 Optional:
 
 - [Mod Menu](https://modrinth.com/mod/modmenu) for a cleaner config entry point
-
-## Building
-
-Build from the project root:
-
-```bash
-./gradlew build
-```
-
-For a compile-only check:
-
-```bash
-./gradlew compileJava
-```
-
-The project uses Fabric Loom and targets Java 25.
-
-## Project structure
-
-High-level layout:
-
-```text
-src/main/java/com/frandm/justenoughbackups
-├─ backup/          Core backup, restore, retention, storage, progress
-├─ client/          Client entrypoints, screens, UI chrome, popup HUD
-├─ command/         Brigadier command registration
-├─ config/          Persistent config and shared color parsing
-├─ network/         UI payloads and request/response handling
-└─ scheduler/       Automatic backup scheduling
-```
-
-Notable classes:
-
-- `BackupService`: main service entry for create/list/rename/delete/restore
-- `BackupStorage`: zip creation, manifest I/O, naming, sanitization
-- `RetentionPolicy`: dependency-aware retention planning and deletion
-- `BackupScheduler`: automatic backup timing and lifecycle hooks
-- `BackupManagementScreen`: in-game backup browser
-- `JEBConfigScreen`: in-game config editor
-
-## Design notes
-
-- Backup logic is server-side.
-- The backup browser and config editor are client-side frontends for that logic.
-- Retention is dependency-aware.
-- The size cap is enforced per world backup directory, not globally across all worlds.
-- Popup colors are stored as normalized `0xAARRGGBB` strings.
 
 ## License
 

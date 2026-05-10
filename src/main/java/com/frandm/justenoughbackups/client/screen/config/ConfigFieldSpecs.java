@@ -10,6 +10,8 @@ final class ConfigFieldSpecs {
             ConfigFieldSpec.of(ConfigFieldId.BACKUP_ON_START),
             ConfigFieldSpec.of(ConfigFieldId.BACKUP_ON_STOP),
             ConfigFieldSpec.intField(ConfigFieldId.INTERVAL_MINUTES, 1, Integer.MAX_VALUE),
+            ConfigFieldSpec.of(ConfigFieldId.AUTOMATIC_BACKUP_WARNING),
+            ConfigFieldSpec.intField(ConfigFieldId.AUTOMATIC_BACKUP_WARNING_MINUTES, 1, Integer.MAX_VALUE),
             ConfigFieldSpec.intField(ConfigFieldId.KEEP_FULL, 1, Integer.MAX_VALUE),
             ConfigFieldSpec.intField(ConfigFieldId.KEEP_PARTIAL, 0, Integer.MAX_VALUE),
             ConfigFieldSpec.intField(ConfigFieldId.KEEP_DIFFERENTIAL, 0, Integer.MAX_VALUE),

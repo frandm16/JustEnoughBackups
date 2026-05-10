@@ -98,6 +98,7 @@ public final class JEBConfigScreen extends Screen {
             case PAUSE_WITHOUT_PLAYERS -> () -> state.working.pauseAutomaticBackupsWithoutPlayers;
             case BACKUP_ON_START -> () -> state.working.backupOnServerStart;
             case BACKUP_ON_STOP -> () -> state.working.backupOnServerStop;
+            case AUTOMATIC_BACKUP_WARNING -> () -> state.working.automaticBackupWarningEnabled;
             case POPUP_ENABLED -> () -> state.working.popup.enabled;
             case POPUP_SHOW_TITLE -> () -> state.working.popup.showTitle;
             case POPUP_CENTER_TEXT -> () -> state.working.popup.centerText;
@@ -112,6 +113,7 @@ public final class JEBConfigScreen extends Screen {
             case PAUSE_WITHOUT_PLAYERS -> value -> state.working.pauseAutomaticBackupsWithoutPlayers = value;
             case BACKUP_ON_START -> value -> state.working.backupOnServerStart = value;
             case BACKUP_ON_STOP -> value -> state.working.backupOnServerStop = value;
+            case AUTOMATIC_BACKUP_WARNING -> value -> state.working.automaticBackupWarningEnabled = value;
             case POPUP_ENABLED -> value -> state.working.popup.enabled = value;
             case POPUP_SHOW_TITLE -> value -> state.working.popup.showTitle = value;
             case POPUP_CENTER_TEXT -> value -> state.working.popup.centerText = value;
@@ -123,6 +125,7 @@ public final class JEBConfigScreen extends Screen {
     private IntSupplier intGetter(ConfigFieldId fieldId) {
         return switch (fieldId) {
             case INTERVAL_MINUTES -> () -> state.working.automaticIntervalMinutes;
+            case AUTOMATIC_BACKUP_WARNING_MINUTES -> () -> state.working.automaticBackupWarningMinutes;
             case KEEP_FULL -> () -> state.working.retention.full;
             case KEEP_PARTIAL -> () -> state.working.retention.incremental;
             case KEEP_DIFFERENTIAL -> () -> state.working.retention.differential;
@@ -135,6 +138,7 @@ public final class JEBConfigScreen extends Screen {
     private IntConsumer intSetter(ConfigFieldId fieldId) {
         return switch (fieldId) {
             case INTERVAL_MINUTES -> value -> state.working.automaticIntervalMinutes = value;
+            case AUTOMATIC_BACKUP_WARNING_MINUTES -> value -> state.working.automaticBackupWarningMinutes = value;
             case KEEP_FULL -> value -> state.working.retention.full = value;
             case KEEP_PARTIAL -> value -> state.working.retention.incremental = value;
             case KEEP_DIFFERENTIAL -> value -> state.working.retention.differential = value;
@@ -642,6 +646,7 @@ public final class JEBConfigScreen extends Screen {
         String input = state.rawInputs.getOrDefault(state.focusedField, "");
         switch (state.focusedField) {
             case INTERVAL_MINUTES -> parseInt(input).ifPresent(value -> state.working.automaticIntervalMinutes = value);
+            case AUTOMATIC_BACKUP_WARNING_MINUTES -> parseInt(input).ifPresent(value -> state.working.automaticBackupWarningMinutes = value);
             case KEEP_FULL -> parseInt(input).ifPresent(value -> state.working.retention.full = value);
             case KEEP_PARTIAL -> parseInt(input).ifPresent(value -> state.working.retention.incremental = value);
             case KEEP_DIFFERENTIAL -> parseInt(input).ifPresent(value -> state.working.retention.differential = value);

@@ -17,6 +17,10 @@ public final class BackupMessages {
         broadcast(server, Component.translatable("message.justenoughbackups.backup_started", reason, type.commandName()));
     }
 
+    public static void broadcastAutomaticBackupWarning(MinecraftServer server, long minutes) {
+        broadcast(server, Component.translatable("message.justenoughbackups.automatic_backup_warning", String.valueOf(minutes)));
+    }
+
     public static void broadcastBackupCompleted(MinecraftServer server, BackupManifest manifest) {
         broadcast(server, Component.translatable(
                 "message.justenoughbackups.backup_completed",

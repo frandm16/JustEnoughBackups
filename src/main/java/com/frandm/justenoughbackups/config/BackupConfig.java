@@ -25,7 +25,9 @@ public final class BackupConfig {
     public boolean pauseAutomaticBackupsWithoutPlayers = true;
     public boolean backupOnServerStart = false;
     public boolean backupOnServerStop = false;
-    public int automaticIntervalMinutes = 15;
+    public int automaticIntervalMinutes = 60;
+    public boolean automaticBackupWarningEnabled = true;
+    public int automaticBackupWarningMinutes = 5;
     public int commandPermissionLevel = 2;
     public BackupMessageChannel messageChannel = BackupMessageChannel.ACTION_BAR;
     public BackupIntegrityMode integrityMode = BackupIntegrityMode.STRICT;
@@ -82,6 +84,8 @@ public final class BackupConfig {
         copy.backupOnServerStart = backupOnServerStart;
         copy.backupOnServerStop = backupOnServerStop;
         copy.automaticIntervalMinutes = automaticIntervalMinutes;
+        copy.automaticBackupWarningEnabled = automaticBackupWarningEnabled;
+        copy.automaticBackupWarningMinutes = automaticBackupWarningMinutes;
         copy.commandPermissionLevel = commandPermissionLevel;
         copy.messageChannel = messageChannel;
         copy.integrityMode = integrityMode;
@@ -122,6 +126,9 @@ public final class BackupConfig {
         }
         if (automaticIntervalMinutes < 1) {
             automaticIntervalMinutes = defaults().automaticIntervalMinutes;
+        }
+        if (automaticBackupWarningMinutes < 1) {
+            automaticBackupWarningMinutes = defaults().automaticBackupWarningMinutes;
         }
         commandPermissionLevel = Math.clamp(commandPermissionLevel, 0, 4);
         if (messageChannel == null) {

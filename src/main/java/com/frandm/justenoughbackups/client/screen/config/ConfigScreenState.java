@@ -35,6 +35,8 @@ final class ConfigScreenState {
                 working.backupOnServerStart = defaults.backupOnServerStart;
                 working.backupOnServerStop = defaults.backupOnServerStop;
                 working.automaticIntervalMinutes = defaults.automaticIntervalMinutes;
+                working.automaticBackupWarningEnabled = defaults.automaticBackupWarningEnabled;
+                working.automaticBackupWarningMinutes = defaults.automaticBackupWarningMinutes;
                 working.commandPermissionLevel = defaults.commandPermissionLevel;
                 working.messageChannel = defaults.messageChannel;
                 working.integrityMode = defaults.integrityMode;

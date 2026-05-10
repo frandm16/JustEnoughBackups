@@ -1,6 +1,7 @@
 package com.frandm.justenoughbackups.scheduler;
 
 import com.frandm.justenoughbackups.WorldBackupMod;
+import com.frandm.justenoughbackups.backup.BackupMessages;
 import com.frandm.justenoughbackups.backup.model.BackupManifest;
 import com.frandm.justenoughbackups.backup.BackupService;
 import com.frandm.justenoughbackups.config.BackupConfig;
@@ -15,6 +16,7 @@ public final class BackupScheduler {
     private static long ticksUntilNextCheck = 20L;
     private static long lastBackupMillis = 0L;
     private static boolean playersSeenSinceLastBackup = false;
+    private static boolean automaticWarningSent = false;
 
     private BackupScheduler() {
     }
@@ -56,6 +58,7 @@ public final class BackupScheduler {
             long now = System.currentTimeMillis();
             long intervalMillis = config.automaticIntervalMinutes * 60_000L;
             if (lastBackupMillis != 0L && now - lastBackupMillis < intervalMillis) {
+                maybeBroadcastAutomaticBackupWarning(server, intervalMillis - (now - lastBackupMillis));
                 return;
             }
 
@@ -64,6 +67,7 @@ public final class BackupScheduler {
             }
 
             lastBackupMillis = now;
+            resetWarnings();
             if (config.pauseAutomaticBackupsWithoutPlayers && !playersSeenSinceLastBackup) {
                 return;
             }
@@ -106,6 +110,7 @@ public final class BackupScheduler {
     public static void resetTimer() {
         lastBackupMillis = System.currentTimeMillis();
         playersSeenSinceLastBackup = false;
+        resetWarnings();
     }
 
     public static NextBackupStatus nextBackupStatus() {
@@ -123,5 +128,22 @@ public final class BackupScheduler {
         return remainingMillis == 0L
                 ? NextBackupStatus.readyNow()
                 : NextBackupStatus.waiting(remainingMillis);
+    }
+
+    private static void maybeBroadcastAutomaticBackupWarning(MinecraftServer server, long remainingMillis) {
+        BackupConfig config = BackupConfig.get();
+        if (!config.automaticBackupWarningEnabled || automaticWarningSent) {
+            return;
+        }
+
+        long remainingMinutes = Math.max(1L, (remainingMillis + 59_999L) / 60_000L);
+        if (remainingMinutes <= config.automaticBackupWarningMinutes) {
+            automaticWarningSent = true;
+            BackupMessages.broadcastAutomaticBackupWarning(server, remainingMinutes);
+        }
+    }
+
+    private static void resetWarnings() {
+        automaticWarningSent = false;
     }
 }

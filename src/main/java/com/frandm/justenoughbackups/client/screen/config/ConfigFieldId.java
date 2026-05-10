@@ -7,6 +7,8 @@ public enum ConfigFieldId {
     BACKUP_ON_START("screen.justenoughbackups.config.backup_on_start", ConfigTab.BACKUPS, ConfigControlType.BOOLEAN),
     BACKUP_ON_STOP("screen.justenoughbackups.config.backup_on_stop", ConfigTab.BACKUPS, ConfigControlType.BOOLEAN),
     INTERVAL_MINUTES("screen.justenoughbackups.config.interval_minutes", ConfigTab.BACKUPS, ConfigControlType.INT),
+    AUTOMATIC_BACKUP_WARNING("screen.justenoughbackups.config.automatic_backup_warning", ConfigTab.BACKUPS, ConfigControlType.BOOLEAN),
+    AUTOMATIC_BACKUP_WARNING_MINUTES("screen.justenoughbackups.config.automatic_backup_warning_minutes", ConfigTab.BACKUPS, ConfigControlType.INT),
     KEEP_FULL("screen.justenoughbackups.config.keep_full", ConfigTab.BACKUPS, ConfigControlType.INT),
     KEEP_PARTIAL("screen.justenoughbackups.config.keep_partial", ConfigTab.BACKUPS, ConfigControlType.INT),
     KEEP_DIFFERENTIAL("screen.justenoughbackups.config.keep_differential", ConfigTab.BACKUPS, ConfigControlType.INT),
