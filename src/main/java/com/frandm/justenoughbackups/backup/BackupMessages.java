@@ -41,10 +41,9 @@ public final class BackupMessages {
     }
 
     public static MutableComponent withTitle(Component message) {
-        return Component.empty()
-                .append(Component.translatable("message.justenoughbackups.title")
-                        .withStyle(ChatFormatting.DARK_PURPLE))
-                .append(message.copy().withStyle(ChatFormatting.RESET));
+        return Component.translatable("message.justenoughbackups.title")
+                .withStyle(style -> style.withColor(0x6F00FF))
+                .append(message.copy().withStyle(ChatFormatting.WHITE));
     }
 
     private static void broadcast(MinecraftServer server, Component message) {

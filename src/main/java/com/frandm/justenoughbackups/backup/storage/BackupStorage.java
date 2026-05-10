@@ -4,6 +4,7 @@ import com.frandm.justenoughbackups.WorldBackupMod;
 import com.frandm.justenoughbackups.backup.BackupConstants;
 import com.frandm.justenoughbackups.backup.model.BackupIntegrityMode;
 import com.frandm.justenoughbackups.backup.model.BackupManifest;
+import com.frandm.justenoughbackups.backup.model.BackupMetadata;
 import com.frandm.justenoughbackups.backup.model.BackupStatus;
 import com.frandm.justenoughbackups.backup.model.BackupType;
 import com.frandm.justenoughbackups.backup.progress.BackupProgress;
@@ -122,7 +123,6 @@ public final class BackupStorage {
         manifest.baseBackupId = base == null ? null : base.id;
         manifest.zipFileName = zipFileName;
         manifest.reason = reason;
-        manifest.integrityStatusEntry = BackupConstants.STATUS_ENTRY;
         manifest.integrityMode = config.integrityMode;
         manifest.includedFiles.addAll(includedFiles);
         manifest.snapshot.putAll(snapshot);
@@ -162,6 +162,7 @@ public final class BackupStorage {
             while (entries.hasMoreElements()) {
                 ZipEntry entry = entries.nextElement();
                 if (entry.isDirectory()
+                        || BackupConstants.DATA_ENTRY.equals(entry.getName())
                         || BackupConstants.MANIFEST_ENTRY.equals(entry.getName())
                         || BackupConstants.STATUS_ENTRY.equals(entry.getName())) {
                     continue;
@@ -231,14 +232,9 @@ public final class BackupStorage {
             manifest.snapshot.clear();
             manifest.snapshot.putAll(finalSnapshot);
 
-            ZipEntry statusEntry = new ZipEntry(BackupConstants.STATUS_ENTRY);
-            zipOut.putNextEntry(statusEntry);
-            zipOut.write(GSON.toJson(status).getBytes(StandardCharsets.UTF_8));
-            zipOut.closeEntry();
-
-            ZipEntry manifestEntry = new ZipEntry(BackupConstants.MANIFEST_ENTRY);
-            zipOut.putNextEntry(manifestEntry);
-            zipOut.write(GSON.toJson(manifest).getBytes(StandardCharsets.UTF_8));
+            ZipEntry dataEntry = new ZipEntry(BackupConstants.DATA_ENTRY);
+            zipOut.putNextEntry(dataEntry);
+            zipOut.write(GSON.toJson(new BackupMetadata(manifest, status)).getBytes(StandardCharsets.UTF_8));
             zipOut.closeEntry();
         }
         progress.emit(status.completed ? BackupProgressState.COMPLETED : BackupProgressState.FAILED, true);
@@ -294,46 +290,44 @@ public final class BackupStorage {
     }
 
     private static BackupManifest readManifest(Path backupFile) {
-        try (ZipFile zipFile = new ZipFile(backupFile.toFile())) {
-            ZipEntry entry = zipFile.getEntry(BackupConstants.MANIFEST_ENTRY);
-            if (entry == null) {
-                return null;
-            }
-
-            try (Reader reader = new InputStreamReader(zipFile.getInputStream(entry), StandardCharsets.UTF_8)) {
-                BackupManifest manifest = GSON.fromJson(reader, BackupManifest.class);
-                if (manifest == null) {
-                    WorldBackupMod.LOGGER.warn("Skipping backup with empty manifest: {}", backupFile);
-                    return null;
-                }
-                if (manifest.id == null || manifest.id.isBlank()) {
-                    WorldBackupMod.LOGGER.warn("Skipping backup with missing id in manifest: {}", backupFile);
-                    return null;
-                }
-                if (manifest.type == null) {
-                    WorldBackupMod.LOGGER.warn("Skipping backup with missing type in manifest: {}", backupFile);
-                    return null;
-                }
-                return manifest;
-            }
-        } catch (IOException | RuntimeException exception) {
-            WorldBackupMod.LOGGER.warn("Skipping unreadable backup manifest: {}", backupFile, exception);
+        BackupMetadata metadata = readMetadata(backupFile);
+        if (metadata == null) {
             return null;
         }
+
+        BackupManifest manifest = metadata.manifest;
+        if (manifest == null) {
+            WorldBackupMod.LOGGER.warn("Skipping backup with empty manifest: {}", backupFile);
+            return null;
+        }
+        if (manifest.id == null || manifest.id.isBlank()) {
+            WorldBackupMod.LOGGER.warn("Skipping backup with missing id in manifest: {}", backupFile);
+            return null;
+        }
+        if (manifest.type == null) {
+            WorldBackupMod.LOGGER.warn("Skipping backup with missing type in manifest: {}", backupFile);
+            return null;
+        }
+        return manifest;
     }
 
     public static BackupStatus readStatus(Path backupFile) {
+        BackupMetadata metadata = readMetadata(backupFile);
+        return metadata == null ? null : metadata.status;
+    }
+
+    private static BackupMetadata readMetadata(Path backupFile) {
         try (ZipFile zipFile = new ZipFile(backupFile.toFile())) {
-            ZipEntry entry = zipFile.getEntry(BackupConstants.STATUS_ENTRY);
+            ZipEntry entry = zipFile.getEntry(BackupConstants.DATA_ENTRY);
             if (entry == null) {
                 return null;
             }
 
             try (Reader reader = new InputStreamReader(zipFile.getInputStream(entry), StandardCharsets.UTF_8)) {
-                return GSON.fromJson(reader, BackupStatus.class);
+                return GSON.fromJson(reader, BackupMetadata.class);
             }
         } catch (IOException | RuntimeException exception) {
-            WorldBackupMod.LOGGER.warn("Skipping unreadable backup status: {}", backupFile, exception);
+            WorldBackupMod.LOGGER.warn("Skipping unreadable backup metadata: {}", backupFile, exception);
             return null;
         }
     }
@@ -365,7 +359,28 @@ public final class BackupStorage {
         return fileName.endsWith(".zip") ? fileName.substring(0, fileName.length() - 4) : fileName;
     }
 
-    private static BackupManifest findById(Path backupDir, String backupId) throws IOException {
+    public static BackupManifest findByZipName(Path backupDir, String input) throws IOException {
+        String value = input == null ? "" : input.trim();
+        if (value.isBlank()) {
+            throw new IOException("Backup not found: " + input);
+        }
+
+        List<BackupManifest> matches = new ArrayList<>();
+        for (BackupManifest manifest : readManifests(backupDir)) {
+            if (Objects.equals(manifest.zipFileName, value) || Objects.equals(displayName(manifest), value)) {
+                matches.add(manifest);
+            }
+        }
+        if (matches.isEmpty()) {
+            throw new IOException("Backup not found: " + input);
+        }
+        if (matches.size() > 1) {
+            throw new IOException("Backup name is ambiguous: " + input);
+        }
+        return matches.getFirst();
+    }
+
+    public static BackupManifest findById(Path backupDir, String backupId) throws IOException {
         for (BackupManifest manifest : readManifests(backupDir)) {
             if (Objects.equals(manifest.id, backupId)) {
                 return manifest;

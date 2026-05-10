@@ -132,25 +132,37 @@ public final class BackupService {
         BackupStorage.deleteBackup(BackupPaths.worldBackupDir(server), backupId);
     }
 
-    public static CompletableFuture<PendingRestore> restoreBackup(MinecraftServer server, String backupId) {
+    public static CompletableFuture<PendingRestore> restoreBackupByName(MinecraftServer server, String backupName) {
+        return restoreBackup(server, backupName, false);
+    }
+
+    public static CompletableFuture<PendingRestore> restoreBackupById(MinecraftServer server, String backupId) {
+        return restoreBackup(server, backupId, true);
+    }
+
+    private static CompletableFuture<PendingRestore> restoreBackup(MinecraftServer server, String backup, boolean byId) {
         if (!BACKUP_RUNNING.compareAndSet(false, true)) {
             BackupMessages.broadcastRestoreFailed(server, "A backup or restore is already running.");
             return CompletableFuture.failedFuture(new IllegalStateException("A backup or restore is already running."));
         }
 
-        BackupMessages.broadcastRestoreStarted(server, backupId);
+        BackupMessages.broadcastRestoreStarted(server, backup);
         server.saveEverything(true, true, true);
         Path worldPath = server.getWorldPath(LevelResource.ROOT);
         Path backupDir = BackupPaths.worldBackupDir(server);
 
         return CompletableFuture.supplyAsync(() -> {
             try {
-                PendingRestore restore = RestoreService.prepareRestore(backupDir, worldPath, backupId);
-                BackupMessages.broadcastRestorePrepared(server, restore.backupId());
+                BackupManifest target = byId
+                        ? BackupStorage.findById(backupDir, backup)
+                        : BackupStorage.findByZipName(backupDir, backup);
+                String displayName = BackupStorage.displayName(target);
+                PendingRestore restore = RestoreService.prepareRestore(backupDir, worldPath, target, backup);
+                BackupMessages.broadcastRestorePrepared(server, displayName);
                 return restore;
             } catch (IOException exception) {
                 BackupMessages.broadcastRestoreFailed(server, rootMessage(exception));
-                throw new RuntimeException("Failed to prepare restore: " + backupId, exception);
+                throw new RuntimeException("Failed to prepare restore: " + backup, exception);
             } finally {
                 BACKUP_RUNNING.set(false);
             }

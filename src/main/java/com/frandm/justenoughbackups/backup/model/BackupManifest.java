@@ -16,7 +16,6 @@ public final class BackupManifest {
     public String baseBackupId;
     public String zipFileName;
     public String reason;
-    public String integrityStatusEntry;
     public BackupIntegrityMode integrityMode;
     public long includedBytes;
     public List<String> includedFiles = new ArrayList<>();

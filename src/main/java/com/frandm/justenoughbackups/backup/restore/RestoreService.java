@@ -55,8 +55,9 @@ public final class RestoreService {
         });
     }
 
-    public static PendingRestore prepareRestore(Path backupDir, Path worldPath, String backupId) throws IOException {
-        List<BackupManifest> chain = resolveRestoreChain(backupDir, backupId);
+    public static PendingRestore prepareRestore(Path backupDir, Path worldPath, BackupManifest targetManifest, String requestedName) throws IOException {
+        List<BackupManifest> chain = resolveRestoreChain(backupDir, targetManifest);
+        String backupId = targetManifest.id;
         Path tempRestore = backupDir.resolve(".restore-" + backupId);
         BackupManifest target = chain.getLast();
 
@@ -79,20 +80,15 @@ public final class RestoreService {
                 Map.copyOf(chain.getLast().snapshot)
         );
         pendingRestore = restore;
-        WorldBackupMod.LOGGER.warn("Restore {} prepared. It will be applied when the server stops.", backupId);
+        WorldBackupMod.LOGGER.warn("Restore {} prepared from request {}. It will be applied when the server stops.", backupId, requestedName);
         return restore;
     }
 
-    private static List<BackupManifest> resolveRestoreChain(Path backupDir, String backupId) throws IOException {
+    private static List<BackupManifest> resolveRestoreChain(Path backupDir, BackupManifest target) throws IOException {
         List<BackupManifest> manifests = BackupStorage.readManifests(backupDir);
         Map<String, BackupManifest> byId = new LinkedHashMap<>();
         for (BackupManifest manifest : manifests) {
             byId.put(manifest.id, manifest);
-        }
-
-        BackupManifest target = byId.get(backupId);
-        if (target == null) {
-            throw new IOException("Backup not found: " + backupId);
         }
 
         ArrayDeque<BackupManifest> chain = new ArrayDeque<>();

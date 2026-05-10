@@ -6,6 +6,7 @@ import com.frandm.justenoughbackups.backup.BackupPermissions;
 import com.frandm.justenoughbackups.backup.BackupService;
 import com.frandm.justenoughbackups.backup.model.BackupManifest;
 import com.frandm.justenoughbackups.backup.model.BackupType;
+import com.frandm.justenoughbackups.backup.storage.BackupStorage;
 import com.frandm.justenoughbackups.config.BackupConfig;
 import com.frandm.justenoughbackups.scheduler.BackupScheduler;
 import com.frandm.justenoughbackups.scheduler.NextBackupStatus;
@@ -13,6 +14,8 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.commands.SharedSuggestionProvider;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.network.chat.Component;
 
 import java.io.IOException;
@@ -48,10 +51,11 @@ public final class BackupCommand {
                         .then(Commands.literal("next")
                                 .executes(context -> next(context.getSource())))
                         .then(Commands.literal("restore")
-                                .then(Commands.argument("backupId", StringArgumentType.word())
+                                .then(Commands.argument("backup", StringArgumentType.greedyString())
+                                        .suggests((context, builder) -> suggestBackupNames(context.getSource(), builder))
                                         .executes(context -> restore(
                                                 context.getSource(),
-                                                StringArgumentType.getString(context, "backupId")
+                                                StringArgumentType.getString(context, "backup")
                                         ))))
                         .then(Commands.literal("config")
                                 .then(Commands.literal("reload")
@@ -78,20 +82,17 @@ public final class BackupCommand {
         try {
             List<BackupManifest> backups = BackupService.listBackups(source.getServer());
             if (backups.isEmpty()) {
-                source.sendSuccess(() -> BackupMessages.withTitle(Component.translatable("message.justenoughbackups.no_backups")), false);
+                sendLocal(source, BackupMessages.withTitle(Component.translatable("message.justenoughbackups.no_backups")));
                 return 1;
             }
 
-            source.sendSuccess(() -> BackupMessages.withTitle(Component.translatable("message.justenoughbackups.backup_count", backups.size())), false);
+            sendLocal(source, BackupMessages.withTitle(Component.translatable("message.justenoughbackups.backup_count", String.valueOf(backups.size()))));
             backups.stream()
-                    .forEach(manifest -> source.sendSuccess(
-                            () -> formatBackup(manifest),
-                            false
-                    ));
+                    .forEach(manifest -> sendLocal(source, formatBackup(manifest)));
             return backups.size();
         } catch (IOException exception) {
             WorldBackupMod.LOGGER.error("Failed to list backups.", exception);
-            source.sendFailure(BackupMessages.withTitle(Component.translatable("message.justenoughbackups.list_failed")));
+            sendLocal(source, BackupMessages.withTitle(Component.translatable("message.justenoughbackups.list_failed")));
             return 0;
         }
     }
@@ -99,30 +100,21 @@ public final class BackupCommand {
     private static int next(CommandSourceStack source) {
         NextBackupStatus status = BackupScheduler.nextBackupStatus();
         if (!status.enabled()) {
-            source.sendSuccess(
-                    () -> BackupMessages.withTitle(Component.translatable("message.justenoughbackups.next_disabled")),
-                    false
-            );
+            sendLocal(source, BackupMessages.withTitle(Component.translatable("message.justenoughbackups.next_disabled")));
             return 1;
         }
 
         if (status.ready()) {
-            source.sendSuccess(
-                    () -> BackupMessages.withTitle(Component.translatable("message.justenoughbackups.next_ready")),
-                    false
-            );
+            sendLocal(source, BackupMessages.withTitle(Component.translatable("message.justenoughbackups.next_ready")));
             return 1;
         }
 
-        source.sendSuccess(
-                () -> BackupMessages.withTitle(Component.translatable("message.justenoughbackups.next_waiting", formatDuration(status.remainingMillis()))),
-                false
-        );
+        sendLocal(source, BackupMessages.withTitle(Component.translatable("message.justenoughbackups.next_waiting", formatDuration(status.remainingMillis()))));
         return 1;
     }
 
     private static int restore(CommandSourceStack source, String backupId) {
-        BackupService.restoreBackup(source.getServer(), backupId)
+        BackupService.restoreBackupByName(source.getServer(), backupId)
                 .thenAccept(restore -> source.getServer().execute(() -> {
                     source.getServer().halt(false);
                 }))
@@ -135,15 +127,12 @@ public final class BackupCommand {
 
     private static int reloadConfig(CommandSourceStack source) {
         BackupConfig config = BackupService.reloadConfig();
-        source.sendSuccess(
-                () -> BackupMessages.withTitle(Component.translatable("message.justenoughbackups.config_reloaded",
-                        config.backupMode,
-                        config.automaticBackupsEnabled,
-                        config.automaticIntervalMinutes,
-                        config.commandPermissionLevel,
-                        config.messageChannel)),
-                false
-        );
+        sendLocal(source, BackupMessages.withTitle(Component.translatable("message.justenoughbackups.config_reloaded",
+                String.valueOf(config.backupMode),
+                String.valueOf(config.automaticBackupsEnabled),
+                String.valueOf(config.automaticIntervalMinutes),
+                String.valueOf(config.commandPermissionLevel),
+                String.valueOf(config.messageChannel))));
         return 1;
     }
 
@@ -152,7 +141,7 @@ public final class BackupCommand {
         return BackupMessages.withTitle(Component.translatable("message.justenoughbackups.backup_entry",
                 manifest.id,
                 manifest.type.commandName(),
-                manifest.includedFiles.size(),
+                String.valueOf(manifest.includedFiles.size()),
                 base,
                 manifest.createdAt));
     }
@@ -172,4 +161,27 @@ public final class BackupCommand {
         return seconds + "s";
     }
 
+    private static void sendLocal(CommandSourceStack source, Component message) {
+        if (source.getEntity() instanceof ServerPlayer player) {
+            player.sendSystemMessage(message);
+            return;
+        }
+        source.sendSuccess(() -> message, false);
+    }
+
+    private static java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> suggestBackupNames(
+            CommandSourceStack source,
+            com.mojang.brigadier.suggestion.SuggestionsBuilder builder
+    ) {
+        try {
+            List<String> suggestions = BackupService.listBackups(source.getServer()).stream()
+                    .map(BackupStorage::displayName)
+                    .filter(displayName -> !displayName.isBlank())
+                    .toList();
+            return SharedSuggestionProvider.suggest(suggestions, builder);
+        } catch (IOException exception) {
+            WorldBackupMod.LOGGER.warn("Failed to suggest backups for restore command.", exception);
+            return builder.buildFuture();
+        }
+    }
 }

@@ -65,7 +65,7 @@ public final class BackupUiNetworking {
     }
 
     private static void restoreBackup(BackupUiRequestPayload payload, MinecraftServer server, ServerPlayer player) {
-        BackupService.restoreBackup(server, payload.backupId())
+        BackupService.restoreBackupById(server, payload.backupId())
                 .thenAccept(restore -> server.execute(() -> {
                     send(player, payload, true, true, "message.justenoughbackups.restore_prepared", List.of(restore.backupId()), List.of());
                     server.halt(false);
