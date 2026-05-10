@@ -425,9 +425,11 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
                 return;
             }
             minecraft.setScreen(new ConfirmScreen(second -> {
-                minecraft.setScreen(this);
                 if (second) {
                     BackupUiClient.restoreBackup(backup.id());
+                    minecraft.setScreen(null);
+                } else {
+                    minecraft.setScreen(this);
                 }
             }, Component.translatable("screen.justenoughbackups.backups.restore_second_title"), Component.translatable("screen.justenoughbackups.backups.restore_second_message")));
         }, Component.translatable("screen.justenoughbackups.backups.restore_title", backup.displayName()), Component.translatable("screen.justenoughbackups.backups.restore_message")));
@@ -718,8 +720,8 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
                     return true;
                 }
                 if (confirmRect().contains(event.x(), event.y())) {
-                    minecraft.setScreen(parent);
                     BackupUiClient.createBackup(selected, nameBox.getValue());
+                    minecraft.setScreen(null);
                     return true;
                 }
                 if (cancelRect().contains(event.x(), event.y())) {
