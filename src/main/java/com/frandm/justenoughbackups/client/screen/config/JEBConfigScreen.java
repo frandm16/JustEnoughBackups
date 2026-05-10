@@ -3,6 +3,7 @@ package com.frandm.justenoughbackups.client.screen.config;
 import com.frandm.justenoughbackups.backup.model.BackupIntegrityMode;
 import com.frandm.justenoughbackups.backup.model.BackupType;
 import com.frandm.justenoughbackups.client.screen.preview.PopupPreviewScreen;
+import com.frandm.justenoughbackups.client.ui.ScreenChrome;
 import com.frandm.justenoughbackups.client.ui.popup.PopupPositioning;
 import com.frandm.justenoughbackups.config.BackupConfig;
 import com.frandm.justenoughbackups.config.ConfigColor;
@@ -23,12 +24,8 @@ import java.util.function.IntSupplier;
 import java.util.function.Supplier;
 
 public final class JEBConfigScreen extends Screen {
-    private static final int OUTER = 12;
-    private static final int TITLE_Y = 8;
     private static final int TAB_Y = 32;
     private static final int TAB_H = 20;
-    private static final int VIEW_TOP = 64;
-    private static final int FOOTER_H = 38;
     private static final int ROW_H = 32;
     private static final int ROW_GAP = 6;
     private static final int ROW_INSET = 8;
@@ -37,12 +34,8 @@ public final class JEBConfigScreen extends Screen {
     private static final int SCROLL_W = 4;
     private static final int MIN_THUMB_H = 18;
 
-    private static final int BG_COLOR = 0xCC050505;
-    private static final int TITLE_COLOR = 0xFFFFFFFF;
-    private static final int LINE_COLOR = 0x00606060;
     private static final int ROW_COLOR = 0x66181818;
     private static final int ROW_BAD_COLOR = 0x66AA2222;
-    private static final int OUTLINE_COLOR = 0xFF333333;
     private static final int OUTLINE_BAD_COLOR = 0xFFFF5555;
 
     private final Screen parent;
@@ -386,11 +379,11 @@ public final class JEBConfigScreen extends Screen {
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-        graphics.fill(0, 0, width, height, BG_COLOR);
-        graphics.centeredText(font, title, width / 2, TITLE_Y, TITLE_COLOR);
+        graphics.fill(0, 0, width, height, ScreenChrome.BG_COLOR);
+        graphics.centeredText(font, title, width / 2, ScreenChrome.TITLE_Y, ScreenChrome.TITLE_COLOR);
         renderTabs(graphics, mouseX, mouseY);
-        graphics.horizontalLine(0, width, viewportTop(), LINE_COLOR);
-        graphics.horizontalLine(0, width, viewportBottom(), LINE_COLOR);
+        graphics.horizontalLine(0, width, viewportTop(), ScreenChrome.LINE_COLOR);
+        graphics.horizontalLine(0, width, viewportBottom(), ScreenChrome.LINE_COLOR);
 
         graphics.enableScissor(viewportX(), viewportTop() + 1, viewportRight(), viewportBottom());
         ConfigRow hovered = null;
@@ -401,7 +394,7 @@ public final class JEBConfigScreen extends Screen {
             }
             int color = isInvalid(row.fieldId) ? ROW_BAD_COLOR : ROW_COLOR;
             graphics.fill(row.x, y, row.x + row.w, y + row.h, color);
-            graphics.outline(row.x, y, row.w, row.h, isInvalid(row.fieldId) ? OUTLINE_BAD_COLOR : OUTLINE_COLOR);
+            graphics.outline(row.x, y, row.w, row.h, isInvalid(row.fieldId) ? OUTLINE_BAD_COLOR : ScreenChrome.OUTLINE_COLOR);
             graphics.text(font, Component.literal(trimToWidth(Component.translatable(row.fieldId.labelKey()).getString(), Math.max(50, row.w / 2 - 16))), row.x + ROW_INSET, y + 11, 0xFFE0E0E0, true);
             row.renderer.render(graphics, row, y, mouseX, mouseY);
             if (isInsideViewport(mouseY) && mouseX >= row.x && mouseX <= row.x + row.w && mouseY >= y && mouseY <= y + row.h) {
@@ -425,10 +418,10 @@ public final class JEBConfigScreen extends Screen {
     }
 
     private void renderFooter(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
-        int footerY = height - OUTER - CONTROL_H;
+        int footerY = height - ScreenChrome.OUTER - CONTROL_H;
         if (!validationErrors.isEmpty()) {
             String message = validationErrors.getFirst().message().getString();
-            graphics.text(font, Component.literal(trimToWidth(message, Math.max(100, width - 280))), OUTER, footerY + 6, 0xFFFF7777, true);
+            graphics.text(font, Component.literal(trimToWidth(message, Math.max(100, width - 280))), ScreenChrome.OUTER, footerY + 6, 0xFFFF7777, true);
         }
         Rect resetTab = resetTabRect();
         Rect resetAll = resetAllRect();
@@ -439,10 +432,7 @@ public final class JEBConfigScreen extends Screen {
     }
 
     private void drawButton(GuiGraphicsExtractor graphics, Rect rect, Component text, boolean active, boolean hovered) {
-        int fill = !active ? 0x66333333 : hovered ? 0xFF606060 : 0xFF3B3B3B;
-        graphics.fill(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h, fill);
-        graphics.outline(rect.x, rect.y, rect.w, rect.h, active ? 0xFF8A8A8A : 0xFF555555);
-        graphics.centeredText(font, text, rect.x + rect.w / 2, rect.y + 6, active ? 0xFFFFFFFF : 0xFFAAAAAA);
+        ScreenChrome.drawSurfaceButton(graphics, font, new ScreenChrome.Rect(rect.x, rect.y, rect.w, rect.h), text, active, hovered);
     }
 
     private void drawField(GuiGraphicsExtractor graphics, Rect rect, ConfigFieldId fieldId, String text, int mouseX, int mouseY) {
@@ -710,11 +700,11 @@ public final class JEBConfigScreen extends Screen {
     }
 
     private int contentX() {
-        return OUTER;
+        return ScreenChrome.contentX();
     }
 
     private int contentWidth() {
-        return Math.max(1, width - OUTER * 2 - SCROLL_GUTTER);
+        return Math.max(1, ScreenChrome.contentWidth(width) - SCROLL_GUTTER);
     }
 
     private int controlWidth(int rowW) {
@@ -752,15 +742,15 @@ public final class JEBConfigScreen extends Screen {
     }
 
     private int viewportX() {
-        return OUTER;
+        return ScreenChrome.contentX();
     }
 
     private int viewportRight() {
-        return width - OUTER;
+        return ScreenChrome.viewportRight(width);
     }
 
     private int viewportTop() {
-        return VIEW_TOP;
+        return ScreenChrome.viewportTop();
     }
 
     private int viewportBottom() {
@@ -772,7 +762,7 @@ public final class JEBConfigScreen extends Screen {
     }
 
     private int footerTop() {
-        return height - FOOTER_H;
+        return ScreenChrome.footerTop(height);
     }
 
     private boolean isInsideViewport(double mouseY) {
@@ -784,7 +774,7 @@ public final class JEBConfigScreen extends Screen {
     }
 
     private int scrollbarX() {
-        return width - OUTER - (SCROLL_GUTTER + SCROLL_W) / 2;
+        return ScreenChrome.viewportRight(width) - (SCROLL_GUTTER + SCROLL_W) / 2;
     }
 
     private int scrollbarThumbHeight() {
@@ -851,8 +841,8 @@ public final class JEBConfigScreen extends Screen {
     }
 
     private Rect resetTabRect() {
-        int y = height - OUTER - CONTROL_H;
-        int x = Math.max(OUTER, width - OUTER - 248);
+        int y = height - ScreenChrome.OUTER - CONTROL_H;
+        int x = Math.max(ScreenChrome.OUTER, width - ScreenChrome.OUTER - 248);
         return new Rect(x, y, 72, CONTROL_H);
     }
 

@@ -4,12 +4,12 @@ import com.frandm.justenoughbackups.backup.model.BackupType;
 import com.frandm.justenoughbackups.client.net.BackupUiClient;
 import com.frandm.justenoughbackups.client.net.BackupUiResponseConsumer;
 import com.frandm.justenoughbackups.client.screen.config.JEBConfigScreens;
+import com.frandm.justenoughbackups.client.ui.ScreenChrome;
 import com.frandm.justenoughbackups.config.BackupConfig;
 import com.frandm.justenoughbackups.network.BackupUiBackup;
 import com.frandm.justenoughbackups.network.BackupUiResponsePayload;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.components.CycleButton;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.ConfirmScreen;
 import net.minecraft.client.gui.screens.Screen;
@@ -18,6 +18,7 @@ import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
 
+import java.util.Arrays;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -31,7 +32,8 @@ import java.util.Locale;
 import java.util.Map;
 
 public final class BackupManagementScreen extends Screen implements BackupUiResponseConsumer {
-    private static final int TOOLBAR_HEIGHT = 34;
+    private static final int HEADER_Y = 34;
+    private static final int TOOLBAR_HEIGHT = 22;
     private static final int LIST_HEADER_HEIGHT = 18;
     private static final int ROW_HEADER_HEIGHT = 54;
     private static final int DETAIL_LINE_HEIGHT = 14;
@@ -44,8 +46,7 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
     private static final int MAX_INLINE_CHILDREN = 6;
     private static final DateTimeFormatter SHORT_DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm", Locale.ROOT)
             .withZone(ZoneId.systemDefault());
-    public static final int BG_COLOR = 0xCC080808;
-    public static final int TEXT_COLOR = 0xFFFFFFFF;
+    public static final int TEXT_COLOR = ScreenChrome.TITLE_COLOR;
     public static final int STATUS_OK_COLOR = 0xFFB8E986;
     public static final int STATUS_NOT_OK_COLOR = 0xFFFF7777;
     public static final int ROW_HOVERED_COLOR = 0xE0171717;
@@ -79,12 +80,11 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
         items = buildItems();
         rowLayouts = buildRowLayouts(filteredItems());
         scroll = Math.clamp(scroll, 0, maxScroll());
-        addVisibleRowButtons();
     }
 
     private void buildToolbar() {
-        int x = MARGIN;
-        int y = MARGIN;
+        int x = contentX();
+        int y = HEADER_Y;
 
         searchBox = new EditBox(font, x, y, Math.min(280, width / 3), 20, Component.translatable("screen.justenoughbackups.backups.search"));
         searchBox.setHint(Component.translatable("screen.justenoughbackups.backups.search_hint"));
@@ -97,71 +97,56 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
         addRenderableWidget(searchBox);
         setInitialFocus(searchBox);
 
-        int buttonX = searchBox.getX() + searchBox.getWidth() + 8;
-        addRenderableWidget(Button.builder(Component.translatable("screen.justenoughbackups.backups.create"), button -> minecraft.setScreen(new CreateBackupScreen(this)))
-                .bounds(buttonX, y, 76, 20)
-                .build());
-        addRenderableWidget(Button.builder(Component.translatable("screen.justenoughbackups.backups.refresh"), button -> BackupUiClient.requestList())
-                .bounds(buttonX + 82, y, 76, 20)
-                .build());
-        addRenderableWidget(Button.builder(Component.translatable("screen.justenoughbackups.backups.config"), button -> minecraft.setScreen(JEBConfigScreens.create(this)))
-                .bounds(width - MARGIN - 60, y, 60, 20)
-                .build());
-    }
-
-    private void addVisibleRowButtons() {
-        for (RowLayout layout : rowLayouts) {
-            int rowY = screenY(layout);
-            if (rowY + layout.height() < listTop() || rowY > listBottom()) {
-                continue;
-            }
-            addRowButtons(layout, rowY);
-        }
-    }
-
-    private void addRowButtons(RowLayout layout, int rowY) {
-        BackupUiBackup backup = layout.item().backup();
-        Rect restore = restoreRect(layout, rowY);
-        Rect rename = renameRect(layout, rowY);
-        Rect delete = deleteRect(layout, rowY);
-
-        addRenderableWidget(Button.builder(Component.translatable("screen.justenoughbackups.backups.restore"), button -> confirmRestore(backup))
-                .bounds(restore.x(), restore.y(), restore.w(), restore.h())
-                .build());
-        addRenderableWidget(Button.builder(Component.translatable("screen.justenoughbackups.backups.rename"), button -> minecraft.setScreen(new RenameBackupScreen(this, backup)))
-                .bounds(rename.x(), rename.y(), rename.w(), rename.h())
-                .build());
-        Button deleteButton = Button.builder(Component.translatable("screen.justenoughbackups.backups.delete"), button -> confirmDelete(backup))
-                .bounds(delete.x(), delete.y(), delete.w(), delete.h())
-                .build();
-        deleteButton.active = backup.canDelete();
-        addRenderableWidget(deleteButton);
     }
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-        graphics.fill(0, 0, width, height, BG_COLOR);
-        graphics.text(font, title, MARGIN, 6, TEXT_COLOR, true);
-        graphics.text(font, status, MARGIN, TOOLBAR_HEIGHT + 4, statusOk ? STATUS_OK_COLOR : STATUS_NOT_OK_COLOR, true);
+        graphics.fill(0, 0, width, height, ScreenChrome.BG_COLOR);
+        graphics.centeredText(font, title, width / 2, ScreenChrome.TITLE_Y, TEXT_COLOR);
+        graphics.horizontalLine(0, width, viewportTop(), ScreenChrome.LINE_COLOR);
+        graphics.horizontalLine(0, width, footerTop(), ScreenChrome.LINE_COLOR);
+        renderToolbar(graphics, mouseX, mouseY);
 
         int listTop = listTop();
-        graphics.fill(rowX() - 4, listTop - 4, rowX() + rowWidth() + 4, height - MARGIN, 0x88000000);
         renderListHeader(graphics);
 
-        if (rowLayouts.isEmpty()) {
-            graphics.text(font, Component.translatable(backups.isEmpty() ? "screen.justenoughbackups.backups.empty" : "screen.justenoughbackups.backups.no_matches"),
-                    MARGIN + 10, listTop + LIST_HEADER_HEIGHT + 10, TEXT_COLOR, true);
+        graphics.enableScissor(rowX() - 4, listContentTop(), rowX() + rowWidth() + 4, footerTop() - 4);
+        try {
+            if (rowLayouts.isEmpty()) {
+                graphics.text(font, Component.translatable(backups.isEmpty() ? "screen.justenoughbackups.backups.empty" : "screen.justenoughbackups.backups.no_matches"),
+                        MARGIN + 10, listTop + LIST_HEADER_HEIGHT + 10, TEXT_COLOR, true);
+            }
+
+            for (RowLayout layout : rowLayouts) {
+                int rowY = screenY(layout);
+                if (rowY + layout.height() < listContentTop() || rowY > listBottom()) {
+                    continue;
+                }
+                renderRow(graphics, layout, rowY, mouseX, mouseY);
+            }
+        } finally {
+            graphics.disableScissor();
         }
 
-        for (RowLayout layout : rowLayouts) {
-            int rowY = screenY(layout);
-            if (rowY + layout.height() < listContentTop() || rowY > listBottom()) {
-                continue;
-            }
-            renderRow(graphics, layout, rowY, mouseX, mouseY);
-        }
+        renderFooter(graphics);
 
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);
+    }
+
+    private void renderToolbar(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+        drawSurfaceButton(graphics, createButtonRect(), Component.translatable("screen.justenoughbackups.backups.create"), mouseX, mouseY, true);
+        drawSurfaceButton(graphics, refreshButtonRect(), Component.translatable("screen.justenoughbackups.backups.refresh"), mouseX, mouseY, true);
+        drawSurfaceButton(graphics, configButtonRect(), Component.translatable("screen.justenoughbackups.backups.config"), mouseX, mouseY, true);
+    }
+
+    private void renderFooter(GuiGraphicsExtractor graphics) {
+        int footerY = height - ScreenChrome.OUTER - 10;
+        int count = filteredItems().size();
+        String summary = count == backups.size()
+                ? count + " backups"
+                : count + "/" + backups.size() + " backups";
+        graphics.text(font, status, ScreenChrome.OUTER, footerY, statusOk ? STATUS_OK_COLOR : STATUS_NOT_OK_COLOR, true);
+        graphics.text(font, summary, viewportRight() - font.width(summary), footerY, 0xFF9B9B9B, true);
     }
 
     private void renderListHeader(GuiGraphicsExtractor graphics) {
@@ -169,7 +154,7 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
         int y = listTop();
         int w = rowWidth();
         graphics.fill(x, y, x + w, y + LIST_HEADER_HEIGHT, 0xAA111111);
-        graphics.horizontalLine(x, x + w, y + LIST_HEADER_HEIGHT, 0xFF353535);
+        graphics.horizontalLine(x, x + w -1, y + LIST_HEADER_HEIGHT, 0xFF353535);
 
         int actionsX = actionsX(w);
         graphics.text(font, Component.translatable("screen.justenoughbackups.backups.column.backup"), x + ROW_PADDING + EXPAND_SIZE + 8, y + 5, 0xFF8F8F8F, false);
@@ -208,6 +193,9 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
         Component dependencySummary = dependencySummary(layout.item());
         graphics.text(font, Component.literal(trimToWidth(dependencySummary.getString(), maxDependencyWidth)), dependencyX, rowY + 8, dependencyColor(layout.item()), true);
         graphics.text(font, Component.literal(trimToWidth(reasonLine(layout.item().backup()).getString(), maxDependencyWidth)), dependencyX, rowY + 26, 0xFF8FA8D8, true);
+        drawSurfaceButton(graphics, restoreRect(layout, rowY), Component.translatable("screen.justenoughbackups.backups.restore"), mouseX, mouseY, true);
+        drawSurfaceButton(graphics, renameRect(layout, rowY), Component.translatable("screen.justenoughbackups.backups.rename"), mouseX, mouseY, true);
+        drawSurfaceButton(graphics, deleteRect(layout, rowY), Component.translatable("screen.justenoughbackups.backups.delete"), mouseX, mouseY, layout.item().backup().canDelete());
 
         if (expanded(layout.item())) {
             renderExpandedDetails(graphics, layout, headerBottom + 8, x, w - ROW_PADDING * 2);
@@ -250,10 +238,28 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        if (event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT && handleExpandClick(event.x(), event.y())) {
-            return true;
+        if (event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+            if (handleToolbarClick(event.x(), event.y()) || handleExpandClick(event.x(), event.y()) || handleRowActionClick(event.x(), event.y())) {
+                return true;
+            }
         }
         return super.mouseClicked(event, doubleClick);
+    }
+
+    private boolean handleToolbarClick(double mouseX, double mouseY) {
+        if (createButtonRect().contains(mouseX, mouseY)) {
+            minecraft.setScreen(new CreateBackupScreen(this));
+            return true;
+        }
+        if (refreshButtonRect().contains(mouseX, mouseY)) {
+            BackupUiClient.requestList();
+            return true;
+        }
+        if (configButtonRect().contains(mouseX, mouseY)) {
+            minecraft.setScreen(JEBConfigScreens.create(this));
+            return true;
+        }
+        return false;
     }
 
     private boolean handleExpandClick(double mouseX, double mouseY) {
@@ -265,6 +271,29 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
             if (layout.item().hasDetails() && expanderRect(layout, rowY).contains(mouseX, mouseY)) {
                 expandedById.put(layout.item().backup().id(), !expanded(layout.item()));
                 rebuildWidgets();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean handleRowActionClick(double mouseX, double mouseY) {
+        for (RowLayout layout : rowLayouts) {
+            int rowY = screenY(layout);
+            if (rowY + layout.height() < listContentTop() || rowY > listBottom()) {
+                continue;
+            }
+            BackupUiBackup backup = layout.item().backup();
+            if (restoreRect(layout, rowY).contains(mouseX, mouseY)) {
+                confirmRestore(backup);
+                return true;
+            }
+            if (renameRect(layout, rowY).contains(mouseX, mouseY)) {
+                minecraft.setScreen(new RenameBackupScreen(this, backup));
+                return true;
+            }
+            if (backup.canDelete() && deleteRect(layout, rowY).contains(mouseX, mouseY)) {
+                confirmDelete(backup);
                 return true;
             }
         }
@@ -414,23 +443,23 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
     }
 
     private int listTop() {
-        return TOOLBAR_HEIGHT + 24;
+        return viewportTop();
     }
 
     private int listContentTop() {
-        return listTop() + LIST_HEADER_HEIGHT;
+        return listTop() + LIST_HEADER_HEIGHT + 7;
     }
 
     private int listBottom() {
-        return height - MARGIN;
+        return footerTop();
     }
 
     private int rowX() {
-        return MARGIN + 4;
+        return contentX() + 4;
     }
 
     private int rowWidth() {
-        return Math.max(ACTION_WIDTH * 3 + ACTION_GAP * 2 + 220, width - MARGIN * 2 - 8);
+        return Math.max(ACTION_WIDTH * 3 + ACTION_GAP * 2 + 220, contentWidth() - 8);
     }
 
     private int actionsX(int rowWidth) {
@@ -439,7 +468,7 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
 
     private int maxScroll() {
         int contentHeight = rowLayouts.isEmpty() ? 0 : rowLayouts.getLast().y() + rowLayouts.getLast().height();
-        int viewportHeight = Math.max(1, listBottom() - listContentTop());
+        int viewportHeight = Math.max(1, viewportBottom() - listContentTop());
         return Math.max(0, contentHeight - viewportHeight);
     }
 
@@ -449,6 +478,44 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
 
     private Rect expanderRect(RowLayout layout, int rowY) {
         return new Rect(rowX() + ROW_PADDING, rowY + 9, EXPAND_SIZE, EXPAND_SIZE);
+    }
+
+    private Rect createButtonRect() {
+        int x = searchBox.getX() + searchBox.getWidth() + 8;
+        return new Rect(x, HEADER_Y, 76, TOOLBAR_HEIGHT);
+    }
+
+    private Rect refreshButtonRect() {
+        Rect create = createButtonRect();
+        return new Rect(create.x() + create.w() + 6, HEADER_Y, 76, TOOLBAR_HEIGHT);
+    }
+
+    private Rect configButtonRect() {
+        return new Rect(viewportRight() - 60, HEADER_Y, 60, TOOLBAR_HEIGHT);
+    }
+
+    private int contentX() {
+        return ScreenChrome.contentX();
+    }
+
+    private int contentWidth() {
+        return ScreenChrome.contentWidth(width);
+    }
+
+    private int viewportTop() {
+        return ScreenChrome.viewportTop();
+    }
+
+    private int viewportBottom() {
+        return footerTop();
+    }
+
+    private int footerTop() {
+        return ScreenChrome.footerTop(height);
+    }
+
+    private int viewportRight() {
+        return ScreenChrome.viewportRight(width);
     }
 
     private Rect typeBadgeRect(int nameX, int y) {
@@ -468,6 +535,10 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
     private Rect deleteRect(RowLayout layout, int rowY) {
         Rect rename = renameRect(layout, rowY);
         return new Rect(rename.x() + ACTION_WIDTH + ACTION_GAP, rename.y(), ACTION_WIDTH, rename.h());
+    }
+
+    private void drawSurfaceButton(GuiGraphicsExtractor graphics, Rect rect, Component text, int mouseX, int mouseY, boolean active) {
+        ScreenChrome.drawSurfaceButton(graphics, font, new ScreenChrome.Rect(rect.x(), rect.y(), rect.w(), rect.h()), text, active, rect.contains(mouseX, mouseY));
     }
 
     private void drawExpander(GuiGraphicsExtractor graphics, Rect rect, boolean expanded) {
@@ -602,6 +673,8 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
     }
 
     private static final class CreateBackupScreen extends Screen {
+        private static final int PANEL_WIDTH = 300;
+        private static final int PANEL_HEIGHT = 116;
         private final BackupManagementScreen parent;
         private BackupType selected = BackupConfig.get().backupMode;
         private EditBox nameBox;
@@ -613,38 +686,72 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
 
         @Override
         protected void init() {
-            int panelWidth = 300;
-            int x = (width - panelWidth) / 2;
+            int x = (width - PANEL_WIDTH) / 2;
             int y = height / 2 - 56;
-            addRenderableWidget(CycleButton.builder((BackupType type) -> Component.literal(type.toString()), selected)
-                    .withValues(BackupType.values())
-                    .create(x + 20, y + 18, panelWidth - 40, 20, Component.translatable("screen.justenoughbackups.backups.type"), (button, value) -> selected = value));
-            nameBox = new EditBox(font, x + 20, y + 48, panelWidth - 40, 20, Component.translatable("screen.justenoughbackups.backups.name"));
+            nameBox = new EditBox(font, x + 20, y + 48, PANEL_WIDTH - 40, 20, Component.translatable("screen.justenoughbackups.backups.name"));
             nameBox.setHint(Component.translatable("screen.justenoughbackups.backups.name_hint"));
             addRenderableWidget(nameBox);
-            addRenderableWidget(Button.builder(Component.translatable("screen.justenoughbackups.backups.create"), button -> {
-                minecraft.setScreen(parent);
-                BackupUiClient.createBackup(selected, nameBox.getValue());
-            }).bounds(x + 58, y + 80, 84, 20).build());
-            addRenderableWidget(Button.builder(Component.translatable("screen.justenoughbackups.common.cancel"), button -> minecraft.setScreen(parent))
-                    .bounds(x + 158, y + 80, 84, 20).build());
             setInitialFocus(nameBox);
         }
 
         @Override
         public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
             graphics.fill(0, 0, width, height, 0xAA000000);
-            int panelWidth = 300;
-            int x = (width - panelWidth) / 2;
+            int x = (width - PANEL_WIDTH) / 2;
             int y = height / 2 - 56;
-            graphics.fill(x, y, x + panelWidth, y + 116, 0xEE151515);
-            graphics.outline(x, y, panelWidth, 116, 0xFF4A4A4A);
-            graphics.centeredText(font, title, width / 2, y + 7, 0xFFFFFFFF);
+            graphics.fill(x, y, x + PANEL_WIDTH, y + PANEL_HEIGHT, 0xEE151515);
+            graphics.outline(x, y, PANEL_WIDTH, PANEL_HEIGHT, ScreenChrome.OUTLINE_COLOR);
+            graphics.centeredText(font, title, width / 2, y + 7, ScreenChrome.TITLE_COLOR);
+            ScreenChrome.drawSurfaceButton(graphics, font, toChromeRect(typeRect()), Component.literal(selected.toString()), true, typeRect().contains(mouseX, mouseY));
+            ScreenChrome.drawSurfaceButton(graphics, font, toChromeRect(confirmRect()), Component.translatable("screen.justenoughbackups.backups.create"), true, confirmRect().contains(mouseX, mouseY));
+            ScreenChrome.drawSurfaceButton(graphics, font, toChromeRect(cancelRect()), Component.translatable("screen.justenoughbackups.common.cancel"), true, cancelRect().contains(mouseX, mouseY));
             super.extractRenderState(graphics, mouseX, mouseY, partialTick);
+        }
+
+        @Override
+        public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+            if (event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+                if (typeRect().contains(event.x(), event.y())) {
+                    BackupType[] values = BackupType.values();
+                    int next = (Arrays.asList(values).indexOf(selected) + 1) % values.length;
+                    selected = values[next];
+                    return true;
+                }
+                if (confirmRect().contains(event.x(), event.y())) {
+                    minecraft.setScreen(parent);
+                    BackupUiClient.createBackup(selected, nameBox.getValue());
+                    return true;
+                }
+                if (cancelRect().contains(event.x(), event.y())) {
+                    minecraft.setScreen(parent);
+                    return true;
+                }
+            }
+            return super.mouseClicked(event, doubleClick);
+        }
+
+        private Rect typeRect() {
+            int x = (width - PANEL_WIDTH) / 2;
+            int y = height / 2 - 56;
+            return new Rect(x + 20, y + 18, PANEL_WIDTH - 40, 20);
+        }
+
+        private Rect confirmRect() {
+            int x = (width - PANEL_WIDTH) / 2;
+            int y = height / 2 - 56;
+            return new Rect(x + 58, y + 80, 84, 20);
+        }
+
+        private Rect cancelRect() {
+            int x = (width - PANEL_WIDTH) / 2;
+            int y = height / 2 - 56;
+            return new Rect(x + 158, y + 80, 84, 20);
         }
     }
 
     private static final class RenameBackupScreen extends Screen {
+        private static final int PANEL_WIDTH = 300;
+        private static final int PANEL_HEIGHT = 90;
         private final BackupManagementScreen parent;
         private final BackupUiBackup backup;
         private EditBox nameBox;
@@ -657,31 +764,57 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
 
         @Override
         protected void init() {
-            int panelWidth = 300;
-            int x = (width - panelWidth) / 2;
+            int x = (width - PANEL_WIDTH) / 2;
             int y = height / 2 - 42;
-            nameBox = new EditBox(font, x + 20, y + 24, panelWidth - 40, 20, Component.translatable("screen.justenoughbackups.backups.name"));
+            nameBox = new EditBox(font, x + 20, y + 24, PANEL_WIDTH - 40, 20, Component.translatable("screen.justenoughbackups.backups.name"));
             nameBox.setValue(backup.displayName());
             addRenderableWidget(nameBox);
-            addRenderableWidget(Button.builder(Component.translatable("screen.justenoughbackups.common.save"), button -> {
-                minecraft.setScreen(parent);
-                BackupUiClient.renameBackup(backup.id(), nameBox.getValue());
-            }).bounds(x + 58, y + 56, 84, 20).build());
-            addRenderableWidget(Button.builder(Component.translatable("screen.justenoughbackups.common.cancel"), button -> minecraft.setScreen(parent))
-                    .bounds(x + 158, y + 56, 84, 20).build());
             setInitialFocus(nameBox);
         }
 
         @Override
         public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
             graphics.fill(0, 0, width, height, 0xAA000000);
-            int panelWidth = 300;
-            int x = (width - panelWidth) / 2;
+            int x = (width - PANEL_WIDTH) / 2;
             int y = height / 2 - 42;
-            graphics.fill(x, y, x + panelWidth, y + 90, 0xEE151515);
-            graphics.outline(x, y, panelWidth, 90, ROW_BORDER_COLOR);
-            graphics.centeredText(font, title, width / 2, y + 7, TEXT_COLOR);
+            graphics.fill(x, y, x + PANEL_WIDTH, y + PANEL_HEIGHT, 0xEE151515);
+            graphics.outline(x, y, PANEL_WIDTH, PANEL_HEIGHT, ScreenChrome.OUTLINE_COLOR);
+            graphics.centeredText(font, title, width / 2, y + 7, ScreenChrome.TITLE_COLOR);
+            ScreenChrome.drawSurfaceButton(graphics, font, toChromeRect(saveRect()), Component.translatable("screen.justenoughbackups.common.save"), true, saveRect().contains(mouseX, mouseY));
+            ScreenChrome.drawSurfaceButton(graphics, font, toChromeRect(cancelRect()), Component.translatable("screen.justenoughbackups.common.cancel"), true, cancelRect().contains(mouseX, mouseY));
             super.extractRenderState(graphics, mouseX, mouseY, partialTick);
         }
+
+        @Override
+        public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+            if (event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+                if (saveRect().contains(event.x(), event.y())) {
+                    minecraft.setScreen(parent);
+                    BackupUiClient.renameBackup(backup.id(), nameBox.getValue());
+                    return true;
+                }
+                if (cancelRect().contains(event.x(), event.y())) {
+                    minecraft.setScreen(parent);
+                    return true;
+                }
+            }
+            return super.mouseClicked(event, doubleClick);
+        }
+
+        private Rect saveRect() {
+            int x = (width - PANEL_WIDTH) / 2;
+            int y = height / 2 - 42;
+            return new Rect(x + 58, y + 56, 84, 20);
+        }
+
+        private Rect cancelRect() {
+            int x = (width - PANEL_WIDTH) / 2;
+            int y = height / 2 - 42;
+            return new Rect(x + 158, y + 56, 84, 20);
+        }
+    }
+
+    private static ScreenChrome.Rect toChromeRect(Rect rect) {
+        return new ScreenChrome.Rect(rect.x(), rect.y(), rect.w(), rect.h());
     }
 }
