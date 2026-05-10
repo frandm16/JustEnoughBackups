@@ -2,6 +2,7 @@ package com.frandm.justenoughbackups.config;
 
 import com.frandm.justenoughbackups.WorldBackupMod;
 import com.frandm.justenoughbackups.backup.BackupConstants;
+import com.frandm.justenoughbackups.backup.BackupMessageChannel;
 import com.frandm.justenoughbackups.backup.model.BackupIntegrityMode;
 import com.frandm.justenoughbackups.backup.model.BackupType;
 import com.frandm.justenoughbackups.scheduler.BackupScheduler;
@@ -26,6 +27,7 @@ public final class BackupConfig {
     public boolean backupOnServerStop = false;
     public int automaticIntervalMinutes = 15;
     public int commandPermissionLevel = 2;
+    public BackupMessageChannel messageChannel = BackupMessageChannel.ACTION_BAR;
     public BackupIntegrityMode integrityMode = BackupIntegrityMode.STRICT;
     public Retention retention = new Retention();
     public Popup popup = new Popup();
@@ -81,6 +83,7 @@ public final class BackupConfig {
         copy.backupOnServerStop = backupOnServerStop;
         copy.automaticIntervalMinutes = automaticIntervalMinutes;
         copy.commandPermissionLevel = commandPermissionLevel;
+        copy.messageChannel = messageChannel;
         copy.integrityMode = integrityMode;
         copy.backupDirectory = backupDirectory;
         copy.retention = retention.copy();
@@ -121,6 +124,9 @@ public final class BackupConfig {
             automaticIntervalMinutes = defaults().automaticIntervalMinutes;
         }
         commandPermissionLevel = Math.clamp(commandPermissionLevel, 0, 4);
+        if (messageChannel == null) {
+            messageChannel = BackupMessageChannel.ACTION_BAR;
+        }
         if (integrityMode == null) {
             integrityMode = BackupIntegrityMode.STRICT;
         }

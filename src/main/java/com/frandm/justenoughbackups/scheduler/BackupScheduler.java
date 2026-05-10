@@ -6,7 +6,6 @@ import com.frandm.justenoughbackups.backup.BackupService;
 import com.frandm.justenoughbackups.config.BackupConfig;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 
 import java.util.concurrent.CompletableFuture;
@@ -70,33 +69,25 @@ public final class BackupScheduler {
             }
 
             playersSeenSinceLastBackup = false;
-            sendActionBar(server, Component.translatable("text.justenoughbackups.scheduler.automatic_initializing"));
             BackupService.createBackup(server, config.backupMode, "automatic")
                     .whenComplete((manifest, exception) -> {
                         if (exception != null) {
                             WorldBackupMod.LOGGER.error("Automatic backup failed.", exception);
-                            server.execute(() -> sendActionBar(server, Component.translatable("text.justenoughbackups.scheduler.automatic_failed")));
                             return;
                         }
-
-                        server.execute(() -> sendActionBar(server, Component.translatable("text.justenoughbackups.scheduler.automatic_completed")));
                     });
         });
     }
 
     private static void runLifecycleBackup(MinecraftServer server, BackupConfig config, String reason, boolean waitForCompletion) {
         lastBackupMillis = System.currentTimeMillis();
-        sendActionBar(server, Component.translatable("text.justenoughbackups.scheduler.lifecycle_initializing", reason));
 
         CompletableFuture<BackupManifest> backup = BackupService.createBackup(server, config.backupMode, reason)
                 .whenComplete((manifest, exception) -> {
                     if (exception != null) {
                         WorldBackupMod.LOGGER.error("{} backup failed.", reason, exception);
-                        server.execute(() -> sendActionBar(server, Component.translatable("text.justenoughbackups.scheduler.lifecycle_failed", reason)));
                         return;
                     }
-
-                    server.execute(() -> sendActionBar(server, Component.translatable("text.justenoughbackups.scheduler.lifecycle_completed", reason)));
                 });
 
         if (waitForCompletion) {
@@ -106,10 +97,6 @@ public final class BackupScheduler {
                 WorldBackupMod.LOGGER.error("{} backup did not complete during shutdown.", reason, exception);
             }
         }
-    }
-
-    private static void sendActionBar(MinecraftServer server, Component message) {
-        server.getPlayerList().broadcastSystemMessage(message, true);
     }
 
     private static boolean hasOnlinePlayers(MinecraftServer server) {

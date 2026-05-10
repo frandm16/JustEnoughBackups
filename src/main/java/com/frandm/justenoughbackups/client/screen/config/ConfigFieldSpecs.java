@@ -15,6 +15,7 @@ final class ConfigFieldSpecs {
             ConfigFieldSpec.intField(ConfigFieldId.KEEP_DIFFERENTIAL, 0, Integer.MAX_VALUE),
             ConfigFieldSpec.intField(ConfigFieldId.MAX_TOTAL_SIZE_MB, 0, Integer.MAX_VALUE),
             ConfigFieldSpec.intField(ConfigFieldId.PERMISSION_LEVEL, 0, 4),
+            ConfigFieldSpec.of(ConfigFieldId.MESSAGE_CHANNEL),
             ConfigFieldSpec.of(ConfigFieldId.INTEGRITY_MODE),
             ConfigFieldSpec.textField(ConfigFieldId.BACKUP_DIRECTORY, 256),
             ConfigFieldSpec.textField(ConfigFieldId.POPUP_TITLE, 256),

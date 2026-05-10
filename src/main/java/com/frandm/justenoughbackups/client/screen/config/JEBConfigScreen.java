@@ -2,6 +2,7 @@ package com.frandm.justenoughbackups.client.screen.config;
 
 import com.frandm.justenoughbackups.backup.model.BackupIntegrityMode;
 import com.frandm.justenoughbackups.backup.model.BackupType;
+import com.frandm.justenoughbackups.backup.BackupMessageChannel;
 import com.frandm.justenoughbackups.client.screen.preview.PopupPreviewScreen;
 import com.frandm.justenoughbackups.client.ui.ScreenChrome;
 import com.frandm.justenoughbackups.client.ui.popup.PopupPositioning;
@@ -205,6 +206,7 @@ public final class JEBConfigScreen extends Screen {
     private int enumRow(int x, int y, int w, int controlsW, ConfigFieldId fieldId) {
         return switch (fieldId) {
             case BACKUP_MODE -> enumRow(x, y, w, controlsW, fieldId, state.working.backupMode, BackupType.values(), value -> state.working.backupMode = value);
+            case MESSAGE_CHANNEL -> enumRow(x, y, w, controlsW, fieldId, state.working.messageChannel, BackupMessageChannel.values(), value -> state.working.messageChannel = value);
             case INTEGRITY_MODE -> enumRow(x, y, w, controlsW, fieldId, state.working.integrityMode, BackupIntegrityMode.values(), value -> state.working.integrityMode = value);
             default -> throw new IllegalArgumentException("Unsupported enum field: " + fieldId);
         };

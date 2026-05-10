@@ -46,9 +46,11 @@ public final class BackupService {
 
     public static CompletableFuture<BackupManifest> createBackup(MinecraftServer server, BackupType type, String reason, String requestedName) {
         if (!BACKUP_RUNNING.compareAndSet(false, true)) {
+            BackupMessages.broadcastBackupFailed(server, type, reason);
             return CompletableFuture.failedFuture(new IllegalStateException("A backup is already running."));
         }
 
+        BackupMessages.broadcastBackupStarted(server, type, reason);
         server.saveEverything(true, true, true);
         boolean previousAutoSave = server.isAutoSave();
         server.setAutoSave(false);
@@ -72,6 +74,7 @@ public final class BackupService {
                 );
                 RetentionPolicy.apply(worldDirectoryName, config);
                 WorldBackupMod.LOGGER.info("Backup created: {}", manifest.id);
+                BackupMessages.broadcastBackupCompleted(server, manifest);
                 return manifest;
             } catch (IOException exception) {
                 BackupProgressBroadcaster.broadcast(server, new BackupProgress(
@@ -84,6 +87,7 @@ public final class BackupService {
                         0,
                         BackupProgressState.FAILED
                 ));
+                BackupMessages.broadcastBackupFailed(server, type, reason);
                 throw new RuntimeException("Failed to create " + type + " backup.", exception);
             } finally {
                 restoreSaving(server, previousAutoSave, previousWorldSavingState);
@@ -130,17 +134,22 @@ public final class BackupService {
 
     public static CompletableFuture<PendingRestore> restoreBackup(MinecraftServer server, String backupId) {
         if (!BACKUP_RUNNING.compareAndSet(false, true)) {
+            BackupMessages.broadcastRestoreFailed(server, "A backup or restore is already running.");
             return CompletableFuture.failedFuture(new IllegalStateException("A backup or restore is already running."));
         }
 
+        BackupMessages.broadcastRestoreStarted(server, backupId);
         server.saveEverything(true, true, true);
         Path worldPath = server.getWorldPath(LevelResource.ROOT);
         Path backupDir = BackupPaths.worldBackupDir(server);
 
         return CompletableFuture.supplyAsync(() -> {
             try {
-                return RestoreService.prepareRestore(backupDir, worldPath, backupId);
+                PendingRestore restore = RestoreService.prepareRestore(backupDir, worldPath, backupId);
+                BackupMessages.broadcastRestorePrepared(server, restore.backupId());
+                return restore;
             } catch (IOException exception) {
+                BackupMessages.broadcastRestoreFailed(server, rootMessage(exception));
                 throw new RuntimeException("Failed to prepare restore: " + backupId, exception);
             } finally {
                 BACKUP_RUNNING.set(false);
@@ -179,6 +188,15 @@ public final class BackupService {
 
     private static String value(String value) {
         return value == null ? "" : value;
+    }
+
+    private static String rootMessage(Throwable throwable) {
+        Throwable current = throwable;
+        while (current.getCause() != null) {
+            current = current.getCause();
+        }
+        String message = current.getMessage();
+        return message == null || message.isBlank() ? current.getClass().getSimpleName() : message;
     }
 
     private static void restoreSaving(MinecraftServer server, boolean previousAutoSave, WorldSavingState previousWorldSavingState) {

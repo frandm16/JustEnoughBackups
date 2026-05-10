@@ -55,19 +55,19 @@ public final class BackupUiNetworking {
 
     private static void createBackup(BackupUiRequestPayload payload, MinecraftServer server, ServerPlayer player) {
         BackupService.createBackup(server, payload.backupType(), "manual", payload.value())
-                .thenAccept(manifest -> server.execute(() -> sendList(server, player, payload, true, "text.justenoughbackups.backup_ui.created", BackupStorage.displayName(manifest))))
+                .thenAccept(manifest -> server.execute(() -> sendList(server, player, payload, true, "message.justenoughbackups.backup_completed", BackupStorage.displayName(manifest))))
                 .exceptionally(exception -> {
                     WorldBackupMod.LOGGER.error("Backup UI create failed.", exception);
                     server.execute(() -> sendList(server, player, payload, false, "text.justenoughbackups.backup_ui.backup_failed", rootMessage(exception)));
                     return null;
                 });
-        sendList(server, player, payload, true, "text.justenoughbackups.backup_ui.backup_started");
+        sendList(server, player, payload, true, "message.justenoughbackups.backup_started", "manual", payload.backupType().commandName());
     }
 
     private static void restoreBackup(BackupUiRequestPayload payload, MinecraftServer server, ServerPlayer player) {
         BackupService.restoreBackup(server, payload.backupId())
                 .thenAccept(restore -> server.execute(() -> {
-                    send(player, payload, true, true, "text.justenoughbackups.backup_ui.restore_prepared", List.of(), List.of());
+                    send(player, payload, true, true, "message.justenoughbackups.restore_prepared", List.of(restore.backupId()), List.of());
                     server.halt(false);
                 }))
                 .exceptionally(exception -> {
@@ -75,7 +75,7 @@ public final class BackupUiNetworking {
                     server.execute(() -> sendList(server, player, payload, false, "text.justenoughbackups.backup_ui.restore_failed", rootMessage(exception)));
                     return null;
                 });
-        sendList(server, player, payload, true, "text.justenoughbackups.backup_ui.restore_started");
+        sendList(server, player, payload, true, "message.justenoughbackups.restore_started", payload.backupId());
     }
 
     private static void sendList(MinecraftServer server, ServerPlayer player, BackupUiRequestPayload request, boolean success, String messageKey, String... args) {

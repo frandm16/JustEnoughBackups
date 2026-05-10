@@ -1,11 +1,11 @@
 package com.frandm.justenoughbackups.command;
 
 import com.frandm.justenoughbackups.WorldBackupMod;
+import com.frandm.justenoughbackups.backup.BackupMessages;
 import com.frandm.justenoughbackups.backup.BackupPermissions;
 import com.frandm.justenoughbackups.backup.BackupService;
 import com.frandm.justenoughbackups.backup.model.BackupManifest;
 import com.frandm.justenoughbackups.backup.model.BackupType;
-import com.frandm.justenoughbackups.backup.storage.BackupStorage;
 import com.frandm.justenoughbackups.config.BackupConfig;
 import com.frandm.justenoughbackups.scheduler.BackupScheduler;
 import com.frandm.justenoughbackups.scheduler.NextBackupStatus;
@@ -63,21 +63,11 @@ public final class BackupCommand {
     }
 
     private static int create(CommandSourceStack source, BackupType type, String requestedName) {
-        source.sendSuccess(
-                () -> Component.translatable("command.justenoughbackups.backup_started", type.commandName()),
-                false
-        );
-
         BackupService.createBackup(source.getServer(), type, "manual", requestedName)
-                .thenAccept(manifest -> source.getServer().execute(() -> source.sendSuccess(
-                        () -> Component.translatable("command.justenoughbackups.backup_created", BackupStorage.displayName(manifest)),
-                        false
-                )))
+                .thenAccept(manifest -> {
+                })
                 .exceptionally(exception -> {
                     WorldBackupMod.LOGGER.error("Manual backup failed.", exception);
-                    source.getServer().execute(() ->
-                            source.sendFailure(Component.translatable("command.justenoughbackups.backup_failed", rootMessage(exception)))
-                    );
                     return null;
                 });
 
@@ -88,11 +78,11 @@ public final class BackupCommand {
         try {
             List<BackupManifest> backups = BackupService.listBackups(source.getServer());
             if (backups.isEmpty()) {
-                source.sendSuccess(() -> Component.translatable("command.justenoughbackups.no_backups"), false);
+                source.sendSuccess(() -> BackupMessages.withTitle(Component.translatable("message.justenoughbackups.no_backups")), false);
                 return 1;
             }
 
-            source.sendSuccess(() -> Component.translatable("command.justenoughbackups.backup_count", backups.size()), false);
+            source.sendSuccess(() -> BackupMessages.withTitle(Component.translatable("message.justenoughbackups.backup_count", backups.size())), false);
             backups.stream()
                     .forEach(manifest -> source.sendSuccess(
                             () -> formatBackup(manifest),
@@ -101,7 +91,7 @@ public final class BackupCommand {
             return backups.size();
         } catch (IOException exception) {
             WorldBackupMod.LOGGER.error("Failed to list backups.", exception);
-            source.sendFailure(Component.translatable("command.justenoughbackups.list_failed"));
+            source.sendFailure(BackupMessages.withTitle(Component.translatable("message.justenoughbackups.list_failed")));
             return 0;
         }
     }
@@ -110,7 +100,7 @@ public final class BackupCommand {
         NextBackupStatus status = BackupScheduler.nextBackupStatus();
         if (!status.enabled()) {
             source.sendSuccess(
-                    () -> Component.translatable("command.justenoughbackups.next_disabled"),
+                    () -> BackupMessages.withTitle(Component.translatable("message.justenoughbackups.next_disabled")),
                     false
             );
             return 1;
@@ -118,38 +108,26 @@ public final class BackupCommand {
 
         if (status.ready()) {
             source.sendSuccess(
-                    () -> Component.translatable("command.justenoughbackups.next_ready"),
+                    () -> BackupMessages.withTitle(Component.translatable("message.justenoughbackups.next_ready")),
                     false
             );
             return 1;
         }
 
         source.sendSuccess(
-                () -> Component.translatable("command.justenoughbackups.next_waiting", formatDuration(status.remainingMillis())),
+                () -> BackupMessages.withTitle(Component.translatable("message.justenoughbackups.next_waiting", formatDuration(status.remainingMillis()))),
                 false
         );
         return 1;
     }
 
     private static int restore(CommandSourceStack source, String backupId) {
-        source.sendSuccess(
-                () -> Component.translatable("command.justenoughbackups.restore_started", backupId),
-                true
-        );
-
         BackupService.restoreBackup(source.getServer(), backupId)
                 .thenAccept(restore -> source.getServer().execute(() -> {
-                    source.sendSuccess(
-                            () -> Component.translatable("command.justenoughbackups.restore_prepared", restore.backupId()),
-                            true
-                    );
                     source.getServer().halt(false);
                 }))
                 .exceptionally(exception -> {
                     WorldBackupMod.LOGGER.error("Restore failed.", exception);
-                    source.getServer().execute(() ->
-                            source.sendFailure(Component.translatable("command.justenoughbackups.restore_failed", rootMessage(exception)))
-                    );
                     return null;
                 });
         return 1;
@@ -158,11 +136,12 @@ public final class BackupCommand {
     private static int reloadConfig(CommandSourceStack source) {
         BackupConfig config = BackupService.reloadConfig();
         source.sendSuccess(
-                () -> Component.translatable("command.justenoughbackups.config_reloaded",
+                () -> BackupMessages.withTitle(Component.translatable("message.justenoughbackups.config_reloaded",
                         config.backupMode,
                         config.automaticBackupsEnabled,
                         config.automaticIntervalMinutes,
-                        config.commandPermissionLevel),
+                        config.commandPermissionLevel,
+                        config.messageChannel)),
                 false
         );
         return 1;
@@ -170,12 +149,12 @@ public final class BackupCommand {
 
     private static Component formatBackup(BackupManifest manifest) {
         String base = manifest.baseBackupId == null ? "none" : manifest.baseBackupId;
-        return Component.translatable("command.justenoughbackups.backup_entry",
+        return BackupMessages.withTitle(Component.translatable("message.justenoughbackups.backup_entry",
                 manifest.id,
                 manifest.type.commandName(),
                 manifest.includedFiles.size(),
                 base,
-                manifest.createdAt);
+                manifest.createdAt));
     }
 
     private static String formatDuration(long millis) {
@@ -193,13 +172,4 @@ public final class BackupCommand {
         return seconds + "s";
     }
 
-    private static String rootMessage(Throwable throwable) {
-        Throwable current = throwable;
-        while (current.getCause() != null) {
-            current = current.getCause();
-        }
-
-        String message = current.getMessage();
-        return message == null || message.isBlank() ? current.getClass().getSimpleName() : message;
-    }
 }
