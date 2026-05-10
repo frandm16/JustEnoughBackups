@@ -167,15 +167,6 @@ If no custom name is provided, the mod uses the automatic naming scheme based on
 
 Rename uses the same sanitization rules as manual creation to keep naming behavior consistent.
 
-## Backup ZIP metadata
-
-New backups store their internal metadata in a single ZIP entry:
-
-```text
-justenoughbackups.data
-```
-
-This entry contains both the backup manifest and integrity status data as JSON. It is not encrypted or protected against manual edits.
 
 ## Requirements
 
