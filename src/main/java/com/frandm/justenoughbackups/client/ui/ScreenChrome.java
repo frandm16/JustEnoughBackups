@@ -1,6 +1,6 @@
 package com.frandm.justenoughbackups.client.ui;
 
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 
 public final class ScreenChrome {
@@ -48,12 +48,34 @@ public final class ScreenChrome {
         return screenWidth - OUTER;
     }
 
-    public static void drawSurfaceButton(GuiGraphicsExtractor graphics, net.minecraft.client.gui.Font font, Rect rect, Component text, boolean active, boolean hovered) {
+    public static void drawSurfaceButton(GuiGraphics graphics, net.minecraft.client.gui.Font font, Rect rect, Component text, boolean active, boolean hovered) {
         int fill = !active ? BUTTON_DISABLED : hovered ? BUTTON_HOVER : BUTTON_FILL;
+
         graphics.fill(rect.x(), rect.y(), rect.x() + rect.w(), rect.y() + rect.h(), fill);
-        graphics.outline(rect.x(), rect.y(), rect.w(), rect.h(), active ? BUTTON_OUTLINE : BUTTON_OUTLINE_DISABLED);
+
+        int outline = active ? BUTTON_OUTLINE : BUTTON_OUTLINE_DISABLED;
+
+        // borde arriba
+        graphics.fill(rect.x(), rect.y(), rect.x() + rect.w(), rect.y() + 1, outline);
+
+        // borde abajo
+        graphics.fill(rect.x(), rect.y() + rect.h() - 1, rect.x() + rect.w(), rect.y() + rect.h(), outline);
+
+        // borde izquierda
+        graphics.fill(rect.x(), rect.y(), rect.x() + 1, rect.y() + rect.h(), outline);
+
+        // borde derecha
+        graphics.fill(rect.x() + rect.w() - 1, rect.y(), rect.x() + rect.w(), rect.y() + rect.h(), outline);
+
         int textY = rect.y() + (rect.h() - font.lineHeight) / 2 + 1;
-        graphics.centeredText(font, text, rect.x() + rect.w() / 2, textY, active ? BUTTON_TEXT : BUTTON_TEXT_DISABLED);
+
+        graphics.drawCenteredString(
+                font,
+                text,
+                rect.x() + rect.w() / 2,
+                textY,
+                active ? BUTTON_TEXT : BUTTON_TEXT_DISABLED
+        );
     }
 
     public record Rect(int x, int y, int w, int h) {

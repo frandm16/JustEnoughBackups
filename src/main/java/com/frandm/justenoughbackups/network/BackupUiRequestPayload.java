@@ -5,7 +5,7 @@ import com.frandm.justenoughbackups.backup.model.BackupType;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 public record BackupUiRequestPayload(
         String requestId,
@@ -15,7 +15,7 @@ public record BackupUiRequestPayload(
         String value
 ) implements CustomPacketPayload {
     public static final Type<BackupUiRequestPayload> TYPE =
-            new Type<>(Identifier.fromNamespaceAndPath(WorldBackupMod.MOD_ID, "backup_ui_request"));
+            new Type<>(ResourceLocation.fromNamespaceAndPath(WorldBackupMod.MOD_ID, "backup_ui_request"));
 
     public static final StreamCodec<RegistryFriendlyByteBuf, BackupUiRequestPayload> CODEC = StreamCodec.of(
             BackupUiRequestPayload::write,

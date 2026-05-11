@@ -8,11 +8,8 @@ import com.frandm.justenoughbackups.client.ui.ScreenChrome;
 import com.frandm.justenoughbackups.client.ui.popup.PopupPositioning;
 import com.frandm.justenoughbackups.config.BackupConfig;
 import com.frandm.justenoughbackups.config.ConfigColor;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.input.CharacterEvent;
-import net.minecraft.client.input.KeyEvent;
-import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
 
@@ -296,7 +293,7 @@ public final class JEBConfigScreen extends Screen {
             int swatchX = row.x + Math.max(54, row.w / 2 - 42);
             graphics.fill(swatchX, screenY + 8, swatchX + 18, screenY + 26, 0xFF000000);
             graphics.fill(swatchX + 1, screenY + 9, swatchX + 17, screenY + 25, target.argb(state.working.popup));
-            graphics.outline(swatchX, screenY + 8, 18, 18, target == state.selectedColor ? 0xFFFFFFFF : 0xFF555555);
+            drawOutline(graphics, swatchX, screenY + 8, 18, 18, target == state.selectedColor ? 0xFFFFFFFF : 0xFF555555);
         }, (row, screenY, mouseX, mouseY) -> {
             Rect control = controlRect(row, screenY, controlsW);
             Rect edit = new Rect(control.x, control.y, Math.clamp(control.w / 3, 34, 52), CONTROL_H);
@@ -384,12 +381,12 @@ public final class JEBConfigScreen extends Screen {
     }
 
     @Override
-    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         graphics.fill(0, 0, width, height, ScreenChrome.BG_COLOR);
-        graphics.centeredText(font, title, width / 2, ScreenChrome.TITLE_Y, ScreenChrome.TITLE_COLOR);
+        graphics.drawCenteredString(font, title, width / 2, ScreenChrome.TITLE_Y, ScreenChrome.TITLE_COLOR);
         renderTabs(graphics, mouseX, mouseY);
-        graphics.horizontalLine(0, width, viewportTop(), ScreenChrome.LINE_COLOR);
-        graphics.horizontalLine(0, width, viewportBottom(), ScreenChrome.LINE_COLOR);
+        graphics.hLine(0, width, viewportTop(), ScreenChrome.LINE_COLOR);
+        graphics.hLine(0, width, viewportBottom(), ScreenChrome.LINE_COLOR);
 
         graphics.enableScissor(viewportX(), viewportTop() + 1, viewportRight(), viewportBottom());
         ConfigRow hovered = null;
@@ -400,8 +397,8 @@ public final class JEBConfigScreen extends Screen {
             }
             int color = isInvalid(row.fieldId) ? ROW_BAD_COLOR : ROW_COLOR;
             graphics.fill(row.x, y, row.x + row.w, y + row.h, color);
-            graphics.outline(row.x, y, row.w, row.h, isInvalid(row.fieldId) ? OUTLINE_BAD_COLOR : ScreenChrome.OUTLINE_COLOR);
-            graphics.text(font, Component.literal(trimToWidth(Component.translatable(row.fieldId.labelKey()).getString(), Math.max(50, row.w / 2 - 16))), row.x + ROW_INSET, y + 11, 0xFFE0E0E0, true);
+            drawOutline(graphics, row.x, y, row.w, row.h, isInvalid(row.fieldId) ? OUTLINE_BAD_COLOR : ScreenChrome.OUTLINE_COLOR);
+            graphics.drawString(font, Component.literal(trimToWidth(Component.translatable(row.fieldId.labelKey()).getString(), Math.max(50, row.w / 2 - 16))), row.x + ROW_INSET, y + 11, 0xFFE0E0E0, true);
             row.renderer.render(graphics, row, y, mouseX, mouseY);
             if (isInsideViewport(mouseY) && mouseX >= row.x && mouseX <= row.x + row.w && mouseY >= y && mouseY <= y + row.h) {
                 hovered = row;
@@ -416,18 +413,18 @@ public final class JEBConfigScreen extends Screen {
         }
     }
 
-    private void renderTabs(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+    private void renderTabs(GuiGraphics graphics, int mouseX, int mouseY) {
         for (ConfigTab tab : ConfigTab.values()) {
             Rect rect = tabRect(tab);
             drawButton(graphics, rect, Component.translatable(tab.key()), state.selectedTab != tab, rect.contains(mouseX, mouseY));
         }
     }
 
-    private void renderFooter(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+    private void renderFooter(GuiGraphics graphics, int mouseX, int mouseY) {
         int footerY = height - ScreenChrome.OUTER - CONTROL_H;
         if (!validationErrors.isEmpty()) {
             String message = validationErrors.getFirst().message().getString();
-            graphics.text(font, Component.literal(trimToWidth(message, Math.max(100, width - 280))), ScreenChrome.OUTER, footerY + 6, 0xFFFF7777, true);
+            graphics.drawString(font, Component.literal(trimToWidth(message, Math.max(100, width - 280))), ScreenChrome.OUTER, footerY + 6, 0xFFFF7777, true);
         }
         Rect resetTab = resetTabRect();
         Rect resetAll = resetAllRect();
@@ -437,51 +434,54 @@ public final class JEBConfigScreen extends Screen {
         drawButton(graphics, save, Component.translatable("screen.justenoughbackups.common.save"), validationErrors.isEmpty(), save.contains(mouseX, mouseY));
     }
 
-    private void drawButton(GuiGraphicsExtractor graphics, Rect rect, Component text, boolean active, boolean hovered) {
+    private void drawButton(GuiGraphics graphics, Rect rect, Component text, boolean active, boolean hovered) {
         ScreenChrome.drawSurfaceButton(graphics, font, new ScreenChrome.Rect(rect.x, rect.y, rect.w, rect.h), text, active, hovered);
     }
 
-    private void drawField(GuiGraphicsExtractor graphics, Rect rect, ConfigFieldId fieldId, String text, int mouseX, int mouseY) {
+    private void drawField(GuiGraphics graphics, Rect rect, ConfigFieldId fieldId, String text, int mouseX, int mouseY) {
         boolean focused = fieldId == state.focusedField;
         graphics.fill(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h, focused ? 0xFF202020 : 0xFF151515);
-        graphics.outline(rect.x, rect.y, rect.w, rect.h, focused ? 0xFFFFFFFF : rect.contains(mouseX, mouseY) ? 0xFF888888 : 0xFF555555);
+        drawOutline(graphics, rect.x, rect.y, rect.w, rect.h, focused ? 0xFFFFFFFF : rect.contains(mouseX, mouseY) ? 0xFF888888 : 0xFF555555);
         String visible = trimToWidth(text, Math.max(8, rect.w - 8));
-        graphics.text(font, visible, rect.x + 4, rect.y + 6, 0xFFE0E0E0, true);
+        graphics.drawString(font, visible, rect.x + 4, rect.y + 6, 0xFFE0E0E0, true);
         if (focused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
             int caretX = rect.x + 4 + font.width(text.substring(0, Math.min(state.cursor, text.length())));
             graphics.fill(Math.min(caretX, rect.x + rect.w - 3), rect.y + 4, Math.min(caretX + 1, rect.x + rect.w - 2), rect.y + rect.h - 4, 0xFFFFFFFF);
         }
     }
 
-    private void drawSlider(GuiGraphicsExtractor graphics, Rect rect, ConfigColorChannel channel) {
+    private void drawSlider(GuiGraphics graphics, Rect rect, ConfigColorChannel channel) {
         int value = channel.extract(state.selectedColor.argb(state.working.popup));
         graphics.fill(rect.x, rect.y + 8, rect.x + rect.w, rect.y + 12, 0xFF303030);
         int knob = rect.x + Math.round((rect.w - 6) * (value / 255.0F));
         graphics.fill(knob, rect.y + 3, knob + 6, rect.y + 17, 0xFFE0E0E0);
-        graphics.outline(rect.x, rect.y, rect.w, rect.h, 0xFF555555);
-        graphics.centeredText(font, Component.translatable("screen.justenoughbackups.config.channel_value", channel.channelLabel(), value), rect.x + rect.w / 2, rect.y + 6, 0xFFFFFFFF);
+        drawOutline(graphics, rect.x, rect.y, rect.w, rect.h, 0xFF555555);
+        graphics.drawCenteredString(font, Component.translatable("screen.justenoughbackups.config.channel_value", channel.channelLabel(), value), rect.x + rect.w / 2, rect.y + 6, 0xFFFFFFFF);
     }
 
     @Override
-    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        if (event.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT) {
-            return super.mouseClicked(event, doubleClick);
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (button != GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+            return super.mouseClicked(mouseX, mouseY, button);
         }
-        double mouseX = event.x();
-        double mouseY = event.y();
+
         state.focusedField = null;
+
         if (handleTabClick(mouseX, mouseY) || handleFooterClick(mouseX, mouseY) || handleScrollbarClick(mouseX, mouseY)) {
             return true;
         }
+
         if (!isInsideViewport(mouseY)) {
             return true;
         }
+
         for (ConfigRow row : rows) {
             int y = rowScreenY(row);
             if (mouseX >= row.x && mouseX <= row.x + row.w && mouseY >= y && mouseY <= y + row.h) {
                 return row.click.click(row, y, mouseX, mouseY);
             }
         }
+
         return true;
     }
 
@@ -540,23 +540,25 @@ public final class JEBConfigScreen extends Screen {
     }
 
     @Override
-    public boolean mouseDragged(MouseButtonEvent event, double dragX, double dragY) {
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
         if (draggingScrollbar) {
-            setScrollForThumb((int) event.y());
+            setScrollForThumb((int) mouseY);
             return true;
         }
+
         if (draggingChannel != null) {
             ConfigRow row = rowForChannel(draggingChannel);
             if (row != null) {
-                setChannelFromMouse(controlRect(row, rowScreenY(row), controlWidth(row.w)), draggingChannel, event.x());
+                setChannelFromMouse(controlRect(row, rowScreenY(row), controlWidth(row.w)), draggingChannel, mouseX);
             }
             return true;
         }
+
         return true;
     }
 
     @Override
-    public boolean mouseReleased(MouseButtonEvent event) {
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
         draggingScrollbar = false;
         draggingChannel = null;
         return true;
@@ -571,16 +573,19 @@ public final class JEBConfigScreen extends Screen {
     }
 
     @Override
-    public boolean keyPressed(KeyEvent event) {
-        if (event.key() == GLFW.GLFW_KEY_ESCAPE) {
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
             onClose();
             return true;
         }
+
         if (state.focusedField == null) {
-            return super.keyPressed(event);
+            return super.keyPressed(keyCode, scanCode, modifiers);
         }
+
         String text = state.rawInputs.getOrDefault(state.focusedField, "");
-        switch (event.key()) {
+
+        switch (keyCode) {
             case GLFW.GLFW_KEY_BACKSPACE -> {
                 if (state.cursor > 0 && !text.isEmpty()) {
                     state.rawInputs.put(state.focusedField, text.substring(0, state.cursor - 1) + text.substring(state.cursor));
@@ -623,20 +628,31 @@ public final class JEBConfigScreen extends Screen {
     }
 
     @Override
-    public boolean charTyped(CharacterEvent event) {
-        if (state.focusedField == null || !event.isAllowedChatCharacter()) {
+    public boolean charTyped(char chr, int modifiers) {
+        if (state.focusedField == null || !isAllowedChatCharacter(chr)) {
             return false;
         }
+
         String text = state.rawInputs.getOrDefault(state.focusedField, "");
-        String inserted = event.codepointAsString();
+        String inserted = String.valueOf(chr);
         int maxLength = maxLengthFor(state.focusedField);
+
         if (text.length() + inserted.length() > maxLength) {
             return true;
         }
-        state.rawInputs.put(state.focusedField, text.substring(0, state.cursor) + inserted + text.substring(state.cursor));
+
+        state.rawInputs.put(
+                state.focusedField,
+                text.substring(0, state.cursor) + inserted + text.substring(state.cursor)
+        );
+
         state.cursor += inserted.length();
         applyFocusedField();
         return true;
+    }
+
+    private static boolean isAllowedChatCharacter(char chr) {
+        return chr >= 32 && chr != 127;
     }
 
     private void applyFocusedField() {
@@ -797,7 +813,7 @@ public final class JEBConfigScreen extends Screen {
         return max == 0 ? viewportTop() : viewportTop() + state.currentScroll() * travel / max;
     }
 
-    private void renderScrollbar(GuiGraphicsExtractor graphics) {
+    private void renderScrollbar(GuiGraphics graphics) {
         if (!hasScrollbar()) {
             return;
         }
@@ -873,7 +889,7 @@ public final class JEBConfigScreen extends Screen {
         return Component.translatable(enabled ? "screen.justenoughbackups.config.toggle.on" : "screen.justenoughbackups.config.toggle.off");
     }
 
-    private void drawTooltipBox(GuiGraphicsExtractor graphics, String tooltip, int mouseX, int mouseY) {
+    private void drawTooltipBox(GuiGraphics graphics, String tooltip, int mouseX, int mouseY) {
         String[] lines = tooltip.split("\\R");
         int tooltipW = 0;
         for (String line : lines) {
@@ -884,9 +900,9 @@ public final class JEBConfigScreen extends Screen {
         int x = Math.min(mouseX + 12, width - tooltipW - 6);
         int y = Math.min(mouseY + 12, height - tooltipH - 6);
         graphics.fill(x, y, x + tooltipW, y + tooltipH, 0xF0101010);
-        graphics.outline(x, y, tooltipW, tooltipH, 0xFF707070);
+        drawOutline(graphics, x, y, tooltipW, tooltipH, 0xFF707070);
         for (int i = 0; i < lines.length; i++) {
-            graphics.text(font, lines[i], x + 6, y + 5 + i * 11, 0xFFE0E0E0, true);
+            graphics.drawString(font, lines[i], x + 6, y + 5 + i * 11, 0xFFE0E0E0, true);
         }
     }
 
@@ -924,7 +940,7 @@ public final class JEBConfigScreen extends Screen {
 
     @FunctionalInterface
     private interface RowRenderer {
-        void render(GuiGraphicsExtractor graphics, ConfigRow row, int screenY, int mouseX, int mouseY);
+        void render(GuiGraphics graphics, ConfigRow row, int screenY, int mouseX, int mouseY);
     }
 
     @FunctionalInterface
@@ -939,5 +955,12 @@ public final class JEBConfigScreen extends Screen {
         boolean contains(double mouseX, double mouseY) {
             return mouseX >= x && mouseX <= x + w && mouseY >= y && mouseY <= y + h;
         }
+    }
+
+    private static void drawOutline(GuiGraphics graphics, int x, int y, int w, int h, int color) {
+        graphics.fill(x, y, x + w, y + 1, color);
+        graphics.fill(x, y + h - 1, x + w, y + h, color);
+        graphics.fill(x, y, x + 1, y + h, color);
+        graphics.fill(x + w - 1, y, x + w, y + h, color);
     }
 }

@@ -17,8 +17,8 @@ public final class BackupUiNetworking {
     }
 
     public static void registerPayloadTypes() {
-        PayloadTypeRegistry.serverboundPlay().register(BackupUiRequestPayload.TYPE, BackupUiRequestPayload.CODEC);
-        PayloadTypeRegistry.clientboundPlay().register(BackupUiResponsePayload.TYPE, BackupUiResponsePayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(BackupUiRequestPayload.TYPE, BackupUiRequestPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(BackupUiResponsePayload.TYPE, BackupUiResponsePayload.CODEC);
     }
 
     public static void registerServerReceivers() {

@@ -6,7 +6,7 @@ import com.frandm.justenoughbackups.config.BackupConfig;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 
 public final class BackupProgressHud {
     private static final long FINISHED_VISIBLE_MILLIS = 5_000L;
@@ -22,7 +22,7 @@ public final class BackupProgressHud {
         lastUpdateMillis = System.currentTimeMillis();
     }
 
-    public static void render(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker) {
+    public static void render(GuiGraphics graphics, DeltaTracker deltaTracker) {
         BackupProgressPayload progress = current;
         BackupConfig.Popup popup = BackupConfig.get().popup;
         if (progress == null || !popup.enabled) {

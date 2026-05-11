@@ -5,7 +5,7 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -19,7 +19,7 @@ public record BackupUiResponsePayload(
         List<BackupUiBackup> backups
 ) implements CustomPacketPayload {
     public static final Type<BackupUiResponsePayload> TYPE =
-            new Type<>(Identifier.fromNamespaceAndPath(WorldBackupMod.MOD_ID, "backup_ui_response"));
+            new Type<>(ResourceLocation.fromNamespaceAndPath(WorldBackupMod.MOD_ID, "backup_ui_response"));
 
     public static final StreamCodec<RegistryFriendlyByteBuf, BackupUiResponsePayload> CODEC = StreamCodec.of(
             BackupUiResponsePayload::write,

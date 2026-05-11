@@ -8,13 +8,10 @@ import com.frandm.justenoughbackups.client.ui.ScreenChrome;
 import com.frandm.justenoughbackups.config.BackupConfig;
 import com.frandm.justenoughbackups.network.BackupUiBackup;
 import com.frandm.justenoughbackups.network.BackupUiResponsePayload;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.ConfirmScreen;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.input.KeyEvent;
-import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
 
@@ -100,11 +97,11 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
     }
 
     @Override
-    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         graphics.fill(0, 0, width, height, ScreenChrome.BG_COLOR);
-        graphics.centeredText(font, title, width / 2, ScreenChrome.TITLE_Y, TEXT_COLOR);
-        graphics.horizontalLine(0, width, viewportTop(), ScreenChrome.LINE_COLOR);
-        graphics.horizontalLine(0, width, footerTop(), ScreenChrome.LINE_COLOR);
+        graphics.drawCenteredString(font, title, width / 2, ScreenChrome.TITLE_Y, TEXT_COLOR);
+        graphics.hLine(0, width, viewportTop(), ScreenChrome.LINE_COLOR);
+        graphics.hLine(0, width, footerTop(), ScreenChrome.LINE_COLOR);
         renderToolbar(graphics, mouseX, mouseY);
 
         int listTop = listTop();
@@ -113,7 +110,7 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
         graphics.enableScissor(rowX() - 4, listContentTop(), rowX() + rowWidth() + 4, footerTop() - 4);
         try {
             if (rowLayouts.isEmpty()) {
-                graphics.text(font, Component.translatable(backups.isEmpty() ? "screen.justenoughbackups.backups.empty" : "screen.justenoughbackups.backups.no_matches"),
+                graphics.drawString(font, Component.translatable(backups.isEmpty() ? "screen.justenoughbackups.backups.empty" : "screen.justenoughbackups.backups.no_matches"),
                         MARGIN + 10, listTop + LIST_HEADER_HEIGHT + 10, TEXT_COLOR, true);
             }
 
@@ -130,39 +127,39 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
 
         renderFooter(graphics);
 
-        super.extractRenderState(graphics, mouseX, mouseY, partialTick);
+        super.render(graphics, mouseX, mouseY, partialTick);
     }
 
-    private void renderToolbar(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+    private void renderToolbar(GuiGraphics graphics, int mouseX, int mouseY) {
         drawSurfaceButton(graphics, createButtonRect(), Component.translatable("screen.justenoughbackups.backups.create"), mouseX, mouseY, true);
         drawSurfaceButton(graphics, refreshButtonRect(), Component.translatable("screen.justenoughbackups.backups.refresh"), mouseX, mouseY, true);
         drawSurfaceButton(graphics, configButtonRect(), Component.translatable("screen.justenoughbackups.backups.config"), mouseX, mouseY, true);
     }
 
-    private void renderFooter(GuiGraphicsExtractor graphics) {
+    private void renderFooter(GuiGraphics graphics) {
         int footerY = height - ScreenChrome.OUTER - 10;
         int count = filteredItems().size();
         String summary = count == backups.size()
                 ? count + " backups"
                 : count + "/" + backups.size() + " backups";
-        graphics.text(font, status, ScreenChrome.OUTER, footerY, statusOk ? STATUS_OK_COLOR : STATUS_NOT_OK_COLOR, true);
-        graphics.text(font, summary, viewportRight() - font.width(summary), footerY, 0xFF9B9B9B, true);
+        graphics.drawString(font, status, ScreenChrome.OUTER, footerY, statusOk ? STATUS_OK_COLOR : STATUS_NOT_OK_COLOR, true);
+        graphics.drawString(font, summary, viewportRight() - font.width(summary), footerY, 0xFF9B9B9B, true);
     }
 
-    private void renderListHeader(GuiGraphicsExtractor graphics) {
+    private void renderListHeader(GuiGraphics graphics) {
         int x = rowX();
         int y = listTop();
         int w = rowWidth();
         graphics.fill(x, y, x + w, y + LIST_HEADER_HEIGHT, 0xAA111111);
-        graphics.horizontalLine(x, x + w -1, y + LIST_HEADER_HEIGHT, 0xFF353535);
+        graphics.hLine(x, x + w -1, y + LIST_HEADER_HEIGHT, 0xFF353535);
 
         int actionsX = actionsX(w);
-        graphics.text(font, Component.translatable("screen.justenoughbackups.backups.column.backup"), x + ROW_PADDING + EXPAND_SIZE + 8, y + 5, 0xFF8F8F8F, false);
-        graphics.text(font, Component.translatable("screen.justenoughbackups.backups.column.details"), x + 218, y + 5, 0xFF8F8F8F, false);
-        graphics.text(font, Component.translatable("screen.justenoughbackups.backups.column.actions"), actionsX + 12, y + 5, 0xFF8F8F8F, false);
+        graphics.drawString(font, Component.translatable("screen.justenoughbackups.backups.column.backup"), x + ROW_PADDING + EXPAND_SIZE + 8, y + 5, 0xFF8F8F8F, false);
+        graphics.drawString(font, Component.translatable("screen.justenoughbackups.backups.column.details"), x + 218, y + 5, 0xFF8F8F8F, false);
+        graphics.drawString(font, Component.translatable("screen.justenoughbackups.backups.column.actions"), actionsX + 12, y + 5, 0xFF8F8F8F, false);
     }
 
-    private void renderRow(GuiGraphicsExtractor graphics, RowLayout layout, int rowY, int mouseX, int mouseY) {
+    private void renderRow(GuiGraphics graphics, RowLayout layout, int rowY, int mouseX, int mouseY) {
         int x = rowX();
         int w = rowWidth();
         int actionsX = actionsX(w);
@@ -170,8 +167,8 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
         boolean hovered = mouseX >= x && mouseX <= x + w && mouseY >= rowY && mouseY <= rowY + layout.height();
 
         graphics.fill(x, rowY, x + w, rowY + layout.height(), hovered ? ROW_HOVERED_COLOR : ROW_COLOR);
-        graphics.outline(x, rowY, w, layout.height(), ROW_BORDER_COLOR);
-        graphics.horizontalLine(x + 1, x + w - 1, headerBottom - 1, ROW_BORDER_COLOR);
+        drawOutline(graphics, x, rowY, w, layout.height(), ROW_BORDER_COLOR);
+        graphics.hLine(x + 1, x + w - 1, headerBottom - 1, ROW_BORDER_COLOR);
 
         Rect expander = expanderRect(layout, rowY);
         if (layout.item().hasDetails()) {
@@ -185,14 +182,14 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
         int maxMetaWidth = Math.max(90, dependencyX - metaX - 10);
         int maxDependencyWidth = Math.max(80, actionsX - dependencyX - 10);
 
-        graphics.text(font, Component.literal(trimToWidth(layout.item().backup().displayName(), maxNameWidth)), nameX, rowY + 8, TEXT_COLOR, true);
+        graphics.drawString(font, Component.literal(trimToWidth(layout.item().backup().displayName(), maxNameWidth)), nameX, rowY + 8, TEXT_COLOR, true);
         drawTypeBadge(graphics, typeBadgeRect(nameX, rowY + 24), layout.item().backup().type());
-        graphics.text(font, Component.literal(trimToWidth(shortDate(layout.item().backup().createdAt()), maxMetaWidth)), metaX, rowY + 8, TEXT_COLOR, true);
-        graphics.text(font, Component.literal(trimToWidth(formatBytes(layout.item().backup().includedBytes()) + " | " + layout.item().backup().includedFiles() + " files", maxMetaWidth)), metaX, rowY + 26, TEXT_ALTER_COLOR, true);
+        graphics.drawString(font, Component.literal(trimToWidth(shortDate(layout.item().backup().createdAt()), maxMetaWidth)), metaX, rowY + 8, TEXT_COLOR, true);
+        graphics.drawString(font, Component.literal(trimToWidth(formatBytes(layout.item().backup().includedBytes()) + " | " + layout.item().backup().includedFiles() + " files", maxMetaWidth)), metaX, rowY + 26, TEXT_ALTER_COLOR, true);
 
         Component dependencySummary = dependencySummary(layout.item());
-        graphics.text(font, Component.literal(trimToWidth(dependencySummary.getString(), maxDependencyWidth)), dependencyX, rowY + 8, dependencyColor(layout.item()), true);
-        graphics.text(font, Component.literal(trimToWidth(reasonLine(layout.item().backup()).getString(), maxDependencyWidth)), dependencyX, rowY + 26, 0xFF8FA8D8, true);
+        graphics.drawString(font, Component.literal(trimToWidth(dependencySummary.getString(), maxDependencyWidth)), dependencyX, rowY + 8, dependencyColor(layout.item()), true);
+        graphics.drawString(font, Component.literal(trimToWidth(reasonLine(layout.item().backup()).getString(), maxDependencyWidth)), dependencyX, rowY + 26, 0xFF8FA8D8, true);
         drawSurfaceButton(graphics, restoreRect(layout, rowY), Component.translatable("screen.justenoughbackups.backups.restore"), mouseX, mouseY, true);
         drawSurfaceButton(graphics, renameRect(layout, rowY), Component.translatable("screen.justenoughbackups.backups.rename"), mouseX, mouseY, true);
         drawSurfaceButton(graphics, deleteRect(layout, rowY), Component.translatable("screen.justenoughbackups.backups.delete"), mouseX, mouseY, layout.item().backup().canDelete());
@@ -202,7 +199,7 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
         }
     }
 
-    private void renderExpandedDetails(GuiGraphicsExtractor graphics, RowLayout layout, int startY, int x, int width) {
+    private void renderExpandedDetails(GuiGraphics graphics, RowLayout layout, int startY, int x, int width) {
         BackupListItem item = layout.item();
         int lineY = startY;
         int textX = x + ROW_PADDING + EXPAND_SIZE + 8;
@@ -211,7 +208,7 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
 
         if (item.base() != null) {
             drawConnector(graphics, connectorX, lineY + 4, 10, 0xFF555555);
-            graphics.text(font, Component.literal(trimToWidth(baseLine(item.base()), detailRight - textX)), textX, lineY, 0xFFB7C7FF, true);
+            graphics.drawString(font, Component.literal(trimToWidth(baseLine(item.base()), detailRight - textX)), textX, lineY, 0xFFB7C7FF, true);
             lineY += DETAIL_LINE_HEIGHT;
         }
 
@@ -219,31 +216,31 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
             for (int i = 0; i < item.children().size() && i < MAX_INLINE_CHILDREN; i++) {
                 BackupUiBackup child = item.children().get(i);
                 drawConnector(graphics, connectorX, lineY + 4, 10, 0xFF555555);
-                graphics.text(font, Component.literal(trimToWidth(childLine(child), detailRight - textX)), textX, lineY, 0xFF9FD5B6, true);
+                graphics.drawString(font, Component.literal(trimToWidth(childLine(child), detailRight - textX)), textX, lineY, 0xFF9FD5B6, true);
                 lineY += DETAIL_LINE_HEIGHT;
             }
             if (item.children().size() > MAX_INLINE_CHILDREN) {
                 drawConnector(graphics, connectorX, lineY + 4, 10, 0xFF555555);
                 int hidden = item.children().size() - MAX_INLINE_CHILDREN;
-                graphics.text(font, Component.translatable("screen.justenoughbackups.backups.more_children", hidden), textX, lineY, 0xFF9B9B9B, true);
+                graphics.drawString(font, Component.translatable("screen.justenoughbackups.backups.more_children", hidden), textX, lineY, 0xFF9B9B9B, true);
                 lineY += DETAIL_LINE_HEIGHT;
             }
         }
 
         if (!item.backup().canDelete() && !item.backup().deleteBlockedReason().isBlank()) {
             drawConnector(graphics, connectorX, lineY + 4, 10, 0xFF885555);
-            graphics.text(font, Component.literal(trimToWidth(item.backup().deleteBlockedReason(), detailRight - textX)), textX, lineY, 0xFFFFC47A, true);
+            graphics.drawString(font, Component.literal(trimToWidth(item.backup().deleteBlockedReason(), detailRight - textX)), textX, lineY, 0xFFFFC47A, true);
         }
     }
 
     @Override
-    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        if (event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
-            if (handleToolbarClick(event.x(), event.y()) || handleExpandClick(event.x(), event.y()) || handleRowActionClick(event.x(), event.y())) {
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+            if (handleToolbarClick(mouseX, mouseY) || handleExpandClick(mouseX, mouseY) || handleRowActionClick(mouseX, mouseY)) {
                 return true;
             }
         }
-        return super.mouseClicked(event, doubleClick);
+        return super.mouseClicked(mouseX, mouseY, button);
     }
 
     private boolean handleToolbarClick(double mouseX, double mouseY) {
@@ -308,12 +305,12 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
     }
 
     @Override
-    public boolean keyPressed(KeyEvent event) {
-        if (event.key() == GLFW.GLFW_KEY_ESCAPE) {
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
             onClose();
             return true;
         }
-        return super.keyPressed(event);
+        return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
     @Override
@@ -539,27 +536,27 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
         return new Rect(rename.x() + ACTION_WIDTH + ACTION_GAP, rename.y(), ACTION_WIDTH, rename.h());
     }
 
-    private void drawSurfaceButton(GuiGraphicsExtractor graphics, Rect rect, Component text, int mouseX, int mouseY, boolean active) {
+    private void drawSurfaceButton(GuiGraphics graphics, Rect rect, Component text, int mouseX, int mouseY, boolean active) {
         ScreenChrome.drawSurfaceButton(graphics, font, new ScreenChrome.Rect(rect.x(), rect.y(), rect.w(), rect.h()), text, active, rect.contains(mouseX, mouseY));
     }
 
-    private void drawExpander(GuiGraphicsExtractor graphics, Rect rect, boolean expanded) {
+    private void drawExpander(GuiGraphics graphics, Rect rect, boolean expanded) {
         graphics.fill(rect.x(), rect.y(), rect.x() + rect.w(), rect.y() + rect.h(), 0xFF202020);
-        graphics.outline(rect.x(), rect.y(), rect.w(), rect.h(), 0xFF5A5A5A);
-        graphics.centeredText(font, Component.literal(expanded ? "v" : ">"), rect.x() + rect.w() / 2, rect.y() + 4, 0xFFE0E0E0);
+        drawOutline(graphics, rect.x(), rect.y(), rect.w(), rect.h(), 0xFF5A5A5A);
+        graphics.drawCenteredString(font, Component.literal(expanded ? "v" : ">"), rect.x() + rect.w() / 2, rect.y() + 4, 0xFFE0E0E0);
     }
 
-    private void drawTypeBadge(GuiGraphicsExtractor graphics, Rect rect, BackupType type) {
+    private void drawTypeBadge(GuiGraphics graphics, Rect rect, BackupType type) {
         int fill = switch (type) {
             case FULL -> 0xFF365E3A;
             case PARTIAL -> 0xFF35506C;
             case DIFFERENTIAL -> 0xFF6B5230;
         };
         graphics.fill(rect.x(), rect.y(), rect.x() + rect.w(), rect.y() + rect.h(), fill);
-        graphics.centeredText(font, Component.literal(type.toString()), rect.x() + rect.w() / 2, rect.y() + 4, TEXT_COLOR);
+        graphics.drawCenteredString(font, Component.literal(type.toString()), rect.x() + rect.w() / 2, rect.y() + 4, TEXT_COLOR);
     }
 
-    private void drawConnector(GuiGraphicsExtractor graphics, int x, int y, int width, int color) {
+    private void drawConnector(GuiGraphics graphics, int x, int y, int width, int color) {
         graphics.fill(x, y, x + 1, y + DETAIL_LINE_HEIGHT - 4, color);
         graphics.fill(x, y + DETAIL_LINE_HEIGHT / 2, x + width, y + DETAIL_LINE_HEIGHT / 2 + 1, color);
     }
@@ -697,39 +694,39 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
         }
 
         @Override
-        public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+        public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
             graphics.fill(0, 0, width, height, 0xAA000000);
             int x = (width - PANEL_WIDTH) / 2;
             int y = height / 2 - 56;
             graphics.fill(x, y, x + PANEL_WIDTH, y + PANEL_HEIGHT, 0xEE151515);
-            graphics.outline(x, y, PANEL_WIDTH, PANEL_HEIGHT, ScreenChrome.OUTLINE_COLOR);
-            graphics.centeredText(font, title, width / 2, y + 7, ScreenChrome.TITLE_COLOR);
+            drawOutline(graphics, x, y, PANEL_WIDTH, PANEL_HEIGHT, ScreenChrome.OUTLINE_COLOR);
+            graphics.drawCenteredString(font, title, width / 2, y + 7, ScreenChrome.TITLE_COLOR);
             ScreenChrome.drawSurfaceButton(graphics, font, toChromeRect(typeRect()), Component.literal(selected.toString()), true, typeRect().contains(mouseX, mouseY));
             ScreenChrome.drawSurfaceButton(graphics, font, toChromeRect(confirmRect()), Component.translatable("screen.justenoughbackups.backups.create"), true, confirmRect().contains(mouseX, mouseY));
             ScreenChrome.drawSurfaceButton(graphics, font, toChromeRect(cancelRect()), Component.translatable("screen.justenoughbackups.common.cancel"), true, cancelRect().contains(mouseX, mouseY));
-            super.extractRenderState(graphics, mouseX, mouseY, partialTick);
+            super.render(graphics, mouseX, mouseY, partialTick);
         }
 
         @Override
-        public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-            if (event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
-                if (typeRect().contains(event.x(), event.y())) {
+        public boolean mouseClicked(double mouseX, double mouseY, int button) {
+            if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+                if (typeRect().contains(mouseX, mouseY)) {
                     BackupType[] values = BackupType.values();
                     int next = (Arrays.asList(values).indexOf(selected) + 1) % values.length;
                     selected = values[next];
                     return true;
                 }
-                if (confirmRect().contains(event.x(), event.y())) {
+                if (confirmRect().contains(mouseX, mouseY)) {
                     BackupUiClient.createBackup(selected, nameBox.getValue());
                     minecraft.setScreen(null);
                     return true;
                 }
-                if (cancelRect().contains(event.x(), event.y())) {
+                if (cancelRect().contains(mouseX, mouseY)) {
                     minecraft.setScreen(parent);
                     return true;
                 }
             }
-            return super.mouseClicked(event, doubleClick);
+            return super.mouseClicked(mouseX, mouseY, button);
         }
 
         private Rect typeRect() {
@@ -775,32 +772,32 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
         }
 
         @Override
-        public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+        public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
             graphics.fill(0, 0, width, height, 0xAA000000);
             int x = (width - PANEL_WIDTH) / 2;
             int y = height / 2 - 42;
             graphics.fill(x, y, x + PANEL_WIDTH, y + PANEL_HEIGHT, 0xEE151515);
-            graphics.outline(x, y, PANEL_WIDTH, PANEL_HEIGHT, ScreenChrome.OUTLINE_COLOR);
-            graphics.centeredText(font, title, width / 2, y + 7, ScreenChrome.TITLE_COLOR);
+            drawOutline(graphics, x, y, PANEL_WIDTH, PANEL_HEIGHT, ScreenChrome.OUTLINE_COLOR);
+            graphics.drawCenteredString(font, title, width / 2, y + 7, ScreenChrome.TITLE_COLOR);
             ScreenChrome.drawSurfaceButton(graphics, font, toChromeRect(saveRect()), Component.translatable("screen.justenoughbackups.common.save"), true, saveRect().contains(mouseX, mouseY));
             ScreenChrome.drawSurfaceButton(graphics, font, toChromeRect(cancelRect()), Component.translatable("screen.justenoughbackups.common.cancel"), true, cancelRect().contains(mouseX, mouseY));
-            super.extractRenderState(graphics, mouseX, mouseY, partialTick);
+            super.render(graphics, mouseX, mouseY, partialTick);
         }
 
         @Override
-        public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-            if (event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
-                if (saveRect().contains(event.x(), event.y())) {
+        public boolean mouseClicked(double mouseX, double mouseY, int button) {
+            if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+                if (saveRect().contains(mouseX, mouseY)) {
                     minecraft.setScreen(parent);
                     BackupUiClient.renameBackup(backup.id(), nameBox.getValue());
                     return true;
                 }
-                if (cancelRect().contains(event.x(), event.y())) {
+                if (cancelRect().contains(mouseX, mouseY)) {
                     minecraft.setScreen(parent);
                     return true;
                 }
             }
-            return super.mouseClicked(event, doubleClick);
+            return super.mouseClicked(mouseX, mouseY, button);
         }
 
         private Rect saveRect() {
@@ -818,5 +815,12 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
 
     private static ScreenChrome.Rect toChromeRect(Rect rect) {
         return new ScreenChrome.Rect(rect.x(), rect.y(), rect.w(), rect.h());
+    }
+
+    private static void drawOutline(GuiGraphics graphics, int x, int y, int w, int h, int color) {
+        graphics.fill(x, y, x + w, y + 1, color);
+        graphics.fill(x, y + h - 1, x + w, y + h, color);
+        graphics.fill(x, y, x + 1, y + h, color);
+        graphics.fill(x + w - 1, y, x + w, y + h, color);
     }
 }

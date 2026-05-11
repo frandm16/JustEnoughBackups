@@ -4,7 +4,7 @@ import com.frandm.justenoughbackups.backup.progress.BackupProgressPayload;
 import com.frandm.justenoughbackups.backup.progress.BackupProgressState;
 import com.frandm.justenoughbackups.config.BackupConfig;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 
 import java.util.Locale;
 
@@ -23,14 +23,22 @@ public final class BackupPopupRenderer {
         return new Dimensions(contentWidth + 12, height);
     }
 
-    public static void render(GuiGraphicsExtractor graphics, Font font, BackupConfig.Popup popup, BackupProgressPayload progress, int x, int y) {
+    public static void render(GuiGraphics graphics, Font font, BackupConfig.Popup popup, BackupProgressPayload progress, int x, int y) {
         String detail = detail(progress, popup);
         String progressLine = progressLine(progress);
         Dimensions dimensions = measure(font, popup, progress);
 
         graphics.fill(x - 4, y - 4, x + dimensions.width(), y + dimensions.height(), popup.backgroundColorArgb());
         if (popup.showBorder) {
-            graphics.outline(x - 4, y - 4, dimensions.width() + 4, dimensions.height() + 4, popup.textColorArgb());
+            int left = x - 4;
+            int top = y - 4;
+            int right = x + dimensions.width();
+            int bottom = y + dimensions.height();
+
+            graphics.fill(left, top, right, top + 1, popup.textColorArgb());       // arriba
+            graphics.fill(left, bottom - 1, right, bottom, popup.textColorArgb()); // abajo
+            graphics.fill(left, top, left + 1, bottom, popup.textColorArgb());     // izquierda
+            graphics.fill(right - 1, top, right, bottom, popup.textColorArgb());   // derecha
         }
 
         int textY = y;
@@ -88,9 +96,9 @@ public final class BackupPopupRenderer {
         };
     }
 
-    private static void drawText(GuiGraphicsExtractor graphics, Font font, BackupConfig.Popup popup, String text, int x, int y, int popupWidth, int color) {
+    private static void drawText(GuiGraphics graphics, Font font, BackupConfig.Popup popup, String text, int x, int y, int popupWidth, int color) {
         int textX = popup.centerText ? x + Math.max(0, popupWidth - 8 - font.width(text)) / 2 : x;
-        graphics.text(font, text, textX, y, color, true);
+        graphics.drawString(font, text, textX, y, color, true);
     }
 
     private static String applyTemplate(String template, BackupProgressPayload progress) {
