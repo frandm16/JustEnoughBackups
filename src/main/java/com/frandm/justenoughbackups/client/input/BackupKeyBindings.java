@@ -10,9 +10,7 @@ import org.lwjgl.glfw.GLFW;
 
 public final class BackupKeyBindings {
 
-    private static final String CATEGORY =
-            "key.categories.justenoughbackups";
-
+    private static final String CATEGORY = "key.categories.justenoughbackups";
     private static KeyMapping backupMenu;
     private static KeyMapping configMenu;
 
