@@ -10,6 +10,9 @@ import com.frandm.justenoughbackups.config.BackupConfig;
 import com.frandm.justenoughbackups.config.ConfigColor;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.CharacterEvent;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
 
@@ -460,28 +463,25 @@ public final class JEBConfigScreen extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button != GLFW.GLFW_MOUSE_BUTTON_LEFT) {
-            return super.mouseClicked(mouseX, mouseY, button);
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        if (event.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+            return super.mouseClicked(event, doubleClick);
         }
-
+        double mouseX = event.x();
+        double mouseY = event.y();
         state.focusedField = null;
-
         if (handleTabClick(mouseX, mouseY) || handleFooterClick(mouseX, mouseY) || handleScrollbarClick(mouseX, mouseY)) {
             return true;
         }
-
         if (!isInsideViewport(mouseY)) {
             return true;
         }
-
         for (ConfigRow row : rows) {
             int y = rowScreenY(row);
             if (mouseX >= row.x && mouseX <= row.x + row.w && mouseY >= y && mouseY <= y + row.h) {
                 return row.click.click(row, y, mouseX, mouseY);
             }
         }
-
         return true;
     }
 
@@ -540,25 +540,23 @@ public final class JEBConfigScreen extends Screen {
     }
 
     @Override
-    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+    public boolean mouseDragged(MouseButtonEvent event, double dragX, double dragY) {
         if (draggingScrollbar) {
-            setScrollForThumb((int) mouseY);
+            setScrollForThumb((int) event.y());
             return true;
         }
-
         if (draggingChannel != null) {
             ConfigRow row = rowForChannel(draggingChannel);
             if (row != null) {
-                setChannelFromMouse(controlRect(row, rowScreenY(row), controlWidth(row.w)), draggingChannel, mouseX);
+                setChannelFromMouse(controlRect(row, rowScreenY(row), controlWidth(row.w)), draggingChannel, event.x());
             }
             return true;
         }
-
         return true;
     }
 
     @Override
-    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+    public boolean mouseReleased(MouseButtonEvent event) {
         draggingScrollbar = false;
         draggingChannel = null;
         return true;
@@ -573,19 +571,16 @@ public final class JEBConfigScreen extends Screen {
     }
 
     @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
+    public boolean keyPressed(KeyEvent event) {
+        if (event.key() == GLFW.GLFW_KEY_ESCAPE) {
             onClose();
             return true;
         }
-
         if (state.focusedField == null) {
-            return super.keyPressed(keyCode, scanCode, modifiers);
+            return super.keyPressed(event);
         }
-
         String text = state.rawInputs.getOrDefault(state.focusedField, "");
-
-        switch (keyCode) {
+        switch (event.key()) {
             case GLFW.GLFW_KEY_BACKSPACE -> {
                 if (state.cursor > 0 && !text.isEmpty()) {
                     state.rawInputs.put(state.focusedField, text.substring(0, state.cursor - 1) + text.substring(state.cursor));
@@ -628,24 +623,17 @@ public final class JEBConfigScreen extends Screen {
     }
 
     @Override
-    public boolean charTyped(char chr, int modifiers) {
-        if (state.focusedField == null || !isAllowedChatCharacter(chr)) {
+    public boolean charTyped(CharacterEvent event) {
+        if (state.focusedField == null || !event.isAllowedChatCharacter()) {
             return false;
         }
-
         String text = state.rawInputs.getOrDefault(state.focusedField, "");
-        String inserted = String.valueOf(chr);
+        String inserted = event.codepointAsString();
         int maxLength = maxLengthFor(state.focusedField);
-
         if (text.length() + inserted.length() > maxLength) {
             return true;
         }
-
-        state.rawInputs.put(
-                state.focusedField,
-                text.substring(0, state.cursor) + inserted + text.substring(state.cursor)
-        );
-
+        state.rawInputs.put(state.focusedField, text.substring(0, state.cursor) + inserted + text.substring(state.cursor));
         state.cursor += inserted.length();
         applyFocusedField();
         return true;

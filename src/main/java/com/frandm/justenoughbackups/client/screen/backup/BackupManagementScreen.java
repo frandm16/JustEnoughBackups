@@ -12,6 +12,8 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.ConfirmScreen;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
 
@@ -233,13 +235,13 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
     }
 
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
-            if (handleToolbarClick(mouseX, mouseY) || handleExpandClick(mouseX, mouseY) || handleRowActionClick(mouseX, mouseY)) {
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        if (event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+            if (handleToolbarClick(event.x(), event.y()) || handleExpandClick(event.x(), event.y()) || handleRowActionClick(event.x(), event.y())) {
                 return true;
             }
         }
-        return super.mouseClicked(mouseX, mouseY, button);
+        return super.mouseClicked(event, doubleClick);
     }
 
     private boolean handleToolbarClick(double mouseX, double mouseY) {
@@ -304,12 +306,12 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
     }
 
     @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
+    public boolean keyPressed(KeyEvent event) {
+        if (event.key() == GLFW.GLFW_KEY_ESCAPE) {
             onClose();
             return true;
         }
-        return super.keyPressed(keyCode, scanCode, modifiers);
+        return super.keyPressed(event);
     }
 
     @Override
@@ -707,25 +709,25 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
         }
 
         @Override
-        public boolean mouseClicked(double mouseX, double mouseY, int button) {
-            if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
-                if (typeRect().contains(mouseX, mouseY)) {
+        public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+            if (event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+                if (typeRect().contains(event.x(), event.y())) {
                     BackupType[] values = BackupType.values();
                     int next = (Arrays.asList(values).indexOf(selected) + 1) % values.length;
                     selected = values[next];
                     return true;
                 }
-                if (confirmRect().contains(mouseX, mouseY)) {
+                if (confirmRect().contains(event.x(), event.y())) {
                     BackupUiClient.createBackup(selected, nameBox.getValue());
                     minecraft.setScreen(null);
                     return true;
                 }
-                if (cancelRect().contains(mouseX, mouseY)) {
+                if (cancelRect().contains(event.x(), event.y())) {
                     minecraft.setScreen(parent);
                     return true;
                 }
             }
-            return super.mouseClicked(mouseX, mouseY, button);
+            return super.mouseClicked(event, doubleClick);
         }
 
         private Rect typeRect() {
@@ -784,19 +786,19 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
         }
 
         @Override
-        public boolean mouseClicked(double mouseX, double mouseY, int button) {
-            if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
-                if (saveRect().contains(mouseX, mouseY)) {
+        public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+            if (event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+                if (saveRect().contains(event.x(), event.y())) {
                     minecraft.setScreen(parent);
                     BackupUiClient.renameBackup(backup.id(), nameBox.getValue());
                     return true;
                 }
-                if (cancelRect().contains(mouseX, mouseY)) {
+                if (cancelRect().contains(event.x(), event.y())) {
                     minecraft.setScreen(parent);
                     return true;
                 }
             }
-            return super.mouseClicked(mouseX, mouseY, button);
+            return super.mouseClicked(event, doubleClick);
         }
 
         private Rect saveRect() {

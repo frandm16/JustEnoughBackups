@@ -7,6 +7,8 @@ import com.frandm.justenoughbackups.client.ui.popup.PopupPositioning;
 import com.frandm.justenoughbackups.config.BackupConfig;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
 
@@ -50,46 +52,45 @@ public final class PopupPreviewScreen extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT && isInsidePreview(mouseX, mouseY)) {
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        if (event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT && isInsidePreview(event.x(), event.y())) {
             draggingPreview = true;
-            dragOffsetX = (int) mouseX - popup.x;
-            dragOffsetY = (int) mouseY - popup.y;
+            dragOffsetX = (int) event.x() - popup.x;
+            dragOffsetY = (int) event.y() - popup.y;
             setDragging(true);
             return true;
         }
-        return super.mouseClicked(mouseX, mouseY, button);
+        return super.mouseClicked(event, doubleClick);
     }
 
     @Override
-    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+    public boolean mouseDragged(MouseButtonEvent event, double dragX, double dragY) {
         if (draggingPreview) {
-            popup.x = (int) mouseX - dragOffsetX;
-            popup.y = (int) mouseY - dragOffsetY;
+            popup.x = (int) event.x() - dragOffsetX;
+            popup.y = (int) event.y() - dragOffsetY;
             snapAndClamp();
             return true;
         }
-        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
+        return super.mouseDragged(event, dragX, dragY);
     }
 
     @Override
-    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+    public boolean mouseReleased(MouseButtonEvent event) {
         draggingPreview = false;
         setDragging(false);
-        return super.mouseReleased(mouseX, mouseY, button);
+        return super.mouseReleased(event);
     }
 
     @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
+    public boolean keyPressed(KeyEvent event) {
+        if (event.key() == GLFW.GLFW_KEY_ESCAPE) {
             PopupPositioning.rememberRatios(font, popup, previewPayload, width, height);
             onClose();
             return true;
         }
 
-        int amount = (modifiers & GLFW.GLFW_MOD_SHIFT) != 0 ? 10 : 1;
-
-        switch (keyCode) {
+        int amount = (event.modifiers() & GLFW.GLFW_MOD_SHIFT) != 0 ? 10 : 1;
+        switch (event.key()) {
             case GLFW.GLFW_KEY_LEFT -> {
                 popup.x -= amount;
                 snapAndClamp();
@@ -111,10 +112,11 @@ public final class PopupPreviewScreen extends Screen {
                 return true;
             }
             default -> {
-                return super.keyPressed(keyCode, scanCode, modifiers);
+                return super.keyPressed(event);
             }
         }
     }
+
 
     @Override
     public void onClose() {
