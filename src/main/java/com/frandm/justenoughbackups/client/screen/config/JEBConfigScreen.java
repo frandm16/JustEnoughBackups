@@ -409,7 +409,10 @@ public final class JEBConfigScreen extends Screen {
         renderScrollbar(graphics);
         renderFooter(graphics, mouseX, mouseY);
         if (hovered != null && !hovered.tooltipKey.isBlank()) {
+            graphics.pose().pushPose();
+            graphics.pose().translate(0, 0, 500);
             drawTooltipBox(graphics, Component.translatable(hovered.tooltipKey).getString(), mouseX, mouseY);
+            graphics.pose().popPose();
         }
     }
 

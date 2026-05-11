@@ -5,7 +5,7 @@ import com.frandm.justenoughbackups.backup.model.BackupType;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 public record BackupProgressPayload(
         String backupId,
@@ -18,7 +18,7 @@ public record BackupProgressPayload(
         BackupProgressState state
 ) implements CustomPacketPayload {
     public static final CustomPacketPayload.Type<BackupProgressPayload> TYPE =
-            new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath(WorldBackupMod.MOD_ID, "backup_progress"));
+            new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath(WorldBackupMod.MOD_ID, "backup_progress"));
 
     public static final StreamCodec<RegistryFriendlyByteBuf, BackupProgressPayload> CODEC = StreamCodec.of(
             BackupProgressPayload::write,

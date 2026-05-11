@@ -38,6 +38,7 @@ public final class PopupPreviewScreen extends Screen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        super.render(graphics, mouseX, mouseY, partialTick);
         graphics.fill(0, 0, width, height, 0x00000000);
 
         drawVerticalGuide(graphics, width / 3, LINE_COLOR);
@@ -46,7 +47,6 @@ public final class PopupPreviewScreen extends Screen {
         drawHorizontalGuide(graphics, 2 * height / 3, LINE_COLOR);
 
         BackupPopupRenderer.render(graphics, font, popup, previewPayload, popup.x, popup.y);
-        super.render(graphics, mouseX, mouseY, partialTick);
     }
 
     @Override

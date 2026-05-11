@@ -98,6 +98,7 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        super.render(graphics, mouseX, mouseY, partialTick);
         graphics.fill(0, 0, width, height, ScreenChrome.BG_COLOR);
         graphics.drawCenteredString(font, title, width / 2, ScreenChrome.TITLE_Y, TEXT_COLOR);
         graphics.hLine(0, width, viewportTop(), ScreenChrome.LINE_COLOR);
@@ -126,8 +127,6 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
         }
 
         renderFooter(graphics);
-
-        super.render(graphics, mouseX, mouseY, partialTick);
     }
 
     private void renderToolbar(GuiGraphics graphics, int mouseX, int mouseY) {
@@ -695,6 +694,7 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
 
         @Override
         public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+            super.render(graphics, mouseX, mouseY, partialTick);
             graphics.fill(0, 0, width, height, 0xAA000000);
             int x = (width - PANEL_WIDTH) / 2;
             int y = height / 2 - 56;
@@ -704,7 +704,6 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
             ScreenChrome.drawSurfaceButton(graphics, font, toChromeRect(typeRect()), Component.literal(selected.toString()), true, typeRect().contains(mouseX, mouseY));
             ScreenChrome.drawSurfaceButton(graphics, font, toChromeRect(confirmRect()), Component.translatable("screen.justenoughbackups.backups.create"), true, confirmRect().contains(mouseX, mouseY));
             ScreenChrome.drawSurfaceButton(graphics, font, toChromeRect(cancelRect()), Component.translatable("screen.justenoughbackups.common.cancel"), true, cancelRect().contains(mouseX, mouseY));
-            super.render(graphics, mouseX, mouseY, partialTick);
         }
 
         @Override
@@ -773,6 +772,7 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
 
         @Override
         public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+            super.render(graphics, mouseX, mouseY, partialTick);
             graphics.fill(0, 0, width, height, 0xAA000000);
             int x = (width - PANEL_WIDTH) / 2;
             int y = height / 2 - 42;
@@ -781,7 +781,6 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
             graphics.drawCenteredString(font, title, width / 2, y + 7, ScreenChrome.TITLE_COLOR);
             ScreenChrome.drawSurfaceButton(graphics, font, toChromeRect(saveRect()), Component.translatable("screen.justenoughbackups.common.save"), true, saveRect().contains(mouseX, mouseY));
             ScreenChrome.drawSurfaceButton(graphics, font, toChromeRect(cancelRect()), Component.translatable("screen.justenoughbackups.common.cancel"), true, cancelRect().contains(mouseX, mouseY));
-            super.render(graphics, mouseX, mouseY, partialTick);
         }
 
         @Override

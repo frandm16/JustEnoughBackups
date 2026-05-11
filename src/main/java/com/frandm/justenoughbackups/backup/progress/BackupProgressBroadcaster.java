@@ -10,7 +10,7 @@ public final class BackupProgressBroadcaster {
     }
 
     public static void registerPayloadType() {
-        PayloadTypeRegistry.clientboundPlay().register(BackupProgressPayload.TYPE, BackupProgressPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(BackupProgressPayload.TYPE, BackupProgressPayload.CODEC);
     }
 
     public static void broadcast(MinecraftServer server, BackupProgress progress) {
