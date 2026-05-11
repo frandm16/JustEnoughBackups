@@ -13,6 +13,6 @@ public final class BackupPermissions {
     }
 
     public static boolean hasConfiguredPermission(ServerPlayer player) {
-        return hasConfiguredPermission(player.createCommandSourceStack());
+        return player.hasPermissions(BackupConfig.get().commandPermissionLevel);
     }
 }
