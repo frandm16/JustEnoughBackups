@@ -18,6 +18,16 @@ It supports:
 
 The mod is designed to keep the actual backup logic on the server side while exposing management and configuration through a client UI.
 
+## Screenshots
+
+![Backup completed popup](assets/BackupCompleted.png)
+
+![Backup management menu](assets/BackupManagementMenu.png)
+
+![Config menu](assets/ConfigMenu.png)
+
+![Popup preview screen](assets/PreviewScreen.png)
+
 ## Features
 
 ### Backup types
