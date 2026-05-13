@@ -102,8 +102,7 @@ public final class BackupUiNetworking {
     }
 
     public static void scheduleServerStop(MinecraftServer server) {
-        CompletableFuture.delayedExecutor(750L, TimeUnit.MILLISECONDS)
-                .execute(() -> server.execute(() -> server.halt(false)));
+        server.execute(() -> server.halt(false));
     }
 
     private static void send(ServerPlayer player, BackupUiRequestPayload request, boolean permitted, boolean success, boolean returnToTitle, String messageKey, List<String> messageArgs, List<BackupUiBackup> backups) {

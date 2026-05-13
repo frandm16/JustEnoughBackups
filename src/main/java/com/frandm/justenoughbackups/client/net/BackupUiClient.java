@@ -14,7 +14,7 @@ import net.minecraft.network.chat.Component;
 import java.util.UUID;
 
 public final class BackupUiClient {
-    private static final int RETURN_TO_TITLE_DELAY_TICKS = 10;
+    private static final int RETURN_TO_TITLE_DELAY_TICKS = 40;
     private static int pendingReturnToTitleTicks = -1;
     private static Component pendingReturnMessage = Component.empty();
 
