@@ -41,15 +41,19 @@ tasks.withType(JavaCompile).configureEach {
 }
 
 processResources {
-    inputs.properties(
-            version: project.version,
-            minecraft_version: project.minecraft_version
-    )
+    def props = [
+            version                : project.version,
+            minecraft_version      : project.minecraft_version,
+            minecraft_version_range: project.minecraft_version_range,
+            loader_version         : project.loader_version,
+            fabric_api_version     : project.fabric_api_version,
+            java_version           : project.java_version,
+            modmenu_version        : project.modmenu_version
+    ]
+
+    inputs.properties(props)
 
     filesMatching('fabric.mod.json') {
-        expand(
-                version: project.version,
-                minecraft_version: project.minecraft_version
-        )
+        expand(props)
     }
 }
