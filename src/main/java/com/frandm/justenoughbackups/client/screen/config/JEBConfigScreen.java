@@ -99,6 +99,7 @@ public final class JEBConfigScreen extends Screen {
             case BACKUP_ON_START -> () -> state.working.backupOnServerStart;
             case BACKUP_ON_STOP -> () -> state.working.backupOnServerStop;
             case AUTOMATIC_BACKUP_WARNING -> () -> state.working.automaticBackupWarningEnabled;
+            case INCLUDE_SUMMARY_FILE -> () -> state.working.includeSummaryFile;
             case POPUP_ENABLED -> () -> state.working.popup.enabled;
             case POPUP_SHOW_TITLE -> () -> state.working.popup.showTitle;
             case POPUP_CENTER_TEXT -> () -> state.working.popup.centerText;
@@ -114,6 +115,7 @@ public final class JEBConfigScreen extends Screen {
             case BACKUP_ON_START -> value -> state.working.backupOnServerStart = value;
             case BACKUP_ON_STOP -> value -> state.working.backupOnServerStop = value;
             case AUTOMATIC_BACKUP_WARNING -> value -> state.working.automaticBackupWarningEnabled = value;
+            case INCLUDE_SUMMARY_FILE -> value -> state.working.includeSummaryFile = value;
             case POPUP_ENABLED -> value -> state.working.popup.enabled = value;
             case POPUP_SHOW_TITLE -> value -> state.working.popup.showTitle = value;
             case POPUP_CENTER_TEXT -> value -> state.working.popup.centerText = value;

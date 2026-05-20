@@ -1,6 +1,7 @@
 package com.frandm.justenoughbackups.backup.restore;
 
 import com.frandm.justenoughbackups.WorldBackupMod;
+import com.frandm.justenoughbackups.backup.BackupConstants;
 import com.frandm.justenoughbackups.backup.model.BackupManifest;
 import com.frandm.justenoughbackups.backup.model.BackupIntegrityMode;
 import com.frandm.justenoughbackups.backup.model.BackupStatus;
@@ -65,6 +66,10 @@ public final class RestoreService {
         Files.createDirectories(tempRestore);
         for (BackupManifest manifest : chain) {
             BackupStorage.extractBackup(backupDir.resolve(manifest.zipFileName), tempRestore);
+        }
+        Path targetBackupFile = backupDir.resolve(target.zipFileName);
+        if (!BackupStorage.hasSummaryFile(targetBackupFile)) {
+            Files.deleteIfExists(tempRestore.resolve(BackupConstants.SUMMARY_ENTRY));
         }
         pruneToSnapshot(tempRestore, chain.getLast().snapshot);
 
@@ -308,7 +313,7 @@ public final class RestoreService {
             @Override
             public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
                 String relativeName = targetDir.relativize(file).toString().replace('\\', '/');
-                if (!expectedFiles.contains(relativeName)) {
+                if (!expectedFiles.contains(relativeName) && !BackupConstants.SUMMARY_ENTRY.equals(relativeName)) {
                     Files.deleteIfExists(file);
                 }
                 return FileVisitResult.CONTINUE;

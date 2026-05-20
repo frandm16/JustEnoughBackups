@@ -31,6 +31,7 @@ public final class BackupConfig {
     public int commandPermissionLevel = 2;
     public BackupMessageChannel messageChannel = BackupMessageChannel.ACTION_BAR;
     public BackupIntegrityMode integrityMode = BackupIntegrityMode.STRICT;
+    public boolean includeSummaryFile = false;
     public Retention retention = new Retention();
     public Popup popup = new Popup();
     public String backupDirectory = BackupConstants.DEFAULT_BACKUP_DIRECTORY;
@@ -89,6 +90,7 @@ public final class BackupConfig {
         copy.commandPermissionLevel = commandPermissionLevel;
         copy.messageChannel = messageChannel;
         copy.integrityMode = integrityMode;
+        copy.includeSummaryFile = includeSummaryFile;
         copy.backupDirectory = backupDirectory;
         copy.retention = retention.copy();
         copy.popup = popup.copy();

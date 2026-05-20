@@ -186,6 +186,7 @@ public final class BackupStorage {
             List<String> includedFiles,
             Map<String, BackupManifest.FileState> currentSnapshot,
             BackupIntegrityMode integrityMode,
+            boolean includeSummaryFile,
             BackupProgressListener progressListener
     ) throws IOException {
         BackupStatus status = new BackupStatus();
@@ -232,6 +233,13 @@ public final class BackupStorage {
             manifest.snapshot.clear();
             manifest.snapshot.putAll(finalSnapshot);
 
+            if (includeSummaryFile) {
+                ZipEntry summaryEntry = new ZipEntry(BackupConstants.SUMMARY_ENTRY);
+                zipOut.putNextEntry(summaryEntry);
+                zipOut.write(BackupSummaryFile.build(manifest).getBytes(StandardCharsets.UTF_8));
+                zipOut.closeEntry();
+            }
+
             ZipEntry dataEntry = new ZipEntry(BackupConstants.DATA_ENTRY);
             zipOut.putNextEntry(dataEntry);
             zipOut.write(GSON.toJson(new BackupMetadata(manifest, status)).getBytes(StandardCharsets.UTF_8));
@@ -253,7 +261,7 @@ public final class BackupStorage {
     ) throws IOException {
         Files.deleteIfExists(tempBackupFile);
         try {
-            writeBackupZip(worldPath, tempBackupFile, manifest, includedFiles, currentSnapshot, config.integrityMode, progressListener);
+            writeBackupZip(worldPath, tempBackupFile, manifest, includedFiles, currentSnapshot, config.integrityMode, config.includeSummaryFile, progressListener);
             enforceSpaceLimitBeforePublish(backupDir, tempBackupFile, manifest, config);
             moveCompletedBackup(tempBackupFile, backupFile);
         } catch (IOException exception) {
@@ -314,6 +322,14 @@ public final class BackupStorage {
     public static BackupStatus readStatus(Path backupFile) {
         BackupMetadata metadata = readMetadata(backupFile);
         return metadata == null ? null : metadata.status;
+    }
+
+    public static boolean hasSummaryFile(Path backupFile) {
+        try (ZipFile zipFile = new ZipFile(backupFile.toFile())) {
+            return zipFile.getEntry(BackupConstants.SUMMARY_ENTRY) != null;
+        } catch (IOException exception) {
+            return false;
+        }
     }
 
     private static BackupMetadata readMetadata(Path backupFile) {

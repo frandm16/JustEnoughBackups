@@ -1,6 +1,7 @@
 package com.frandm.justenoughbackups.backup.storage;
 
 import com.frandm.justenoughbackups.backup.model.BackupManifest;
+import com.frandm.justenoughbackups.backup.BackupConstants;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -64,7 +65,9 @@ public final class WorldSnapshotter {
                 ? ""
                 : relativePath.getFileName().toString().toLowerCase(Locale.ROOT);
 
-        return "session.lock".equals(fileName) || fileName.endsWith(".lock");
+        return "session.lock".equals(fileName)
+                || fileName.endsWith(".lock")
+                || BackupConstants.SUMMARY_ENTRY.equals(fileName);
     }
 
     private static String sha256(Path file) throws IOException {

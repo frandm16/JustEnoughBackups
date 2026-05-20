@@ -19,6 +19,7 @@ final class ConfigFieldSpecs {
             ConfigFieldSpec.intField(ConfigFieldId.PERMISSION_LEVEL, 0, 4),
             ConfigFieldSpec.of(ConfigFieldId.MESSAGE_CHANNEL),
             ConfigFieldSpec.of(ConfigFieldId.INTEGRITY_MODE),
+            ConfigFieldSpec.of(ConfigFieldId.INCLUDE_SUMMARY_FILE),
             ConfigFieldSpec.textField(ConfigFieldId.BACKUP_DIRECTORY, 256),
             ConfigFieldSpec.textField(ConfigFieldId.POPUP_TITLE, 256),
             ConfigFieldSpec.textField(ConfigFieldId.POPUP_RUNNING_TEXT, 256),
