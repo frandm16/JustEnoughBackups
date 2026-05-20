@@ -32,6 +32,7 @@ public final class BackupConfig {
     public BackupMessageChannel messageChannel = BackupMessageChannel.ACTION_BAR;
     public BackupIntegrityMode integrityMode = BackupIntegrityMode.STRICT;
     public boolean includeSummaryFile = false;
+    public int minimumFreeSpaceReserveMb = 512;
     public Retention retention = new Retention();
     public Popup popup = new Popup();
     public String backupDirectory = BackupConstants.DEFAULT_BACKUP_DIRECTORY;
@@ -91,6 +92,7 @@ public final class BackupConfig {
         copy.messageChannel = messageChannel;
         copy.integrityMode = integrityMode;
         copy.includeSummaryFile = includeSummaryFile;
+        copy.minimumFreeSpaceReserveMb = minimumFreeSpaceReserveMb;
         copy.backupDirectory = backupDirectory;
         copy.retention = retention.copy();
         copy.popup = popup.copy();
@@ -142,6 +144,7 @@ public final class BackupConfig {
         if (backupDirectory == null || backupDirectory.isBlank()) {
             backupDirectory = BackupConstants.DEFAULT_BACKUP_DIRECTORY;
         }
+        minimumFreeSpaceReserveMb = Math.max(0, minimumFreeSpaceReserveMb);
         if (retention == null) {
             retention = new Retention();
         }

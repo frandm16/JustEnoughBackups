@@ -46,6 +46,7 @@ final class ConfigScreenState {
                 working.retention.incremental = defaults.retention.incremental;
                 working.retention.differential = defaults.retention.differential;
                 working.retention.maxTotalSizeMb = defaults.retention.maxTotalSizeMb;
+                working.minimumFreeSpaceReserveMb = defaults.minimumFreeSpaceReserveMb;
             }
             case HUD -> {
                 working.popup = defaults.popup.copy();

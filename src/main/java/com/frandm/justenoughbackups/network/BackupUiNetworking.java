@@ -49,7 +49,7 @@ public final class BackupUiNetworking {
             }
         } catch (IOException | RuntimeException exception) {
             WorldBackupMod.LOGGER.warn("Backup UI action failed: {}", payload.action(), exception);
-            sendList(server, player, payload, false, "text.justenoughbackups.backup_ui.failed", rootMessage(exception));
+            sendFailure(server, player, payload, "text.justenoughbackups.backup_ui.failed", exception);
         }
     }
 
@@ -58,7 +58,7 @@ public final class BackupUiNetworking {
                 .thenAccept(manifest -> server.execute(() -> sendList(server, player, payload, true, "message.justenoughbackups.backup_completed", BackupStorage.displayName(manifest))))
                 .exceptionally(exception -> {
                     WorldBackupMod.LOGGER.error("Backup UI create failed.", exception);
-                    server.execute(() -> sendList(server, player, payload, false, "text.justenoughbackups.backup_ui.backup_failed", rootMessage(exception)));
+                    server.execute(() -> sendFailure(server, player, payload, "text.justenoughbackups.backup_ui.backup_failed", exception));
                     return null;
                 });
         sendList(server, player, payload, true, "message.justenoughbackups.backup_started", "manual", payload.backupType().commandName());
@@ -72,7 +72,7 @@ public final class BackupUiNetworking {
                 }))
                 .exceptionally(exception -> {
                     WorldBackupMod.LOGGER.error("Backup UI restore failed.", exception);
-                    server.execute(() -> sendList(server, player, payload, false, "text.justenoughbackups.backup_ui.restore_failed", rootMessage(exception)));
+                    server.execute(() -> sendFailure(server, player, payload, "text.justenoughbackups.backup_ui.restore_failed", exception));
                     return null;
                 });
         sendList(server, player, payload, true, "message.justenoughbackups.restore_started", payload.backupId());
@@ -86,7 +86,7 @@ public final class BackupUiNetworking {
                     .toList();
             send(player, request, true, success, messageKey, List.of(args), backups);
         } catch (IOException exception) {
-            send(player, request, true, false, "text.justenoughbackups.backup_ui.failed", List.of(rootMessage(exception)), List.of());
+            sendFailure(player, request, "text.justenoughbackups.backup_ui.failed", exception);
         }
     }
 
@@ -103,13 +103,38 @@ public final class BackupUiNetworking {
         }
     }
 
+    private static void sendFailure(MinecraftServer server, ServerPlayer player, BackupUiRequestPayload request, String defaultMessageKey, Throwable throwable) {
+        try {
+            List<BackupUiBackup> backups = BackupService.listBackupSummaries(server).stream()
+                    .map(BackupUiBackup::new)
+                    .filter(backup -> isSendable(backup, server))
+                    .toList();
+            sendFailure(player, request, defaultMessageKey, throwable, backups);
+        } catch (IOException exception) {
+            sendFailure(player, request, defaultMessageKey, exception, List.of());
+        }
+    }
+
+    private static void sendFailure(ServerPlayer player, BackupUiRequestPayload request, String defaultMessageKey, Throwable throwable) {
+        sendFailure(player, request, defaultMessageKey, throwable, List.of());
+    }
+
+    private static void sendFailure(ServerPlayer player, BackupUiRequestPayload request, String defaultMessageKey, Throwable throwable, List<BackupUiBackup> backups) {
+        Throwable root = rootCause(throwable);
+        send(player, request, true, false, defaultMessageKey, List.of(rootMessage(root)), backups);
+    }
+
     private static String rootMessage(Throwable throwable) {
+        String message = throwable.getMessage();
+        return message == null || message.isBlank() ? throwable.getClass().getSimpleName() : message;
+    }
+
+    private static Throwable rootCause(Throwable throwable) {
         Throwable current = throwable;
         while (current.getCause() != null) {
             current = current.getCause();
         }
-        String message = current.getMessage();
-        return message == null || message.isBlank() ? current.getClass().getSimpleName() : message;
+        return current;
     }
 
     private static boolean isSendable(BackupUiBackup backup, MinecraftServer server) {

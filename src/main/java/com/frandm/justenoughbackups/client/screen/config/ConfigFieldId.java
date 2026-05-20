@@ -13,6 +13,7 @@ public enum ConfigFieldId {
     KEEP_PARTIAL("screen.justenoughbackups.config.keep_partial", ConfigTab.BACKUPS, ConfigControlType.INT),
     KEEP_DIFFERENTIAL("screen.justenoughbackups.config.keep_differential", ConfigTab.BACKUPS, ConfigControlType.INT),
     MAX_TOTAL_SIZE_MB("screen.justenoughbackups.config.max_total_size_mb", ConfigTab.BACKUPS, ConfigControlType.INT),
+    MINIMUM_FREE_SPACE_RESERVE_MB("screen.justenoughbackups.config.minimum_free_space_reserve_mb", ConfigTab.BACKUPS, ConfigControlType.INT),
     PERMISSION_LEVEL("screen.justenoughbackups.config.permission_level", ConfigTab.BACKUPS, ConfigControlType.INT),
     MESSAGE_CHANNEL("screen.justenoughbackups.config.message_channel", ConfigTab.BACKUPS, ConfigControlType.ENUM),
     INTEGRITY_MODE("screen.justenoughbackups.config.integrity_mode", ConfigTab.BACKUPS, ConfigControlType.ENUM),

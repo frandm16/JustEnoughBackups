@@ -158,6 +158,7 @@ Main config areas:
 - `commandPermissionLevel`
 - `messageChannel`
 - `integrityMode`
+- `minimumFreeSpaceReserveMb`
 - `backupDirectory`
 - `retention`
   - `full`
@@ -167,6 +168,14 @@ Main config areas:
 - `popup`
 
 `backupDirectory` may be relative to the game directory or an absolute path.
+
+Before creating a backup, the mod also checks free disk space on the backup destination filesystem. The check is conservative and requires:
+
+```text
+(current world size * 2) + minimumFreeSpaceReserveMb
+```
+
+If that space is not available, backup creation is aborted before the temporary ZIP is written.
 
 ## Backup naming
 

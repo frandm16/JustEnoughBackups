@@ -46,8 +46,9 @@ public final class BackupService {
 
     public static CompletableFuture<BackupManifest> createBackup(MinecraftServer server, BackupType type, String reason, String requestedName) {
         if (!BACKUP_RUNNING.compareAndSet(false, true)) {
-            BackupMessages.broadcastBackupFailed(server, type, reason);
-            return CompletableFuture.failedFuture(new IllegalStateException("A backup is already running."));
+            IllegalStateException exception = new IllegalStateException("A backup is already running.");
+            BackupMessages.broadcastBackupFailed(server, type, reason, exception);
+            return CompletableFuture.failedFuture(exception);
         }
 
         BackupMessages.broadcastBackupStarted(server, type, reason);
@@ -87,7 +88,7 @@ public final class BackupService {
                         0,
                         BackupProgressState.FAILED
                 ));
-                BackupMessages.broadcastBackupFailed(server, type, reason);
+                BackupMessages.broadcastBackupFailed(server, type, reason, exception);
                 throw new RuntimeException("Failed to create " + type + " backup.", exception);
             } finally {
                 restoreSaving(server, previousAutoSave, previousWorldSavingState);

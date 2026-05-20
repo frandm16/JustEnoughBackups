@@ -2,6 +2,7 @@ package com.frandm.justenoughbackups.backup.storage;
 
 import com.frandm.justenoughbackups.WorldBackupMod;
 import com.frandm.justenoughbackups.backup.BackupConstants;
+import com.frandm.justenoughbackups.backup.BackupSizeFormatter;
 import com.frandm.justenoughbackups.backup.model.BackupIntegrityMode;
 import com.frandm.justenoughbackups.backup.model.BackupManifest;
 import com.frandm.justenoughbackups.backup.model.BackupMetadata;
@@ -19,6 +20,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.Reader;
+import java.nio.file.FileStore;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
@@ -127,6 +129,7 @@ public final class BackupStorage {
         manifest.includedFiles.addAll(includedFiles);
         manifest.snapshot.putAll(snapshot);
 
+        ensureSufficientDiskSpace(backupDir, snapshot, config);
         writeBackupZipToTemp(worldPath, backupDir, tempBackupFile, backupFile, manifest, includedFiles, snapshot, config, progressListener);
         WorldBackupMod.LOGGER.info("{} backup {} created for reason: {}", type, id, reason);
         return manifest;
@@ -332,6 +335,25 @@ public final class BackupStorage {
         }
     }
 
+    private static void ensureSufficientDiskSpace(Path backupDir, Map<String, BackupManifest.FileState> snapshot, BackupConfig config) throws IOException {
+        long worldBytes = snapshot.values().stream()
+                .mapToLong(fileState -> Math.max(0L, fileState.size))
+                .sum();
+        long reserveBytes = Math.max(0L, config.minimumFreeSpaceReserveMb) * 1024L * 1024L;
+        long requiredBytes = safeAdd(safeMultiply(worldBytes, 2L), reserveBytes);
+        FileStore fileStore = Files.getFileStore(backupDir);
+        long availableBytes = Math.max(0L, fileStore.getUsableSpace());
+
+        if (availableBytes < requiredBytes) {
+            throw new IOException("Insufficient disk space for backup. Required "
+                    + BackupSizeFormatter.formatBytes(requiredBytes)
+                    + ", available "
+                    + BackupSizeFormatter.formatBytes(availableBytes)
+                    + ", destination "
+                    + backupDir.toAbsolutePath().normalize());
+        }
+    }
+
     private static BackupMetadata readMetadata(Path backupFile) {
         try (ZipFile zipFile = new ZipFile(backupFile.toFile())) {
             ZipEntry entry = zipFile.getEntry(BackupConstants.DATA_ENTRY);
@@ -502,6 +524,23 @@ public final class BackupStorage {
             }
         }
         return total;
+    }
+
+    private static long safeMultiply(long value, long multiplier) {
+        if (value <= 0L || multiplier <= 0L) {
+            return 0L;
+        }
+        if (value > Long.MAX_VALUE / multiplier) {
+            return Long.MAX_VALUE;
+        }
+        return value * multiplier;
+    }
+
+    private static long safeAdd(long left, long right) {
+        if (left >= Long.MAX_VALUE - right) {
+            return Long.MAX_VALUE;
+        }
+        return left + right;
     }
 
     private static BackupManifest findBaseManifest(List<BackupManifest> manifests, BackupType type) {
