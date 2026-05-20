@@ -6,6 +6,9 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
 import net.minecraft.SharedConstants;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
 
@@ -16,10 +19,7 @@ final class BackupSummaryFile {
     static String build(BackupManifest manifest) {
         String jebVersion = versionFor(WorldBackupMod.MOD_ID);
         String loaderVersion = versionFor("fabricloader");
-        List<String> mods = FabricLoader.getInstance().getAllMods().stream()
-                .map(container -> container.getMetadata().getId() + " " + container.getMetadata().getVersion().getFriendlyString())
-                .sorted(String.CASE_INSENSITIVE_ORDER)
-                .toList();
+        List<String> mods = installedMods();
 
         StringBuilder builder = new StringBuilder();
         line(builder, "World", value(manifest.worldName));
@@ -36,6 +36,27 @@ final class BackupSummaryFile {
             builder.append("- ").append(mod).append(System.lineSeparator());
         }
         return builder.toString();
+    }
+
+    private static List<String> installedMods() {
+        Path modsDir = FabricLoader.getInstance().getGameDir().resolve("mods");
+        if (!Files.isDirectory(modsDir)) {
+            return List.of();
+        }
+
+        try (var stream = Files.list(modsDir)) {
+            return stream
+                    .filter(Files::isRegularFile)
+                    .map(Path::getFileName)
+                    .filter(path -> path != null)
+                    .map(Path::toString)
+                    .filter(name -> name.toLowerCase(Locale.ROOT).endsWith(".jar"))
+                    .sorted(String.CASE_INSENSITIVE_ORDER)
+                    .toList();
+        } catch (IOException exception) {
+            WorldBackupMod.LOGGER.warn("Unable to read mods directory for backup summary: {}", modsDir, exception);
+            return List.of();
+        }
     }
 
     private static String versionFor(String modId) {
