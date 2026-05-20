@@ -21,8 +21,8 @@ public final class RetentionPolicy {
     private RetentionPolicy() {
     }
 
-    public static void apply(String worldName, BackupConfig config) throws IOException {
-        Path backupDir = config.resolveBackupRoot().resolve(worldName);
+    public static void apply(String worldDirectoryName, BackupConfig config) throws IOException {
+        Path backupDir = config.resolveBackupRoot().resolve(worldDirectoryName);
         RetentionDecision decision = plan(backupDir, BackupStorage.readManifests(backupDir), config);
         for (BackupEntry entry : decision.deletions()) {
             if (entry.existingFile()) {

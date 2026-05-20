@@ -57,7 +57,7 @@ public final class BackupService {
         WorldSavingState previousWorldSavingState = WorldSavingState.captureAndDisable(server);
         Path worldPath = server.getWorldPath(LevelResource.ROOT);
         String worldName = BackupPaths.worldName(server, worldPath);
-        String worldDirectoryName = BackupPaths.worldDirectoryName(server, worldPath);
+        String worldDirectoryName = BackupPaths.worldDirectoryName(worldPath);
         BackupConfig config = BackupConfig.get();
 
         return CompletableFuture.supplyAsync(() -> {
