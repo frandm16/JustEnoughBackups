@@ -1,12 +1,17 @@
 package com.frandm.justenoughbackups.backup;
 
+import com.frandm.justenoughbackups.WorldBackupMod;
 import com.frandm.justenoughbackups.config.BackupConfig;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.storage.LevelResource;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.nio.file.Path;
 
 public final class BackupPaths {
+    private static final String DEFAULT_WORLD_NAME = "Default-World(WORLD NAME NOT FOUND)";
+
     private BackupPaths() {
     }
 
@@ -25,21 +30,51 @@ public final class BackupPaths {
     }
 
     public static String worldDirectoryName(MinecraftServer server, Path worldPath) {
-        return cleanWorldName(worldName(server, worldPath));
+        String levelId = levelId(server);
+        if (levelId != null && !levelId.isBlank()) {
+            return cleanWorldName(levelId);
+        }
+
+        String fallback = worldName(worldPath);
+        WorldBackupMod.LOGGER.debug("Falling back to world path for backup directory name: {}", fallback);
+        return cleanWorldName(fallback);
     }
 
     public static String worldName(Path worldPath) {
         Path fileName = worldPath.getFileName();
         if (fileName == null) {
-            return "world";
+            WorldBackupMod.LOGGER.warn("Unable to resolve world folder name from world path. Using fallback {}.", DEFAULT_WORLD_NAME);
+            return DEFAULT_WORLD_NAME;
         }
 
         String name = fileName.toString();
-        return name.isBlank() || ".".equals(name) || "..".equals(name) ? "world" : name;
+        if (name.isBlank() || ".".equals(name) || "..".equals(name)) {
+            WorldBackupMod.LOGGER.warn("World path file name was invalid ({}). Using fallback {}.", name, DEFAULT_WORLD_NAME);
+            return DEFAULT_WORLD_NAME;
+        }
+        return name;
     }
 
     private static String cleanWorldName(String name) {
         String cleaned = name.replaceAll("[^a-zA-Z0-9._-]", "_");
         return cleaned.isBlank() || ".".equals(cleaned) || "..".equals(cleaned) ? "world" : cleaned;
+    }
+
+    private static String levelId(MinecraftServer server) {
+        try {
+            Field storageField = MinecraftServer.class.getDeclaredField("storageSource");
+            storageField.setAccessible(true);
+            Object storageAccess = storageField.get(server);
+            if (storageAccess == null) {
+                return null;
+            }
+
+            Method getLevelId = storageAccess.getClass().getMethod("getLevelId");
+            Object levelId = getLevelId.invoke(storageAccess);
+            return levelId instanceof String value ? value : null;
+        } catch (ReflectiveOperationException | SecurityException exception) {
+            WorldBackupMod.LOGGER.debug("Unable to read world levelId from MinecraftServer storageSource; using path fallback.", exception);
+            return null;
+        }
     }
 }

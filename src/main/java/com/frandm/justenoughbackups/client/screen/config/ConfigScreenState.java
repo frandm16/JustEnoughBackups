@@ -40,11 +40,13 @@ final class ConfigScreenState {
                 working.commandPermissionLevel = defaults.commandPermissionLevel;
                 working.messageChannel = defaults.messageChannel;
                 working.integrityMode = defaults.integrityMode;
+                working.includeSummaryFile = defaults.includeSummaryFile;
                 working.backupDirectory = defaults.backupDirectory;
                 working.retention.full = defaults.retention.full;
                 working.retention.incremental = defaults.retention.incremental;
                 working.retention.differential = defaults.retention.differential;
                 working.retention.maxTotalSizeMb = defaults.retention.maxTotalSizeMb;
+                working.minimumFreeSpaceReserveMb = defaults.minimumFreeSpaceReserveMb;
             }
             case HUD -> {
                 working.popup = defaults.popup.copy();

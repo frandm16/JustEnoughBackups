@@ -96,6 +96,7 @@ public final class JEBConfigScreen extends Screen {
             case BACKUP_ON_START -> () -> state.working.backupOnServerStart;
             case BACKUP_ON_STOP -> () -> state.working.backupOnServerStop;
             case AUTOMATIC_BACKUP_WARNING -> () -> state.working.automaticBackupWarningEnabled;
+            case INCLUDE_SUMMARY_FILE -> () -> state.working.includeSummaryFile;
             case POPUP_ENABLED -> () -> state.working.popup.enabled;
             case POPUP_SHOW_TITLE -> () -> state.working.popup.showTitle;
             case POPUP_CENTER_TEXT -> () -> state.working.popup.centerText;
@@ -111,6 +112,7 @@ public final class JEBConfigScreen extends Screen {
             case BACKUP_ON_START -> value -> state.working.backupOnServerStart = value;
             case BACKUP_ON_STOP -> value -> state.working.backupOnServerStop = value;
             case AUTOMATIC_BACKUP_WARNING -> value -> state.working.automaticBackupWarningEnabled = value;
+            case INCLUDE_SUMMARY_FILE -> value -> state.working.includeSummaryFile = value;
             case POPUP_ENABLED -> value -> state.working.popup.enabled = value;
             case POPUP_SHOW_TITLE -> value -> state.working.popup.showTitle = value;
             case POPUP_CENTER_TEXT -> value -> state.working.popup.centerText = value;
@@ -127,6 +129,7 @@ public final class JEBConfigScreen extends Screen {
             case KEEP_PARTIAL -> () -> state.working.retention.incremental;
             case KEEP_DIFFERENTIAL -> () -> state.working.retention.differential;
             case MAX_TOTAL_SIZE_MB -> () -> state.working.retention.maxTotalSizeMb;
+            case MINIMUM_FREE_SPACE_RESERVE_MB -> () -> state.working.minimumFreeSpaceReserveMb;
             case PERMISSION_LEVEL -> () -> state.working.commandPermissionLevel;
             default -> throw new IllegalArgumentException("Not an int field: " + fieldId);
         };
@@ -140,6 +143,7 @@ public final class JEBConfigScreen extends Screen {
             case KEEP_PARTIAL -> value -> state.working.retention.incremental = value;
             case KEEP_DIFFERENTIAL -> value -> state.working.retention.differential = value;
             case MAX_TOTAL_SIZE_MB -> value -> state.working.retention.maxTotalSizeMb = value;
+            case MINIMUM_FREE_SPACE_RESERVE_MB -> value -> state.working.minimumFreeSpaceReserveMb = value;
             case PERMISSION_LEVEL -> value -> state.working.commandPermissionLevel = value;
             default -> throw new IllegalArgumentException("Not an int field: " + fieldId);
         };
@@ -667,6 +671,7 @@ public final class JEBConfigScreen extends Screen {
             case KEEP_PARTIAL -> parseInt(input).ifPresent(value -> state.working.retention.incremental = value);
             case KEEP_DIFFERENTIAL -> parseInt(input).ifPresent(value -> state.working.retention.differential = value);
             case MAX_TOTAL_SIZE_MB -> parseInt(input).ifPresent(value -> state.working.retention.maxTotalSizeMb = value);
+            case MINIMUM_FREE_SPACE_RESERVE_MB -> parseInt(input).ifPresent(value -> state.working.minimumFreeSpaceReserveMb = value);
             case PERMISSION_LEVEL -> parseInt(input).ifPresent(value -> state.working.commandPermissionLevel = value);
             case BACKUP_DIRECTORY -> state.working.backupDirectory = input;
             case POPUP_TITLE -> state.working.popup.title = input;
