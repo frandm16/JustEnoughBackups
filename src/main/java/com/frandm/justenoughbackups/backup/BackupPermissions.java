@@ -9,10 +9,33 @@ public final class BackupPermissions {
     }
 
     public static boolean hasConfiguredPermission(CommandSourceStack source) {
-        return source.hasPermission(BackupConfig.get().commandPermissionLevel);
+        return hasConfiguredPermissionLevel(source, BackupConfig.get().commandPermissionLevel);
     }
 
     public static boolean hasConfiguredPermission(ServerPlayer player) {
-        return player.hasPermissions(BackupConfig.get().commandPermissionLevel);
+        return hasConfiguredPermissionLevel(player.createCommandSourceStack(), BackupConfig.get().commandPermissionLevel);
+    }
+
+    private static boolean hasConfiguredPermissionLevel(CommandSourceStack source, int level) {
+        try {
+            return source.getClass()
+                    .getMethod("hasPermission", int.class)
+                    .invoke(source, level) instanceof Boolean allowed && allowed;
+        } catch (ReflectiveOperationException ignored) {
+            // 1.21.11 replaced the integer-based helper, so fall through to the new permission model.
+        }
+
+        try {
+            Object permissions = source.getClass().getMethod("permissions").invoke(source);
+            Object currentLevel = permissions.getClass().getMethod("level").invoke(permissions);
+            Class<?> permissionLevelClass = currentLevel.getClass();
+            Object requiredLevel = permissionLevelClass.getMethod("byId", int.class).invoke(null, level);
+
+            return permissionLevelClass
+                    .getMethod("isEqualOrHigherThan", permissionLevelClass)
+                    .invoke(currentLevel, requiredLevel) instanceof Boolean allowed && allowed;
+        } catch (ReflectiveOperationException ignored) {
+            return level <= 0 || !source.isPlayer();
+        }
     }
 }

@@ -8,6 +8,7 @@ import com.frandm.justenoughbackups.backup.model.BackupManifest;
 import com.frandm.justenoughbackups.backup.model.BackupType;
 import com.frandm.justenoughbackups.backup.storage.BackupStorage;
 import com.frandm.justenoughbackups.config.BackupConfig;
+import com.frandm.justenoughbackups.network.BackupUiNetworking;
 import com.frandm.justenoughbackups.scheduler.BackupScheduler;
 import com.frandm.justenoughbackups.scheduler.NextBackupStatus;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -116,7 +117,10 @@ public final class BackupCommand {
     private static int restore(CommandSourceStack source, String backupId) {
         BackupService.restoreBackupByName(source.getServer(), backupId)
                 .thenAccept(restore -> source.getServer().execute(() -> {
-                    source.getServer().halt(false);
+                    if (source.getEntity() instanceof ServerPlayer player) {
+                        BackupUiNetworking.sendRestoreShutdown(player, restore.backupId());
+                    }
+                    BackupUiNetworking.scheduleServerStop(source.getServer());
                 }))
                 .exceptionally(exception -> {
                     WorldBackupMod.LOGGER.error("Restore failed.", exception);

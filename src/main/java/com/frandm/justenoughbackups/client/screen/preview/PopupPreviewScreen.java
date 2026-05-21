@@ -117,7 +117,6 @@ public final class PopupPreviewScreen extends Screen {
         }
     }
 
-
     @Override
     public void onClose() {
         minecraft.setScreen(parent);
