@@ -11,6 +11,8 @@ import net.minecraft.server.level.ServerPlayer;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 public final class BackupUiNetworking {
     private BackupUiNetworking() {
@@ -67,8 +69,8 @@ public final class BackupUiNetworking {
     private static void restoreBackup(BackupUiRequestPayload payload, MinecraftServer server, ServerPlayer player) {
         BackupService.restoreBackupById(server, payload.backupId())
                 .thenAccept(restore -> server.execute(() -> {
-                    send(player, payload, true, true, "message.justenoughbackups.restore_prepared", List.of(restore.backupId()), List.of());
-                    server.halt(false);
+                    sendRestoreShutdown(player, restore.backupId());
+                    scheduleServerStop(server);
                 }))
                 .exceptionally(exception -> {
                     WorldBackupMod.LOGGER.error("Backup UI restore failed.", exception);
@@ -91,11 +93,26 @@ public final class BackupUiNetworking {
     }
 
     private static void send(ServerPlayer player, BackupUiRequestPayload request, boolean permitted, boolean success, String messageKey, List<String> messageArgs, List<BackupUiBackup> backups) {
+        send(player, request, permitted, success, false, messageKey, messageArgs, backups);
+    }
+
+    public static void sendRestoreShutdown(ServerPlayer player, String backupId) {
+        send(player, new BackupUiRequestPayload("", BackupUiAction.RESTORE, com.frandm.justenoughbackups.backup.model.BackupType.FULL, backupId, ""),
+                true, true, true, "message.justenoughbackups.restore_prepared", List.of(backupId), List.of());
+    }
+
+    public static void scheduleServerStop(MinecraftServer server) {
+        CompletableFuture.delayedExecutor(750L, TimeUnit.MILLISECONDS)
+                .execute(() -> server.execute(() -> server.halt(false)));
+    }
+
+    private static void send(ServerPlayer player, BackupUiRequestPayload request, boolean permitted, boolean success, boolean returnToTitle, String messageKey, List<String> messageArgs, List<BackupUiBackup> backups) {
         if (ServerPlayNetworking.canSend(player, BackupUiResponsePayload.TYPE)) {
             ServerPlayNetworking.send(player, new BackupUiResponsePayload(
                     request.requestId(),
                     permitted,
                     success,
+                    returnToTitle,
                     messageKey,
                     messageArgs,
                     backups

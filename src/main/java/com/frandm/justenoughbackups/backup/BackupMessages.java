@@ -32,6 +32,15 @@ public final class BackupMessages {
         broadcast(server, Component.translatable("message.justenoughbackups.backup_failed", reason, type.commandName()));
     }
 
+    public static void broadcastBackupFailed(MinecraftServer server, BackupType type, String reason, Throwable throwable) {
+        broadcast(server, Component.translatable(
+                "message.justenoughbackups.backup_failed_reason",
+                reason,
+                type.commandName(),
+                rootMessage(rootCause(throwable))
+        ));
+    }
+
     public static void broadcastRestoreStarted(MinecraftServer server, String backupId) {
         broadcast(server, Component.translatable("message.justenoughbackups.restore_started", backupId));
     }
@@ -66,5 +75,18 @@ public final class BackupMessages {
         } else {
             server.execute(send);
         }
+    }
+
+    private static Throwable rootCause(Throwable throwable) {
+        Throwable current = throwable;
+        while (current.getCause() != null) {
+            current = current.getCause();
+        }
+        return current;
+    }
+
+    private static String rootMessage(Throwable throwable) {
+        String message = throwable.getMessage();
+        return message == null || message.isBlank() ? throwable.getClass().getSimpleName() : message;
     }
 }
