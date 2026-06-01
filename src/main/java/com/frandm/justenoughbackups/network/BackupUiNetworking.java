@@ -4,6 +4,7 @@ import com.frandm.justenoughbackups.WorldBackupMod;
 import com.frandm.justenoughbackups.backup.BackupPermissions;
 import com.frandm.justenoughbackups.backup.BackupService;
 import com.frandm.justenoughbackups.backup.storage.BackupStorage;
+import com.frandm.justenoughbackups.text.ServerTranslations;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.server.MinecraftServer;
@@ -96,8 +97,7 @@ public final class BackupUiNetworking {
                     request.requestId(),
                     permitted,
                     success,
-                    messageKey,
-                    messageArgs,
+                    ServerTranslations.text(messageKey, messageArgs.toArray()),
                     backups
             ));
         }

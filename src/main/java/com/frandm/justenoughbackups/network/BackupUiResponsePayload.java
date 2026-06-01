@@ -6,16 +6,13 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
-
-import java.util.ArrayList;
 import java.util.List;
 
 public record BackupUiResponsePayload(
         String requestId,
         boolean permitted,
         boolean success,
-        String messageKey,
-        List<String> messageArgs,
+        String messageText,
         List<BackupUiBackup> backups
 ) implements CustomPacketPayload {
     public static final Type<BackupUiResponsePayload> TYPE =
@@ -32,20 +29,16 @@ public record BackupUiResponsePayload(
     }
 
     public Component message() {
-        return messageKey == null || messageKey.isBlank()
+        return messageText == null || messageText.isBlank()
                 ? Component.empty()
-                : Component.translatable(messageKey, messageArgs.toArray());
+                : Component.literal(messageText);
     }
 
     private static void write(RegistryFriendlyByteBuf buffer, BackupUiResponsePayload payload) {
         buffer.writeUtf(value(payload.requestId()));
         buffer.writeBoolean(payload.permitted());
         buffer.writeBoolean(payload.success());
-        buffer.writeUtf(value(payload.messageKey()));
-        buffer.writeInt(payload.messageArgs().size());
-        for (String arg : payload.messageArgs()) {
-            buffer.writeUtf(value(arg));
-        }
+        buffer.writeUtf(value(payload.messageText()));
         buffer.writeInt(payload.backups().size());
         for (BackupUiBackup backup : payload.backups()) {
             BackupUiBackup.write(buffer, backup);
@@ -56,18 +49,13 @@ public record BackupUiResponsePayload(
         String requestId = buffer.readUtf();
         boolean permitted = buffer.readBoolean();
         boolean success = buffer.readBoolean();
-        String messageKey = buffer.readUtf();
-        int argSize = buffer.readInt();
-        List<String> messageArgs = new ArrayList<>(argSize);
-        for (int i = 0; i < argSize; i++) {
-            messageArgs.add(buffer.readUtf());
-        }
+        String messageText = buffer.readUtf();
         int size = buffer.readInt();
-        List<BackupUiBackup> backups = new ArrayList<>(size);
+        List<BackupUiBackup> backups = new java.util.ArrayList<>(size);
         for (int i = 0; i < size; i++) {
             backups.add(BackupUiBackup.read(buffer));
         }
-        return new BackupUiResponsePayload(requestId, permitted, success, messageKey, List.copyOf(messageArgs), List.copyOf(backups));
+        return new BackupUiResponsePayload(requestId, permitted, success, messageText, List.copyOf(backups));
     }
 
     private static String value(String value) {

@@ -10,6 +10,7 @@ import com.frandm.justenoughbackups.backup.storage.BackupStorage;
 import com.frandm.justenoughbackups.config.BackupConfig;
 import com.frandm.justenoughbackups.scheduler.BackupScheduler;
 import com.frandm.justenoughbackups.scheduler.NextBackupStatus;
+import com.frandm.justenoughbackups.text.ServerTranslations;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.commands.CommandSourceStack;
@@ -82,17 +83,17 @@ public final class BackupCommand {
         try {
             List<BackupManifest> backups = BackupService.listBackups(source.getServer());
             if (backups.isEmpty()) {
-                sendLocal(source, BackupMessages.withTitle(Component.translatable("message.justenoughbackups.no_backups")));
+                sendLocal(source, BackupMessages.withTitle(ServerTranslations.component("message.justenoughbackups.no_backups")));
                 return 1;
             }
 
-            sendLocal(source, BackupMessages.withTitle(Component.translatable("message.justenoughbackups.backup_count", String.valueOf(backups.size()))));
+            sendLocal(source, BackupMessages.withTitle(ServerTranslations.component("message.justenoughbackups.backup_count", String.valueOf(backups.size()))));
             backups.stream()
                     .forEach(manifest -> sendLocal(source, formatBackup(manifest)));
             return backups.size();
         } catch (IOException exception) {
             WorldBackupMod.LOGGER.error("Failed to list backups.", exception);
-            sendLocal(source, BackupMessages.withTitle(Component.translatable("message.justenoughbackups.list_failed")));
+            sendLocal(source, BackupMessages.withTitle(ServerTranslations.component("message.justenoughbackups.list_failed")));
             return 0;
         }
     }
@@ -100,16 +101,16 @@ public final class BackupCommand {
     private static int next(CommandSourceStack source) {
         NextBackupStatus status = BackupScheduler.nextBackupStatus();
         if (!status.enabled()) {
-            sendLocal(source, BackupMessages.withTitle(Component.translatable("message.justenoughbackups.next_disabled")));
+            sendLocal(source, BackupMessages.withTitle(ServerTranslations.component("message.justenoughbackups.next_disabled")));
             return 1;
         }
 
         if (status.ready()) {
-            sendLocal(source, BackupMessages.withTitle(Component.translatable("message.justenoughbackups.next_ready")));
+            sendLocal(source, BackupMessages.withTitle(ServerTranslations.component("message.justenoughbackups.next_ready")));
             return 1;
         }
 
-        sendLocal(source, BackupMessages.withTitle(Component.translatable("message.justenoughbackups.next_waiting", formatDuration(status.remainingMillis()))));
+        sendLocal(source, BackupMessages.withTitle(ServerTranslations.component("message.justenoughbackups.next_waiting", formatDuration(status.remainingMillis()))));
         return 1;
     }
 
@@ -127,7 +128,7 @@ public final class BackupCommand {
 
     private static int reloadConfig(CommandSourceStack source) {
         BackupConfig config = BackupService.reloadConfig();
-        sendLocal(source, BackupMessages.withTitle(Component.translatable("message.justenoughbackups.config_reloaded",
+        sendLocal(source, BackupMessages.withTitle(ServerTranslations.component("message.justenoughbackups.config_reloaded",
                 String.valueOf(config.backupMode),
                 String.valueOf(config.automaticBackupsEnabled),
                 String.valueOf(config.automaticIntervalMinutes),
@@ -138,7 +139,7 @@ public final class BackupCommand {
 
     private static Component formatBackup(BackupManifest manifest) {
         String base = manifest.baseBackupId == null ? "none" : manifest.baseBackupId;
-        return BackupMessages.withTitle(Component.translatable("message.justenoughbackups.backup_entry",
+        return BackupMessages.withTitle(ServerTranslations.component("message.justenoughbackups.backup_entry",
                 manifest.id,
                 manifest.type.commandName(),
                 String.valueOf(manifest.includedFiles.size()),
