@@ -1,5 +1,6 @@
 package com.frandm.justenoughbackups.backup.storage;
 
+import com.frandm.justenoughbackups.WorldBackupMod;
 import com.frandm.justenoughbackups.backup.model.BackupManifest;
 import com.frandm.justenoughbackups.backup.BackupConstants;
 
@@ -7,6 +8,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
@@ -16,12 +18,19 @@ import java.security.NoSuchAlgorithmException;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 public final class WorldSnapshotter {
+    private static final Pattern TRANSIENT_LEVEL_FILE = Pattern.compile("^level\\d+\\.dat$");
+
     private WorldSnapshotter() {
     }
 
     public static Map<String, BackupManifest.FileState> snapshot(Path worldPath) throws IOException {
+        return snapshot(worldPath, WorldSnapshotter::readFileState);
+    }
+
+    static Map<String, BackupManifest.FileState> snapshot(Path worldPath, SnapshotReader reader) throws IOException {
         Map<String, BackupManifest.FileState> snapshot = new LinkedHashMap<>();
 
         Files.walkFileTree(worldPath, new SimpleFileVisitor<>() {
@@ -42,12 +51,36 @@ public final class WorldSnapshotter {
                 }
 
                 String relativeName = relative.toString().replace('\\', '/');
-                snapshot.put(relativeName, new BackupManifest.FileState(
-                        attrs.size(),
-                        attrs.lastModifiedTime().toMillis(),
-                        sha256(file)
-                ));
+                try {
+                    snapshot.put(relativeName, reader.read(file, attrs));
+                } catch (NoSuchFileException exception) {
+                    logSkippedTransientFile(file, relativeName, exception);
+                }
                 return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult visitFileFailed(Path file, IOException exception) throws IOException {
+                if (exception instanceof NoSuchFileException) {
+                    String relativeName = worldPath.relativize(file).toString().replace('\\', '/');
+                    logSkippedTransientFile(file, relativeName, exception);
+                    return FileVisitResult.CONTINUE;
+                }
+                throw exception;
+            }
+
+            private void logSkippedTransientFile(Path file, String relativeName, IOException exception) {
+                WorldBackupMod.LOGGER.debug(
+                        "Skipping transient world file during snapshot: {} ({})",
+                        relativeName,
+                        rootMessage(exception)
+                );
+            }
+
+            private String rootMessage(IOException exception) {
+                return exception.getMessage() == null || exception.getMessage().isBlank()
+                        ? exception.getClass().getSimpleName()
+                        : exception.getMessage();
             }
         });
 
@@ -66,8 +99,17 @@ public final class WorldSnapshotter {
                 : relativePath.getFileName().toString().toLowerCase(Locale.ROOT);
 
         return "session.lock".equals(fileName)
+                || TRANSIENT_LEVEL_FILE.matcher(fileName).matches()
                 || fileName.endsWith(".lock")
                 || BackupConstants.SUMMARY_ENTRY.equals(fileName);
+    }
+
+    private static BackupManifest.FileState readFileState(Path file, BasicFileAttributes attrs) throws IOException {
+        return new BackupManifest.FileState(
+                attrs.size(),
+                attrs.lastModifiedTime().toMillis(),
+                sha256(file)
+        );
     }
 
     private static String sha256(Path file) throws IOException {
@@ -88,5 +130,10 @@ public final class WorldSnapshotter {
             builder.append(String.format(Locale.ROOT, "%02x", value));
         }
         return builder.toString();
+    }
+
+    @FunctionalInterface
+    interface SnapshotReader {
+        BackupManifest.FileState read(Path file, BasicFileAttributes attrs) throws IOException;
     }
 }
