@@ -9,16 +9,20 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 
+import java.lang.ref.WeakReference;
 import java.util.UUID;
 
 public final class BackupUiClient {
+    private static WeakReference<BackupUiResponseConsumer> activeScreen = new WeakReference<>(null);
+
     private BackupUiClient() {
     }
 
     public static void registerReceivers() {
         ClientPlayNetworking.registerGlobalReceiver(BackupUiResponsePayload.TYPE, (payload, context) ->
                 context.client().execute(() -> {
-                    if (context.client().screen instanceof BackupUiResponseConsumer screen) {
+                    BackupUiResponseConsumer screen = activeScreen.get();
+                    if (screen != null) {
                         screen.handleResponse(payload);
                     }
                 })
@@ -30,7 +34,7 @@ public final class BackupUiClient {
         if (minecraft.level == null || minecraft.player == null) {
             return;
         }
-        minecraft.setScreen(new BackupManagementScreen());
+        minecraft.setScreenAndShow(new BackupManagementScreen());
     }
 
     public static void requestList() {
@@ -55,8 +59,8 @@ public final class BackupUiClient {
 
     private static void send(BackupUiAction action, BackupType type, String backupId, String value) {
         if (!canSendRequests()) {
-            Minecraft minecraft = Minecraft.getInstance();
-            if (minecraft.screen instanceof BackupUiResponseConsumer screen) {
+            BackupUiResponseConsumer screen = activeScreen.get();
+            if (screen != null) {
                 screen.setStatus(false, Component.translatable("text.justenoughbackups.backup_ui.unsupported_channel"));
             }
             return;
@@ -76,6 +80,17 @@ public final class BackupUiClient {
             return ClientPlayNetworking.canSend(BackupUiRequestPayload.TYPE);
         } catch (IllegalArgumentException exception) {
             return false;
+        }
+    }
+
+    public static void setActiveScreen(BackupUiResponseConsumer screen) {
+        activeScreen = new WeakReference<>(screen);
+    }
+
+    public static void clearActiveScreen(BackupUiResponseConsumer screen) {
+        BackupUiResponseConsumer current = activeScreen.get();
+        if (current == screen) {
+            activeScreen.clear();
         }
     }
 }

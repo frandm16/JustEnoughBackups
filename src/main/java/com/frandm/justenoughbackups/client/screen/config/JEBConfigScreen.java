@@ -376,7 +376,7 @@ public final class JEBConfigScreen extends Screen {
                 if (!control.contains(mouseX, mouseY)) {
                     return false;
                 }
-                minecraft.setScreen(new PopupPreviewScreen(this, state.working.popup, state.previewPayload()));
+                minecraft.setScreenAndShow(new PopupPreviewScreen(this, state.working.popup, state.previewPayload()));
                 return true;
             });
         }
@@ -673,7 +673,7 @@ public final class JEBConfigScreen extends Screen {
 
     @Override
     public void onClose() {
-        minecraft.setScreen(parent);
+        minecraft.setScreenAndShow(parent);
     }
 
     @Override
@@ -689,7 +689,7 @@ public final class JEBConfigScreen extends Screen {
         validationErrors = validator.validate(state);
         if (validationErrors.isEmpty()) {
             BackupConfig.saveAndApply(state.working);
-            minecraft.setScreen(parent);
+            minecraft.setScreenAndShow(parent);
         }
     }
 

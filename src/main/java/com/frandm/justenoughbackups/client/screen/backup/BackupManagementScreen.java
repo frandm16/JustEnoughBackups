@@ -70,8 +70,15 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
 
     @Override
     protected void init() {
+        BackupUiClient.setActiveScreen(this);
         rebuildWidgets();
         BackupUiClient.requestList();
+    }
+
+    @Override
+    public void removed() {
+        BackupUiClient.clearActiveScreen(this);
+        super.removed();
     }
 
     protected void rebuildWidgets() {
@@ -248,7 +255,7 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
 
     private boolean handleToolbarClick(double mouseX, double mouseY) {
         if (createButtonRect().contains(mouseX, mouseY)) {
-            minecraft.setScreen(new CreateBackupScreen(this));
+            minecraft.setScreenAndShow(new CreateBackupScreen(this));
             return true;
         }
         if (refreshButtonRect().contains(mouseX, mouseY)) {
@@ -256,7 +263,7 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
             return true;
         }
         if (configButtonRect().contains(mouseX, mouseY)) {
-            minecraft.setScreen(JEBConfigScreens.create(this));
+            minecraft.setScreenAndShow(JEBConfigScreens.create(this));
             return true;
         }
         return false;
@@ -289,7 +296,7 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
                 return true;
             }
             if (renameRect(layout, rowY).contains(mouseX, mouseY)) {
-                minecraft.setScreen(new RenameBackupScreen(this, backup));
+                minecraft.setScreenAndShow(new RenameBackupScreen(this, backup));
                 return true;
             }
             if (backup.canDelete() && deleteRect(layout, rowY).contains(mouseX, mouseY)) {
@@ -419,25 +426,25 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
     }
 
     private void confirmRestore(BackupUiBackup backup) {
-        minecraft.setScreen(new ConfirmScreen(first -> {
+        minecraft.setScreenAndShow(new ConfirmScreen(first -> {
             if (!first) {
-                minecraft.setScreen(this);
+                minecraft.setScreenAndShow(this);
                 return;
             }
-            minecraft.setScreen(new ConfirmScreen(second -> {
+            minecraft.setScreenAndShow(new ConfirmScreen(second -> {
                 if (second) {
                     BackupUiClient.restoreBackup(backup.id());
-                    minecraft.setScreen(null);
+                    minecraft.setScreenAndShow(null);
                 } else {
-                    minecraft.setScreen(this);
+                    minecraft.setScreenAndShow(this);
                 }
             }, Component.translatable("screen.justenoughbackups.backups.restore_second_title"), Component.translatable("screen.justenoughbackups.backups.restore_second_message")));
         }, Component.translatable("screen.justenoughbackups.backups.restore_title", backup.displayName()), Component.translatable("screen.justenoughbackups.backups.restore_message")));
     }
 
     private void confirmDelete(BackupUiBackup backup) {
-        minecraft.setScreen(new ConfirmScreen(confirmed -> {
-            minecraft.setScreen(this);
+        minecraft.setScreenAndShow(new ConfirmScreen(confirmed -> {
+            minecraft.setScreenAndShow(this);
             if (confirmed) {
                 BackupUiClient.deleteBackup(backup.id());
             }
@@ -721,11 +728,11 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
                 }
                 if (confirmRect().contains(event.x(), event.y())) {
                     BackupUiClient.createBackup(selected, nameBox.getValue());
-                    minecraft.setScreen(null);
+                    minecraft.setScreenAndShow(null);
                     return true;
                 }
                 if (cancelRect().contains(event.x(), event.y())) {
-                    minecraft.setScreen(parent);
+                    minecraft.setScreenAndShow(parent);
                     return true;
                 }
             }
@@ -791,12 +798,12 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
         public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
             if (event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
                 if (saveRect().contains(event.x(), event.y())) {
-                    minecraft.setScreen(parent);
+                    minecraft.setScreenAndShow(parent);
                     BackupUiClient.renameBackup(backup.id(), nameBox.getValue());
                     return true;
                 }
                 if (cancelRect().contains(event.x(), event.y())) {
-                    minecraft.setScreen(parent);
+                    minecraft.setScreenAndShow(parent);
                     return true;
                 }
             }

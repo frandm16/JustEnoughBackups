@@ -33,13 +33,13 @@ public final class BackupKeyBindings {
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (backupMenu.consumeClick()) {
-                if (client.screen == null) {
+                if (client.canInterruptScreen()) {
                     BackupUiClient.openScreen();
                 }
             }
             while (configMenu.consumeClick()) {
-                if (client.screen == null) {
-                    client.setScreen(JEBConfigScreens.create(null));
+                if (client.canInterruptScreen()) {
+                    client.setScreenAndShow(JEBConfigScreens.create(null));
                 }
             }
         });
