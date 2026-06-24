@@ -15,6 +15,7 @@ final class ConfigFieldSpecs {
             ConfigFieldSpec.intField(ConfigFieldId.KEEP_FULL, 1, Integer.MAX_VALUE),
             ConfigFieldSpec.intField(ConfigFieldId.KEEP_PARTIAL, 0, Integer.MAX_VALUE),
             ConfigFieldSpec.intField(ConfigFieldId.KEEP_DIFFERENTIAL, 0, Integer.MAX_VALUE),
+            ConfigFieldSpec.textField(ConfigFieldId.EXCLUDED_PATHS, 512),
             ConfigFieldSpec.intField(ConfigFieldId.MAX_TOTAL_SIZE_MB, 0, Integer.MAX_VALUE),
             ConfigFieldSpec.intField(ConfigFieldId.MINIMUM_FREE_SPACE_RESERVE_MB, 0, Integer.MAX_VALUE),
             ConfigFieldSpec.intField(ConfigFieldId.PERMISSION_LEVEL, 0, 4),

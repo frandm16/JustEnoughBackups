@@ -6,6 +6,7 @@ import com.frandm.justenoughbackups.config.BackupConfig;
 
 import java.util.EnumMap;
 import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.Map;
 
 final class ConfigScreenState {
@@ -19,6 +20,7 @@ final class ConfigScreenState {
     ConfigPreviewState previewState = ConfigPreviewState.RUNNING;
     ConfigColorTarget selectedColor = ConfigColorTarget.BACKGROUND;
     ConfigFieldId focusedField;
+    Integer focusedExcludedPathIndex;
     int cursor;
 
     ConfigScreenState(BackupConfig working) {
@@ -42,6 +44,7 @@ final class ConfigScreenState {
                 working.integrityMode = defaults.integrityMode;
                 working.includeSummaryFile = defaults.includeSummaryFile;
                 working.backupDirectory = defaults.backupDirectory;
+                working.excludedPaths = new ArrayList<>(defaults.excludedPaths);
                 working.retention.full = defaults.retention.full;
                 working.retention.incremental = defaults.retention.incremental;
                 working.retention.differential = defaults.retention.differential;
@@ -63,6 +66,7 @@ final class ConfigScreenState {
         previewState = ConfigPreviewState.RUNNING;
         selectedColor = ConfigColorTarget.BACKGROUND;
         focusedField = null;
+        focusedExcludedPathIndex = null;
         cursor = 0;
         rawInputs.clear();
         scrollByTab.clear();

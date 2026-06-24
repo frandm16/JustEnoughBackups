@@ -34,6 +34,7 @@ public final class JEBConfigScreen extends Screen {
     private static final int SCROLL_GUTTER = 12;
     private static final int SCROLL_W = 4;
     private static final int MIN_THUMB_H = 18;
+    private static final int LIST_BUTTON_W = 22;
 
     private static final int ROW_COLOR = 0x66181818;
     private static final int ROW_BAD_COLOR = 0x66AA2222;
@@ -379,12 +380,69 @@ public final class JEBConfigScreen extends Screen {
                 minecraft.setScreenAndShow(new PopupPreviewScreen(this, state.working.popup, state.previewPayload()));
                 return true;
             });
+        } else if (fieldId == ConfigFieldId.EXCLUDED_PATHS) {
+            int entryCount = Math.max(1, state.working.excludedPaths.size());
+            int rowHeight = ROW_H + entryCount * (ROW_H + ROW_GAP);
+            addRow(x, y, w, rowHeight, fieldId, (graphics, row, screenY, mouseX, mouseY) -> {
+                Rect add = excludedPathsAddRect(row, screenY);
+                drawButton(graphics, add, Component.translatable("screen.justenoughbackups.config.increment"), true, add.contains(mouseX, mouseY));
+
+                int listY = screenY + ROW_H + ROW_GAP;
+                if (state.working.excludedPaths.isEmpty()) {
+                    graphics.text(
+                            font,
+                            Component.translatable("screen.justenoughbackups.config.excluded_paths.empty"),
+                            row.x + ROW_INSET,
+                            listY + 11,
+                            0xFFAAAAAA,
+                            true
+                    );
+                } else {
+                    for (int i = 0; i < state.working.excludedPaths.size(); i++) {
+                        Rect field = excludedPathFieldRect(row, screenY, i);
+                        Rect remove = excludedPathRemoveRect(row, screenY, i);
+                        drawDynamicField(graphics, field, state.focusedExcludedPathIndex != null && state.focusedExcludedPathIndex == i, state.working.excludedPaths.get(i), mouseX, mouseY);
+                        drawButton(graphics, remove, Component.translatable("screen.justenoughbackups.config.decrement"), true, remove.contains(mouseX, mouseY));
+                    }
+                }
+            }, (row, screenY, mouseX, mouseY) -> {
+                Rect add = excludedPathsAddRect(row, screenY);
+                if (add.contains(mouseX, mouseY)) {
+                    state.working.excludedPaths.add("");
+                    focusExcludedPath(state.working.excludedPaths.size() - 1);
+                    validationErrors = validator.validate(state);
+                    rebuildRows();
+                    return true;
+                }
+
+                for (int i = 0; i < state.working.excludedPaths.size(); i++) {
+                    Rect remove = excludedPathRemoveRect(row, screenY, i);
+                    if (remove.contains(mouseX, mouseY)) {
+                        removeExcludedPath(i);
+                        validationErrors = validator.validate(state);
+                        rebuildRows();
+                        return true;
+                    }
+
+                    Rect field = excludedPathFieldRect(row, screenY, i);
+                    if (field.contains(mouseX, mouseY)) {
+                        focusExcludedPath(i);
+                        return true;
+                    }
+                }
+                return false;
+            });
+            return y + rowHeight + ROW_GAP;
         }
         return y + ROW_H + ROW_GAP;
     }
 
     private void addRow(int x, int y, int w, ConfigFieldId fieldId, RowRenderer renderer, RowClick click) {
         rows.add(new ConfigRow(x, y, w, ROW_H, fieldId, fieldId.tooltipKey(), renderer, click));
+    }
+
+    private void addRow(int x, int y, int w, int h, ConfigFieldId fieldId, RowRenderer renderer, RowClick click) {
+        rows.add(new ConfigRow(x, y, w, h, fieldId, fieldId.tooltipKey(), renderer, click));
     }
 
     @Override
@@ -447,10 +505,21 @@ public final class JEBConfigScreen extends Screen {
 
     private void drawField(GuiGraphicsExtractor graphics, Rect rect, ConfigFieldId fieldId, String text, int mouseX, int mouseY) {
         boolean focused = fieldId == state.focusedField;
+        drawField(graphics, rect, focused, text, mouseX, mouseY);
+    }
+
+    private void drawDynamicField(GuiGraphicsExtractor graphics, Rect rect, boolean focused, String text, int mouseX, int mouseY) {
+        drawField(graphics, rect, focused, text.isBlank() && !focused
+                ? Component.translatable("screen.justenoughbackups.config.excluded_paths.hint").getString()
+                : text, mouseX, mouseY);
+    }
+
+    private void drawField(GuiGraphicsExtractor graphics, Rect rect, boolean focused, String text, int mouseX, int mouseY) {
         graphics.fill(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h, focused ? 0xFF202020 : 0xFF151515);
         graphics.outline(rect.x, rect.y, rect.w, rect.h, focused ? 0xFFFFFFFF : rect.contains(mouseX, mouseY) ? 0xFF888888 : 0xFF555555);
         String visible = trimToWidth(text, Math.max(8, rect.w - 8));
-        graphics.text(font, visible, rect.x + 4, rect.y + 6, 0xFFE0E0E0, true);
+        int color = focused || !text.equals(Component.translatable("screen.justenoughbackups.config.excluded_paths.hint").getString()) ? 0xFFE0E0E0 : 0xFF888888;
+        graphics.text(font, visible, rect.x + 4, rect.y + 6, color, true);
         if (focused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
             int caretX = rect.x + 4 + font.width(text.substring(0, Math.min(state.cursor, text.length())));
             graphics.fill(Math.min(caretX, rect.x + rect.w - 3), rect.y + 4, Math.min(caretX + 1, rect.x + rect.w - 2), rect.y + rect.h - 4, 0xFFFFFFFF);
@@ -474,6 +543,7 @@ public final class JEBConfigScreen extends Screen {
         double mouseX = event.x();
         double mouseY = event.y();
         state.focusedField = null;
+        state.focusedExcludedPathIndex = null;
         if (handleTabClick(mouseX, mouseY) || handleFooterClick(mouseX, mouseY) || handleScrollbarClick(mouseX, mouseY)) {
             return true;
         }
@@ -580,6 +650,47 @@ public final class JEBConfigScreen extends Screen {
             onClose();
             return true;
         }
+        if (state.focusedExcludedPathIndex != null) {
+            String text = excludedPathValue(state.focusedExcludedPathIndex);
+            switch (event.key()) {
+                case GLFW.GLFW_KEY_BACKSPACE -> {
+                    if (state.cursor > 0 && !text.isEmpty()) {
+                        updateExcludedPath(state.focusedExcludedPathIndex, text.substring(0, state.cursor - 1) + text.substring(state.cursor));
+                        state.cursor--;
+                    }
+                    return true;
+                }
+                case GLFW.GLFW_KEY_DELETE -> {
+                    if (state.cursor < text.length()) {
+                        updateExcludedPath(state.focusedExcludedPathIndex, text.substring(0, state.cursor) + text.substring(state.cursor + 1));
+                    }
+                    return true;
+                }
+                case GLFW.GLFW_KEY_LEFT -> {
+                    state.cursor = Math.max(0, state.cursor - 1);
+                    return true;
+                }
+                case GLFW.GLFW_KEY_RIGHT -> {
+                    state.cursor = Math.min(text.length(), state.cursor + 1);
+                    return true;
+                }
+                case GLFW.GLFW_KEY_HOME -> {
+                    state.cursor = 0;
+                    return true;
+                }
+                case GLFW.GLFW_KEY_END -> {
+                    state.cursor = text.length();
+                    return true;
+                }
+                case GLFW.GLFW_KEY_ENTER -> {
+                    state.focusedExcludedPathIndex = null;
+                    return true;
+                }
+                default -> {
+                    return true;
+                }
+            }
+        }
         if (state.focusedField == null) {
             return super.keyPressed(event);
         }
@@ -628,7 +739,20 @@ public final class JEBConfigScreen extends Screen {
 
     @Override
     public boolean charTyped(CharacterEvent event) {
-        if (state.focusedField == null || !event.isAllowedChatCharacter()) {
+        if (!event.isAllowedChatCharacter()) {
+            return false;
+        }
+        if (state.focusedExcludedPathIndex != null) {
+            String text = excludedPathValue(state.focusedExcludedPathIndex);
+            String inserted = event.codepointAsString();
+            if (text.length() + inserted.length() > maxLengthFor(ConfigFieldId.EXCLUDED_PATHS)) {
+                return true;
+            }
+            updateExcludedPath(state.focusedExcludedPathIndex, text.substring(0, state.cursor) + inserted + text.substring(state.cursor));
+            state.cursor += inserted.length();
+            return true;
+        }
+        if (state.focusedField == null) {
             return false;
         }
         String text = state.rawInputs.getOrDefault(state.focusedField, "");
@@ -696,6 +820,7 @@ public final class JEBConfigScreen extends Screen {
     private void clearInputsForTab(ConfigTab tab) {
         state.rawInputs.keySet().removeIf(fieldId -> fieldId.tab() == tab);
         state.focusedField = null;
+        state.focusedExcludedPathIndex = null;
     }
 
     private boolean isInvalid(ConfigFieldId fieldId) {
@@ -870,8 +995,67 @@ public final class JEBConfigScreen extends Screen {
 
     private void focusField(ConfigFieldId id, String value) {
         state.focusedField = id;
+        state.focusedExcludedPathIndex = null;
         state.rawInputs.putIfAbsent(id, value);
         state.cursor = state.rawInputs.get(id).length();
+    }
+
+    private void focusExcludedPath(int index) {
+        state.focusedField = null;
+        state.focusedExcludedPathIndex = index;
+        state.cursor = excludedPathValue(index).length();
+    }
+
+    private String excludedPathValue(int index) {
+        if (index < 0 || index >= state.working.excludedPaths.size()) {
+            return "";
+        }
+        return value(state.working.excludedPaths.get(index));
+    }
+
+    private void updateExcludedPath(int index, String value) {
+        if (index < 0 || index >= state.working.excludedPaths.size()) {
+            return;
+        }
+        state.working.excludedPaths.set(index, value);
+        validationErrors = validator.validate(state);
+    }
+
+    private void removeExcludedPath(int index) {
+        if (index < 0 || index >= state.working.excludedPaths.size()) {
+            return;
+        }
+        state.working.excludedPaths.remove(index);
+        if (state.focusedExcludedPathIndex == null) {
+            return;
+        }
+        if (state.focusedExcludedPathIndex == index) {
+            state.focusedExcludedPathIndex = null;
+            state.cursor = 0;
+        } else if (state.focusedExcludedPathIndex > index) {
+            state.focusedExcludedPathIndex--;
+        }
+    }
+
+    private Rect excludedPathsAddRect(ConfigRow row, int screenY) {
+        Rect control = controlRect(row, screenY, Math.min(controlsWidthForRow(row), 48));
+        return new Rect(control.x + control.w - LIST_BUTTON_W, control.y, LIST_BUTTON_W, CONTROL_H);
+    }
+
+    private Rect excludedPathFieldRect(ConfigRow row, int screenY, int index) {
+        int y = screenY + ROW_H + ROW_GAP + index * (ROW_H + ROW_GAP) + 6;
+        int x = row.x + ROW_INSET;
+        int w = row.w - ROW_INSET * 2 - LIST_BUTTON_W - 6;
+        return new Rect(x, y, w, CONTROL_H);
+    }
+
+    private Rect excludedPathRemoveRect(ConfigRow row, int screenY, int index) {
+        Rect field = excludedPathFieldRect(row, screenY, index);
+        return new Rect(field.x + field.w + 6, field.y, LIST_BUTTON_W, CONTROL_H);
+    }
+
+    private int controlsWidthForRow(ConfigRow row) {
+        return Math.min(row.w, Math.clamp(row.w / 2, 80, 240));
     }
 
     private Component toggleMessage(boolean enabled) {
