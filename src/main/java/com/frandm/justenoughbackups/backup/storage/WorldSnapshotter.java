@@ -3,6 +3,7 @@ package com.frandm.justenoughbackups.backup.storage;
 import com.frandm.justenoughbackups.WorldBackupMod;
 import com.frandm.justenoughbackups.backup.model.BackupManifest;
 import com.frandm.justenoughbackups.backup.BackupConstants;
+import com.frandm.justenoughbackups.config.BackupConfig;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -88,6 +89,11 @@ public final class WorldSnapshotter {
     }
 
     private static boolean shouldSkip(Path relativePath) {
+        for(String path : BackupConfig.get().excludedPaths){
+            if(path.equalsIgnoreCase(relativePath.toString())){
+                return true;
+            }
+        }
         for (Path part : relativePath) {
             if ("backups".equalsIgnoreCase(part.toString())) {
                 return true;
