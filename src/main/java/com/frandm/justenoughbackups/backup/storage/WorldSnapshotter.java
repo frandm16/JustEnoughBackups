@@ -89,8 +89,10 @@ public final class WorldSnapshotter {
     }
 
     private static boolean shouldSkip(Path relativePath) {
+        String normalizedRelative = normalizeRelativePath(relativePath);
+
         for(String path : BackupConfig.get().excludedPaths){
-            if(path.equalsIgnoreCase(relativePath.toString())){
+            if(normalizedRelative.equals(path) || normalizedRelative.startsWith(path + "/")){
                 return true;
             }
         }
@@ -110,19 +112,8 @@ public final class WorldSnapshotter {
                 || BackupConstants.SUMMARY_ENTRY.equals(fileName);
     }
 
-    private static String normalizeExcludedPath(String value) {
-        if (value == null) {
-            return "";
-        }
-
-        String normalized = value.trim().replace('\\', '/');
-        while (normalized.startsWith("/")) {
-            normalized = normalized.substring(1);
-        }
-        while (normalized.endsWith("/")) {
-            normalized = normalized.substring(0, normalized.length() - 1);
-        }
-        return normalized;
+    private static String normalizeRelativePath(Path path) {
+        return path.toString().replace('\\', '/');
     }
 
     private static BackupManifest.FileState readFileState(Path file, BasicFileAttributes attrs) throws IOException {
