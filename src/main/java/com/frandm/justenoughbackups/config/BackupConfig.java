@@ -99,7 +99,7 @@ public final class BackupConfig {
         copy.backupDirectory = backupDirectory;
         copy.retention = retention.copy();
         copy.popup = popup.copy();
-        copy.excludedPaths = excludedPaths;
+        copy.excludedPaths = new ArrayList<>(excludedPaths);
         return copy;
     }
 
