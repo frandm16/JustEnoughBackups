@@ -90,6 +90,7 @@ The config screen exposes:
 - permission level
 - integrity mode
 - backup directory
+- excluded paths
 - popup text, colors, channels, and layout
 
 The popup preview screen lets you move and preview the HUD state before saving.
@@ -160,6 +161,7 @@ Main config areas:
 - `integrityMode`
 - `minimumFreeSpaceReserveMb`
 - `backupDirectory`
+- `excludedPaths`
 - `retention`
   - `full`
   - `incremental`
@@ -168,6 +170,15 @@ Main config areas:
 - `popup`
 
 `backupDirectory` may be relative to the game directory or an absolute path.
+
+`excludedPaths` uses paths relative to the world root. A folder entry excludes that full subtree, while a file entry excludes only that specific file.
+
+Examples:
+
+```text
+voxy
+voxy/cache.db
+```
 
 Before creating a backup, the mod also checks free disk space on the backup destination filesystem. The check is conservative and requires:
 
