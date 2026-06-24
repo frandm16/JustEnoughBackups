@@ -15,6 +15,8 @@ import java.io.Reader;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 
 public final class BackupConfig {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -36,6 +38,7 @@ public final class BackupConfig {
     public Retention retention = new Retention();
     public Popup popup = new Popup();
     public String backupDirectory = BackupConstants.DEFAULT_BACKUP_DIRECTORY;
+    public List<String> excludedPaths = new ArrayList<>();
 
     public static BackupConfig get() {
         BackupConfig config = current;
@@ -96,6 +99,7 @@ public final class BackupConfig {
         copy.backupDirectory = backupDirectory;
         copy.retention = retention.copy();
         copy.popup = popup.copy();
+        copy.excludedPaths = excludedPaths;
         return copy;
     }
 
@@ -153,6 +157,10 @@ public final class BackupConfig {
             popup = new Popup();
         }
         popup.normalize();
+
+        if(excludedPaths == null) {
+            excludedPaths = new ArrayList<>();
+        }
     }
 
     public static final class Retention {
