@@ -158,9 +158,30 @@ public final class BackupConfig {
         }
         popup.normalize();
 
-        if(excludedPaths == null) {
+        if (excludedPaths == null) {
             excludedPaths = new ArrayList<>();
+        } else {
+            excludedPaths = excludedPaths.stream()
+                    .map(BackupConfig::normalizeExcludedPath)
+                    .filter(path -> !path.isBlank())
+                    .distinct()
+                    .toList();
         }
+    }
+
+    private static String normalizeExcludedPath(String value) {
+        if (value == null) {
+            return "";
+        }
+
+        String normalized = value.trim().replace('\\', '/');
+        while (normalized.startsWith("/")) {
+            normalized = normalized.substring(1);
+        }
+        while (normalized.endsWith("/")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        return normalized;
     }
 
     public static final class Retention {
