@@ -17,6 +17,7 @@ import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -28,16 +29,16 @@ public final class WorldSnapshotter {
     }
 
     public static Map<String, BackupManifest.FileState> snapshot(Path worldPath) throws IOException {
-        return snapshot(worldPath, WorldSnapshotter::readFileState);
+        return snapshot(worldPath, WorldSnapshotter::readFileState, BackupConfig.get().excludedPaths);
     }
 
-    static Map<String, BackupManifest.FileState> snapshot(Path worldPath, SnapshotReader reader) throws IOException {
+    static Map<String, BackupManifest.FileState> snapshot(Path worldPath, SnapshotReader reader, List<String> excludedPaths) throws IOException {
         Map<String, BackupManifest.FileState> snapshot = new LinkedHashMap<>();
 
         Files.walkFileTree(worldPath, new SimpleFileVisitor<>() {
             @Override
             public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
-                if (shouldSkip(worldPath.relativize(dir))) {
+                if (shouldSkip(worldPath.relativize(dir), excludedPaths)) {
                     return FileVisitResult.SKIP_SUBTREE;
                 }
 
@@ -47,7 +48,7 @@ public final class WorldSnapshotter {
             @Override
             public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
                 Path relative = worldPath.relativize(file);
-                if (shouldSkip(relative)) {
+                if (shouldSkip(relative, excludedPaths)) {
                     return FileVisitResult.CONTINUE;
                 }
 
@@ -88,11 +89,12 @@ public final class WorldSnapshotter {
         return snapshot;
     }
 
-    private static boolean shouldSkip(Path relativePath) {
-        String normalizedRelative = normalizeRelativePath(relativePath);
+    private static boolean shouldSkip(Path relativePath, List<String> excludedPaths) {
+        String normalizedRelative = normalizeRelativePath(relativePath).toLowerCase(Locale.ROOT);
 
-        for(String path : BackupConfig.get().excludedPaths){
-            if(normalizedRelative.equals(path) || normalizedRelative.startsWith(path + "/")){
+        for(String path : excludedPaths){
+            String normalizedExcludedPath = path.toLowerCase(Locale.ROOT);
+            if(normalizedRelative.equals(normalizedExcludedPath) || normalizedRelative.startsWith(normalizedExcludedPath + "/")){
                 return true;
             }
         }
