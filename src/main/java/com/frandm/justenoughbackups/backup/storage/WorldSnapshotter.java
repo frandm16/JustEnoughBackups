@@ -110,6 +110,21 @@ public final class WorldSnapshotter {
                 || BackupConstants.SUMMARY_ENTRY.equals(fileName);
     }
 
+    private static String normalizeExcludedPath(String value) {
+        if (value == null) {
+            return "";
+        }
+
+        String normalized = value.trim().replace('\\', '/');
+        while (normalized.startsWith("/")) {
+            normalized = normalized.substring(1);
+        }
+        while (normalized.endsWith("/")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        return normalized;
+    }
+
     private static BackupManifest.FileState readFileState(Path file, BasicFileAttributes attrs) throws IOException {
         return new BackupManifest.FileState(
                 attrs.size(),
