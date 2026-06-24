@@ -3,6 +3,7 @@ package com.frandm.justenoughbackups.backup.storage;
 import com.frandm.justenoughbackups.WorldBackupMod;
 import com.frandm.justenoughbackups.backup.model.BackupManifest;
 import com.frandm.justenoughbackups.backup.BackupConstants;
+import com.frandm.justenoughbackups.config.BackupConfig;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -88,6 +89,13 @@ public final class WorldSnapshotter {
     }
 
     private static boolean shouldSkip(Path relativePath) {
+        String normalizedRelative = normalizeRelativePath(relativePath);
+
+        for(String path : BackupConfig.get().excludedPaths){
+            if(normalizedRelative.equals(path) || normalizedRelative.startsWith(path + "/")){
+                return true;
+            }
+        }
         for (Path part : relativePath) {
             if ("backups".equalsIgnoreCase(part.toString())) {
                 return true;
@@ -102,6 +110,10 @@ public final class WorldSnapshotter {
                 || TRANSIENT_LEVEL_FILE.matcher(fileName).matches()
                 || fileName.endsWith(".lock")
                 || BackupConstants.SUMMARY_ENTRY.equals(fileName);
+    }
+
+    private static String normalizeRelativePath(Path path) {
+        return path.toString().replace('\\', '/');
     }
 
     private static BackupManifest.FileState readFileState(Path file, BasicFileAttributes attrs) throws IOException {
