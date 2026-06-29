@@ -1,10 +1,19 @@
-[![](https://img.shields.io/curseforge/dt/1539945?label=downloads&style=for-the-badge&logo=curseforge&color=2D2D2D)](https://www.curseforge.com/minecraft/mc-mods/just-enough-backups) [![](https://img.shields.io/modrinth/dt/ctV8T1ZK?label=downloads&style=for-the-badge&logo=modrinth&color=2D2D2D)](https://modrinth.com/mod/justenoughbackups-jeb)
-
-
 <p style="text-align: center;">
   <img src="assets/banner.png" alt="Just Enough Backups">
 </p>
+<p style="text-align: center;">
+  <a href="https://www.curseforge.com/minecraft/mc-mods/just-enough-backups">
+    <img
+      src="https://img.shields.io/curseforge/dt/1539945?label=downloads&style=for-the-badge&logo=curseforge&color=2D2D2D"
+      alt="CurseForge downloads">
+  </a>
 
+  <a href="https://modrinth.com/mod/justenoughbackups-jeb">
+    <img
+      src="https://img.shields.io/modrinth/dt/ctV8T1ZK?label=downloads&style=for-the-badge&logo=modrinth&color=2D2D2D"
+      alt="Modrinth downloads">
+  </a>
+</p>
 Just Enough Backups is a Fabric mod that adds server-side world backups with a usable in-game workflow.
 
 It supports:
