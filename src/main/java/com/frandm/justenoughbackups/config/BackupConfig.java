@@ -27,7 +27,8 @@ public final class BackupConfig {
     public boolean pauseAutomaticBackupsWithoutPlayers = true;
     public boolean backupOnServerStart = false;
     public boolean backupOnServerStop = false;
-    public int automaticIntervalMinutes = 60;
+    public int automaticIntervalMinutes = 60; // not in use anymore
+    public AutomaticSchedule automaticSchedule = new AutomaticSchedule();
     public boolean automaticBackupWarningEnabled = true;
     public int automaticBackupWarningMinutes = 5;
     public int commandPermissionLevel = 2;
@@ -135,6 +136,22 @@ public final class BackupConfig {
         if (automaticIntervalMinutes < 1) {
             automaticIntervalMinutes = defaults().automaticIntervalMinutes;
         }
+        if (automaticSchedule == null) {
+            automaticSchedule = new AutomaticSchedule();
+
+            automaticSchedule.full.enabled = false;
+            automaticSchedule.differential.enabled = false;
+            automaticSchedule.partial.enabled = false;
+
+            ScheduledBackup legacy = automaticSchedule.forType(backupMode);
+            legacy.enabled = true;
+            legacy.intervalMinutes = Math.max(1, automaticIntervalMinutes);
+        }
+
+        automaticSchedule.full.normalize();
+        automaticSchedule.differential.normalize();
+        automaticSchedule.partial.normalize();
+
         if (automaticBackupWarningMinutes < 1) {
             automaticBackupWarningMinutes = defaults().automaticBackupWarningMinutes;
         }

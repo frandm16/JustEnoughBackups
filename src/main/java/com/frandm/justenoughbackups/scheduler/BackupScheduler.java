@@ -4,17 +4,27 @@ import com.frandm.justenoughbackups.WorldBackupMod;
 import com.frandm.justenoughbackups.backup.BackupMessages;
 import com.frandm.justenoughbackups.backup.model.BackupManifest;
 import com.frandm.justenoughbackups.backup.BackupService;
+import com.frandm.justenoughbackups.backup.model.BackupType;
 import com.frandm.justenoughbackups.config.BackupConfig;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.server.MinecraftServer;
 
+import java.util.EnumMap;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 
 public final class BackupScheduler {
     private static long ticksUntilNextCheck = 20L;
-    private static long lastBackupMillis = 0L;
+    private static final EnumMap<BackupType, Long> lastBackupMillis =
+            new EnumMap<>(BackupType.class);
+
+    private static final List<BackupType> SCHEDULE_PRIORITY = List.of(
+            BackupType.FULL,
+            BackupType.DIFFERENTIAL,
+            BackupType.PARTIAL
+    );
     private static boolean playersSeenSinceLastBackup = false;
     private static boolean automaticWarningSent = false;
 
@@ -56,9 +66,9 @@ public final class BackupScheduler {
             }
 
             long now = System.currentTimeMillis();
-            long intervalMillis = config.automaticIntervalMinutes * 60_000L;
-            if (lastBackupMillis != 0L && now - lastBackupMillis < intervalMillis) {
-                maybeBroadcastAutomaticBackupWarning(server, intervalMillis - (now - lastBackupMillis));
+            BackupType dueType = dueBackupType(config, now);
+            if (dueType == null) {
+                maybeBroadcastAutomaticBackupWarning(server, config, now);
                 return;
             }
 
@@ -66,14 +76,14 @@ public final class BackupScheduler {
                 return;
             }
 
-            lastBackupMillis = now;
+            lastBackupMillis.put(dueType, now);
             resetWarnings();
             if (config.pauseAutomaticBackupsWithoutPlayers && !playersSeenSinceLastBackup) {
                 return;
             }
 
             playersSeenSinceLastBackup = false;
-            BackupService.createBackup(server, config.backupMode, "automatic")
+            BackupService.createBackup(server, dueType, "automatic")
                     .whenComplete((manifest, exception) -> {
                         if (exception != null) {
                             WorldBackupMod.LOGGER.error("Automatic backup failed.", exception);
@@ -84,7 +94,7 @@ public final class BackupScheduler {
     }
 
     private static void runLifecycleBackup(MinecraftServer server, BackupConfig config, String reason, boolean waitForCompletion) {
-        lastBackupMillis = System.currentTimeMillis();
+        lastBackupMillis.put(config.backupMode, System.currentTimeMillis());
 
         CompletableFuture<BackupManifest> backup = BackupService.createBackup(server, config.backupMode, reason)
                 .whenComplete((manifest, exception) -> {
@@ -108,7 +118,10 @@ public final class BackupScheduler {
     }
 
     public static void resetTimer() {
-        lastBackupMillis = System.currentTimeMillis();
+        long now = System.currentTimeMillis();
+        for (BackupType type : BackupType.values()) {
+            lastBackupMillis.put(type, now);
+        }
         playersSeenSinceLastBackup = false;
         resetWarnings();
     }
@@ -119,20 +132,64 @@ public final class BackupScheduler {
             return NextBackupStatus.disabled();
         }
 
-        if (lastBackupMillis == 0L) {
+        long remainingMillis = nextRemainingMillis(config, System.currentTimeMillis());
+        if (remainingMillis == Long.MAX_VALUE) {
+            return NextBackupStatus.disabled();
+        }
+
+        if (remainingMillis == 0L) {
             return NextBackupStatus.readyNow();
         }
 
-        long intervalMillis = config.automaticIntervalMinutes * 60_000L;
-        long remainingMillis = Math.max(0L, intervalMillis - (System.currentTimeMillis() - lastBackupMillis));
-        return remainingMillis == 0L
-                ? NextBackupStatus.readyNow()
-                : NextBackupStatus.waiting(remainingMillis);
+        return NextBackupStatus.waiting(remainingMillis);
     }
 
-    private static void maybeBroadcastAutomaticBackupWarning(MinecraftServer server, long remainingMillis) {
-        BackupConfig config = BackupConfig.get();
+    private static BackupType dueBackupType(BackupConfig config, long now) {
+        for (BackupType type : SCHEDULE_PRIORITY) {
+            BackupConfig.ScheduledBackup schedule = config.automaticSchedule.forType(type);
+            if (!schedule.enabled) {
+                continue;
+            }
+
+            if (remainingMillis(type, schedule, now) == 0L) {
+                return type;
+            }
+        }
+
+        return null;
+    }
+
+    private static long nextRemainingMillis(BackupConfig config, long now) {
+        long nextRemainingMillis = Long.MAX_VALUE;
+        for (BackupType type : SCHEDULE_PRIORITY) {
+            BackupConfig.ScheduledBackup schedule = config.automaticSchedule.forType(type);
+            if (!schedule.enabled) {
+                continue;
+            }
+
+            nextRemainingMillis = Math.min(nextRemainingMillis, remainingMillis(type, schedule, now));
+        }
+
+        return nextRemainingMillis;
+    }
+
+    private static long remainingMillis(BackupType type, BackupConfig.ScheduledBackup schedule, long now) {
+        long last = lastBackupMillis.getOrDefault(type, 0L);
+        if (last == 0L) {
+            return 0L;
+        }
+
+        long intervalMillis = schedule.intervalMinutes * 60_000L;
+        return Math.max(0L, intervalMillis - (now - last));
+    }
+
+    private static void maybeBroadcastAutomaticBackupWarning(MinecraftServer server, BackupConfig config, long now) {
         if (!config.automaticBackupWarningEnabled || automaticWarningSent) {
+            return;
+        }
+
+        long remainingMillis = nextRemainingMillis(config, now);
+        if (remainingMillis == Long.MAX_VALUE) {
             return;
         }
 
