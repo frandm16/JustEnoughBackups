@@ -184,6 +184,34 @@ public final class BackupConfig {
         return normalized;
     }
 
+    public static final class AutomaticSchedule {
+        public ScheduledBackup full = new ScheduledBackup(true, 60);
+        public ScheduledBackup differential = new ScheduledBackup(false, 60);
+        public ScheduledBackup partial = new ScheduledBackup(false, 60);
+
+        public ScheduledBackup forType(BackupType type) {
+            return switch (type) {
+                case FULL -> full;
+                case DIFFERENTIAL -> differential;
+                case PARTIAL -> partial;
+            };
+        }
+    }
+
+    public static final class ScheduledBackup {
+        public boolean enabled;
+        public int intervalMinutes;
+
+        public ScheduledBackup(boolean enabled, int intervalMinutes) {
+            this.enabled = enabled;
+            this.intervalMinutes = intervalMinutes;
+        }
+
+        private void normalize() {
+            intervalMinutes = Math.max(1, intervalMinutes);
+        }
+    }
+
     public static final class Retention {
         public int full = 5;
         public int incremental = 20;
