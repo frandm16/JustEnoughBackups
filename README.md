@@ -48,10 +48,10 @@ Dependencies between backups are tracked. Retention and delete operations respec
 
 ### Automatic backups
 
-Automatic backups are driven by the scheduler and can be configured to:
+Automatic backups are driven by per-type schedulers (`FULL`, `DIFFERENTIAL`, `PARTIAL`) and can be configured to:
 
-- run every `X` minutes (60 by default)
-- send one optional public warning before an automatic backup starts
+- run independently based on configured intervals for each backup type
+- send optional public warning before an automatic backup starts
 - pause when no players have been online since the last backup
 - run on server start
 - run on server stop
@@ -133,6 +133,7 @@ Notes:
 - `<name>` is optional and becomes the real `.zip` file name after sanitization.
 - `<backup>` is the visible backup name, with or without the `.zip` suffix. Tab completion suggests the visible name.
 - restore is prepared asynchronously and then the server shuts down so the restore can be applied safely on the next startup.
+- `/jeb next` displays a multi-schedule summary showing remaining times and exact execution timestamps for all configured backup types, sorted by proximity.
 - command access follows the configured permission level.
 
 ## Default keybindings
