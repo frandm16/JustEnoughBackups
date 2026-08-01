@@ -12,6 +12,9 @@ final class ConfigValidator {
         List<ValidationError> errors = new ArrayList<>();
         validateInt(errors, ConfigFieldId.INTERVAL_MINUTES, state.working.automaticIntervalMinutes, 1, Integer.MAX_VALUE, "screen.justenoughbackups.config.error.interval_min");
         validateInt(errors, ConfigFieldId.AUTOMATIC_BACKUP_WARNING_MINUTES, state.working.automaticBackupWarningMinutes, 1, Integer.MAX_VALUE, "screen.justenoughbackups.config.error.warning_minutes_min");
+        validateInt(errors, ConfigFieldId.AUTOMATIC_FULL_INTERVAL_MINUTES, state.working.automaticSchedule.full.intervalMinutes, 1, Integer.MAX_VALUE, "screen.justenoughbackups.config.error.interval_min");
+        validateInt(errors, ConfigFieldId.AUTOMATIC_DIFFERENTIAL_INTERVAL_MINUTES, state.working.automaticSchedule.differential.intervalMinutes, 1, Integer.MAX_VALUE, "screen.justenoughbackups.config.error.interval_min");
+        validateInt(errors, ConfigFieldId.AUTOMATIC_PARTIAL_INTERVAL_MINUTES, state.working.automaticSchedule.partial.intervalMinutes, 1, Integer.MAX_VALUE, "screen.justenoughbackups.config.error.interval_min");
         validateInt(errors, ConfigFieldId.PERMISSION_LEVEL, state.working.commandPermissionLevel, 0, 4, "screen.justenoughbackups.config.error.permission_range");
         validateInt(errors, ConfigFieldId.KEEP_FULL, state.working.retention.full, 1, Integer.MAX_VALUE, "screen.justenoughbackups.config.error.full_min");
         validateInt(errors, ConfigFieldId.KEEP_PARTIAL, state.working.retention.incremental, 0, Integer.MAX_VALUE, "screen.justenoughbackups.config.error.partial_min");
@@ -21,6 +24,9 @@ final class ConfigValidator {
 
         validateRawInt(errors, state, ConfigFieldId.INTERVAL_MINUTES, 1, Integer.MAX_VALUE);
         validateRawInt(errors, state, ConfigFieldId.AUTOMATIC_BACKUP_WARNING_MINUTES, 1, Integer.MAX_VALUE);
+        validateRawInt(errors, state, ConfigFieldId.AUTOMATIC_FULL_INTERVAL_MINUTES, 1, Integer.MAX_VALUE);
+        validateRawInt(errors, state, ConfigFieldId.AUTOMATIC_DIFFERENTIAL_INTERVAL_MINUTES, 1, Integer.MAX_VALUE);
+        validateRawInt(errors, state, ConfigFieldId.AUTOMATIC_PARTIAL_INTERVAL_MINUTES, 1, Integer.MAX_VALUE);
         validateRawInt(errors, state, ConfigFieldId.PERMISSION_LEVEL, 0, 4);
         validateRawInt(errors, state, ConfigFieldId.KEEP_FULL, 1, Integer.MAX_VALUE);
         validateRawInt(errors, state, ConfigFieldId.KEEP_PARTIAL, 0, Integer.MAX_VALUE);

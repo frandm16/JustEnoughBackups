@@ -50,6 +50,12 @@ final class ConfigScreenState {
                 working.retention.differential = defaults.retention.differential;
                 working.retention.maxTotalSizeMb = defaults.retention.maxTotalSizeMb;
                 working.minimumFreeSpaceReserveMb = defaults.minimumFreeSpaceReserveMb;
+                working.automaticSchedule.full.enabled = defaults.automaticSchedule.full.enabled;
+                working.automaticSchedule.full.intervalMinutes = defaults.automaticSchedule.full.intervalMinutes;
+                working.automaticSchedule.differential.enabled = defaults.automaticSchedule.differential.enabled;
+                working.automaticSchedule.differential.intervalMinutes = defaults.automaticSchedule.differential.intervalMinutes;
+                working.automaticSchedule.partial.enabled = defaults.automaticSchedule.partial.enabled;
+                working.automaticSchedule.partial.intervalMinutes = defaults.automaticSchedule.partial.intervalMinutes;
             }
             case HUD -> {
                 working.popup = defaults.popup.copy();
