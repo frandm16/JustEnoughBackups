@@ -23,12 +23,12 @@ public final class BackupConfig {
     private static volatile BackupConfig current;
 
     public BackupType backupMode = BackupType.FULL;
-    public boolean automaticBackupsEnabled = true;
     public boolean pauseAutomaticBackupsWithoutPlayers = true;
     public boolean backupOnServerStart = false;
     public boolean backupOnServerStop = false;
+    public boolean automaticBackupsEnabled = true; // not in use anymore
     public int automaticIntervalMinutes = 60; // not in use anymore
-    public AutomaticSchedule automaticSchedule = new AutomaticSchedule();
+    public AutomaticSchedule automaticSchedule;
     public boolean automaticBackupWarningEnabled = true;
     public int automaticBackupWarningMinutes = 5;
     public int commandPermissionLevel = 2;
@@ -50,7 +50,9 @@ public final class BackupConfig {
     }
 
     public static BackupConfig defaults() {
-        return new BackupConfig();
+        BackupConfig config = new BackupConfig();
+        config.normalize();
+        return config;
     }
 
     public static BackupConfig reload() {
@@ -85,7 +87,6 @@ public final class BackupConfig {
     public BackupConfig copy() {
         BackupConfig copy = new BackupConfig();
         copy.backupMode = backupMode;
-        copy.automaticBackupsEnabled = automaticBackupsEnabled;
         copy.pauseAutomaticBackupsWithoutPlayers = pauseAutomaticBackupsWithoutPlayers;
         copy.backupOnServerStart = backupOnServerStart;
         copy.backupOnServerStop = backupOnServerStop;
@@ -134,24 +135,22 @@ public final class BackupConfig {
         if (backupMode == null) {
             backupMode = BackupType.FULL;
         }
-        if (automaticIntervalMinutes < 1) {
-            automaticIntervalMinutes = defaults().automaticIntervalMinutes;
-        }
+
         if (automaticSchedule == null) {
             automaticSchedule = new AutomaticSchedule();
 
-            automaticSchedule.full.enabled = false;
-            automaticSchedule.differential.enabled = false;
-            automaticSchedule.partial.enabled = false;
+            automaticSchedule.full = new ScheduledBackup(false, 240);
+            automaticSchedule.differential = new ScheduledBackup(false, 120);
+            automaticSchedule.partial = new ScheduledBackup(false, 60);
+
+            int legacyInterval = Math.max(1, automaticIntervalMinutes);
 
             ScheduledBackup legacy = automaticSchedule.forType(backupMode);
-            legacy.enabled = true;
-            legacy.intervalMinutes = Math.max(1, automaticIntervalMinutes);
+            legacy.enabled = automaticBackupsEnabled;
+            legacy.intervalMinutes = legacyInterval;
+        } else {
+            automaticSchedule.normalize();
         }
-
-        automaticSchedule.full.normalize();
-        automaticSchedule.differential.normalize();
-        automaticSchedule.partial.normalize();
 
         if (automaticBackupWarningMinutes < 1) {
             automaticBackupWarningMinutes = defaults().automaticBackupWarningMinutes;
@@ -203,8 +202,8 @@ public final class BackupConfig {
     }
 
     public static final class AutomaticSchedule {
-        public ScheduledBackup full = new ScheduledBackup(true, 60);
-        public ScheduledBackup differential = new ScheduledBackup(false, 60);
+        public ScheduledBackup full = new ScheduledBackup(true, 240);
+        public ScheduledBackup differential = new ScheduledBackup(false, 120);
         public ScheduledBackup partial = new ScheduledBackup(false, 60);
 
         public ScheduledBackup forType(BackupType type) {
@@ -221,6 +220,16 @@ public final class BackupConfig {
             copy.differential = differential.copy();
             copy.partial = partial.copy();
             return copy;
+        }
+
+        public void normalize() {
+            if (full == null) full = new ScheduledBackup(true, 240);
+            if (differential == null) differential = new ScheduledBackup(false, 120);
+            if (partial == null) partial = new ScheduledBackup(false, 60);
+
+            full.normalize();
+            differential.normalize();
+            partial.normalize();
         }
     }
 
@@ -266,6 +275,16 @@ public final class BackupConfig {
     }
 
     public static final class Popup {
+        private static final String DEFAULT_BG = "0xAA101010";
+        private static final String DEFAULT_RUNNING = "0xFF55FFFF";
+        private static final String DEFAULT_COMPLETED = "0xFF55FF55";
+        private static final String DEFAULT_FAILED = "0xFFFF5555";
+        private static final String DEFAULT_TEXT = "0xFFE0E0E0";
+        private static final String DEFAULT_TITLE = "Just Enough Backups";
+        private static final String DEFAULT_RUNNING_TEXT = "Running {reason} {type}";
+        private static final String DEFAULT_COMPLETED_TEXT = "Completed {reason} {type}";
+        private static final String DEFAULT_FAILED_TEXT = "Unable to Backup";
+
         public boolean enabled = true;
         public boolean showTitle = true;
         public boolean centerText = true;
@@ -274,34 +293,34 @@ public final class BackupConfig {
         public int y = 8;
         public double xRatio = -1.0D;
         public double yRatio = -1.0D;
-        public String backgroundColor = "0xAA101010";
-        public String runningColor = "0xFF55FFFF";
-        public String completedColor = "0xFF55FF55";
-        public String failedColor = "0xFFFF5555";
-        public String textColor = "0xFFE0E0E0";
-        public String title = "Just Enough Backups";
-        public String runningText = "Running {reason} {type}";
-        public String completedText = "Completed {reason} {type}";
-        public String failedText = "Unable to Backup";
+        public String backgroundColor = DEFAULT_BG;
+        public String runningColor = DEFAULT_RUNNING;
+        public String completedColor = DEFAULT_COMPLETED;
+        public String failedColor = DEFAULT_FAILED;
+        public String textColor = DEFAULT_TEXT;
+        public String title = DEFAULT_TITLE;
+        public String runningText = DEFAULT_RUNNING_TEXT;
+        public String completedText = DEFAULT_COMPLETED_TEXT;
+        public String failedText = DEFAULT_FAILED_TEXT;
 
         public int backgroundColorArgb() {
-            return ConfigColor.parseOrDefault(backgroundColor, defaults().popup.backgroundColor);
+            return ConfigColor.parseOrDefault(backgroundColor, DEFAULT_BG);
         }
 
         public int runningColorArgb() {
-            return ConfigColor.parseOrDefault(runningColor, defaults().popup.runningColor);
+            return ConfigColor.parseOrDefault(runningColor, DEFAULT_RUNNING);
         }
 
         public int completedColorArgb() {
-            return ConfigColor.parseOrDefault(completedColor, defaults().popup.completedColor);
+            return ConfigColor.parseOrDefault(completedColor, DEFAULT_COMPLETED);
         }
 
         public int failedColorArgb() {
-            return ConfigColor.parseOrDefault(failedColor, defaults().popup.failedColor);
+            return ConfigColor.parseOrDefault(failedColor, DEFAULT_FAILED);
         }
 
         public int textColorArgb() {
-            return ConfigColor.parseOrDefault(textColor, defaults().popup.textColor);
+            return ConfigColor.parseOrDefault(textColor, DEFAULT_TEXT);
         }
 
         private void normalize() {
@@ -309,15 +328,15 @@ public final class BackupConfig {
             y = Math.max(0, y);
             xRatio = normalizeRatio(xRatio);
             yRatio = normalizeRatio(yRatio);
-            backgroundColor = normalizeColor(backgroundColor, defaults().popup.backgroundColor);
-            runningColor = normalizeColor(runningColor, defaults().popup.runningColor);
-            completedColor = normalizeColor(completedColor, defaults().popup.completedColor);
-            failedColor = normalizeColor(failedColor, defaults().popup.failedColor);
-            textColor = normalizeColor(textColor, defaults().popup.textColor);
-            title = normalizeText(title, defaults().popup.title);
-            runningText = normalizeText(runningText, defaults().popup.runningText);
-            completedText = normalizeText(completedText, defaults().popup.completedText);
-            failedText = normalizeText(failedText, defaults().popup.failedText);
+            backgroundColor = normalizeColor(backgroundColor, DEFAULT_BG);
+            runningColor = normalizeColor(runningColor, DEFAULT_RUNNING);
+            completedColor = normalizeColor(completedColor, DEFAULT_COMPLETED);
+            failedColor = normalizeColor(failedColor, DEFAULT_FAILED);
+            textColor = normalizeColor(textColor, DEFAULT_TEXT);
+            title = normalizeText(title, DEFAULT_TITLE);
+            runningText = normalizeText(runningText, DEFAULT_RUNNING_TEXT);
+            completedText = normalizeText(completedText, DEFAULT_COMPLETED_TEXT);
+            failedText = normalizeText(failedText, DEFAULT_FAILED_TEXT);
         }
 
         public Popup copy() {

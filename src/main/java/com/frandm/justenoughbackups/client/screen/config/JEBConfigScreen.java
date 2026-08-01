@@ -112,7 +112,6 @@ public final class JEBConfigScreen extends Screen {
 
     private Supplier<Boolean> booleanGetter(ConfigFieldId fieldId) {
         return switch (fieldId) {
-            case AUTOMATIC_BACKUPS -> () -> state.working.automaticBackupsEnabled;
             case PAUSE_WITHOUT_PLAYERS -> () -> state.working.pauseAutomaticBackupsWithoutPlayers;
             case BACKUP_ON_START -> () -> state.working.backupOnServerStart;
             case BACKUP_ON_STOP -> () -> state.working.backupOnServerStop;
@@ -131,7 +130,6 @@ public final class JEBConfigScreen extends Screen {
 
     private Consumer<Boolean> booleanSetter(ConfigFieldId fieldId) {
         return switch (fieldId) {
-            case AUTOMATIC_BACKUPS -> value -> state.working.automaticBackupsEnabled = value;
             case PAUSE_WITHOUT_PLAYERS -> value -> state.working.pauseAutomaticBackupsWithoutPlayers = value;
             case BACKUP_ON_START -> value -> state.working.backupOnServerStart = value;
             case BACKUP_ON_STOP -> value -> state.working.backupOnServerStop = value;

@@ -61,9 +61,6 @@ public final class BackupScheduler {
             if (hasOnlinePlayers(server)) {
                 playersSeenSinceLastBackup = true;
             }
-            if (!config.automaticBackupsEnabled) {
-                return;
-            }
 
             long now = System.currentTimeMillis();
             BackupType dueType = dueBackupType(config, now);
@@ -128,9 +125,6 @@ public final class BackupScheduler {
 
     public static NextBackupStatus nextBackupStatus() {
         BackupConfig config = BackupConfig.get();
-        if (!config.automaticBackupsEnabled) {
-            return NextBackupStatus.disabled();
-        }
 
         long remainingMillis = nextRemainingMillis(config, System.currentTimeMillis());
         if (remainingMillis == Long.MAX_VALUE) {

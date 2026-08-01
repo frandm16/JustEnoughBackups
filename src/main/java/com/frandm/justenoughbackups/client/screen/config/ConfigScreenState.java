@@ -32,11 +32,9 @@ final class ConfigScreenState {
         switch (tab) {
             case BACKUPS -> {
                 working.backupMode = defaults.backupMode;
-                working.automaticBackupsEnabled = defaults.automaticBackupsEnabled;
                 working.pauseAutomaticBackupsWithoutPlayers = defaults.pauseAutomaticBackupsWithoutPlayers;
                 working.backupOnServerStart = defaults.backupOnServerStart;
                 working.backupOnServerStop = defaults.backupOnServerStop;
-                working.automaticIntervalMinutes = defaults.automaticIntervalMinutes;
                 working.automaticBackupWarningEnabled = defaults.automaticBackupWarningEnabled;
                 working.automaticBackupWarningMinutes = defaults.automaticBackupWarningMinutes;
                 working.commandPermissionLevel = defaults.commandPermissionLevel;
@@ -50,12 +48,10 @@ final class ConfigScreenState {
                 working.retention.differential = defaults.retention.differential;
                 working.retention.maxTotalSizeMb = defaults.retention.maxTotalSizeMb;
                 working.minimumFreeSpaceReserveMb = defaults.minimumFreeSpaceReserveMb;
-                working.automaticSchedule.full.enabled = defaults.automaticSchedule.full.enabled;
-                working.automaticSchedule.full.intervalMinutes = defaults.automaticSchedule.full.intervalMinutes;
-                working.automaticSchedule.differential.enabled = defaults.automaticSchedule.differential.enabled;
-                working.automaticSchedule.differential.intervalMinutes = defaults.automaticSchedule.differential.intervalMinutes;
-                working.automaticSchedule.partial.enabled = defaults.automaticSchedule.partial.enabled;
-                working.automaticSchedule.partial.intervalMinutes = defaults.automaticSchedule.partial.intervalMinutes;
+
+                BackupConfig.AutomaticSchedule defaultSchedule = new BackupConfig.AutomaticSchedule();
+                defaultSchedule.normalize();
+                working.automaticSchedule = defaultSchedule;
             }
             case HUD -> {
                 working.popup = defaults.popup.copy();
