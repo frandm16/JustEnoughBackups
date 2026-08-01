@@ -10,6 +10,8 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.server.MinecraftServer;
 
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -123,19 +125,28 @@ public final class BackupScheduler {
         resetWarnings();
     }
 
-    public static NextBackupStatus nextBackupStatus() {
+    public static List<NextBackupStatus> nextBackupStatus() {
         BackupConfig config = BackupConfig.get();
+        long now = System.currentTimeMillis();
+        List<NextBackupStatus> list = new ArrayList<>();
 
-        long remainingMillis = nextRemainingMillis(config, System.currentTimeMillis());
-        if (remainingMillis == Long.MAX_VALUE) {
-            return NextBackupStatus.disabled();
+        for (BackupType type : SCHEDULE_PRIORITY) {
+            BackupConfig.ScheduledBackup schedule = config.automaticSchedule.forType(type);
+            if (!schedule.enabled) {
+                continue;
+            }
+
+            long remaining = remainingMillis(type, schedule, now);
+
+            if (remaining <= 0L) {
+                list.add(NextBackupStatus.readyNow(type));
+            } else {
+                list.add(NextBackupStatus.waiting(type, remaining));
+            }
         }
 
-        if (remainingMillis == 0L) {
-            return NextBackupStatus.readyNow();
-        }
-
-        return NextBackupStatus.waiting(remainingMillis);
+        list.sort(Comparator.comparingLong(NextBackupStatus::remainingMillis));
+        return list;
     }
 
     private static BackupType dueBackupType(BackupConfig config, long now) {

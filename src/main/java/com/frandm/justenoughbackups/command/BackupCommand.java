@@ -99,18 +99,23 @@ public final class BackupCommand {
     }
 
     private static int next(CommandSourceStack source) {
-        NextBackupStatus status = BackupScheduler.nextBackupStatus();
-        if (!status.enabled()) {
+        List<NextBackupStatus> statuses = BackupScheduler.nextBackupStatus();
+
+        if (statuses.isEmpty()) {
             sendLocal(source, BackupMessages.withTitle(ServerTranslations.component("message.justenoughbackups.next_disabled")));
             return 1;
         }
+        for (NextBackupStatus status : statuses) {
+            String typeName = status.type().name();
 
-        if (status.ready()) {
-            sendLocal(source, BackupMessages.withTitle(ServerTranslations.component("message.justenoughbackups.next_ready")));
-            return 1;
+            if (status.ready()) {
+                sendLocal(source, BackupMessages.withTitle(ServerTranslations.component("message.justenoughbackups.next_ready")));
+                return 1;
+            } else {
+                sendLocal(source, BackupMessages.withTitle(ServerTranslations.component(typeName, formatDuration(status.remainingMillis()))));
+            }
         }
 
-        sendLocal(source, BackupMessages.withTitle(ServerTranslations.component("message.justenoughbackups.next_waiting", formatDuration(status.remainingMillis()))));
         return 1;
     }
 
