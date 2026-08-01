@@ -75,12 +75,12 @@ public final class BackupScheduler {
                 return;
             }
 
-            lastBackupMillis.put(dueType, now);
-            resetWarnings();
             if (config.pauseAutomaticBackupsWithoutPlayers && !playersSeenSinceLastBackup) {
                 return;
             }
 
+            lastBackupMillis.put(dueType, now);
+            resetWarnings();
             playersSeenSinceLastBackup = false;
             BackupService.createBackup(server, dueType, "automatic")
                     .whenComplete((manifest, exception) -> {
