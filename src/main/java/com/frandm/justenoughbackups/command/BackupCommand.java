@@ -106,13 +106,12 @@ public final class BackupCommand {
             return 1;
         }
         for (NextBackupStatus status : statuses) {
-            String typeName = status.type().name();
-
             if (status.ready()) {
                 sendLocal(source, BackupMessages.withTitle(ServerTranslations.component("message.justenoughbackups.next_ready")));
                 return 1;
             } else {
-                sendLocal(source, BackupMessages.withTitle(ServerTranslations.component(typeName, formatDuration(status.remainingMillis()))));
+                sendLocal(source, BackupMessages.withTitle(ServerTranslations.component("message.justenoughbackups.next_waiting", formatDuration(status.remainingMillis()))));
+                return 1;
             }
         }
 
