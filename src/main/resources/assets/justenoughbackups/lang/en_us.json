@@ -122,6 +122,7 @@
   "screen.justenoughbackups.config.backup_on_start.tooltip": "Creates one backup when the server finishes starting the world. Disabled by default.",
   "screen.justenoughbackups.config.backup_on_stop.tooltip": "Creates one backup while the server is shutting down. Shutdown waits for it to finish. Disabled by default.",
   "screen.justenoughbackups.config.interval_minutes.tooltip": "Minutes between automatic backups. The timer resets when this value is saved.",
+  "screen.justenoughbackups.config.automatic_backups_header": "Automatic Backups",
   "screen.justenoughbackups.config.automatic_full_enabled.tooltip": "When enabled, full backups run automatically at the configured interval.",
   "screen.justenoughbackups.config.automatic_differential_enabled.tooltip": "When enabled, differential backups run automatically at the configured interval.",
   "screen.justenoughbackups.config.automatic_partial_enabled.tooltip": "When enabled, partial backups run automatically at the configured interval.",

@@ -6,16 +6,19 @@ final class ConfigFieldSpecs {
     private static final List<ConfigFieldSpec> ALL = List.of(
             ConfigFieldSpec.of(ConfigFieldId.BACKUP_MODE),
             ConfigFieldSpec.of(ConfigFieldId.AUTOMATIC_BACKUPS),
-            ConfigFieldSpec.of(ConfigFieldId.PAUSE_WITHOUT_PLAYERS),
-            ConfigFieldSpec.of(ConfigFieldId.BACKUP_ON_START),
-            ConfigFieldSpec.of(ConfigFieldId.BACKUP_ON_STOP),
+
+            ConfigFieldSpec.of(ConfigFieldId.AUTOMATIC_BACKUPS_HEADER),
             ConfigFieldSpec.of(ConfigFieldId.AUTOMATIC_FULL_ENABLED),
             ConfigFieldSpec.intField(ConfigFieldId.AUTOMATIC_FULL_INTERVAL_MINUTES, 1, Integer.MAX_VALUE),
             ConfigFieldSpec.of(ConfigFieldId.AUTOMATIC_DIFFERENTIAL_ENABLED),
             ConfigFieldSpec.intField(ConfigFieldId.AUTOMATIC_DIFFERENTIAL_INTERVAL_MINUTES, 1, Integer.MAX_VALUE),
             ConfigFieldSpec.of(ConfigFieldId.AUTOMATIC_PARTIAL_ENABLED),
             ConfigFieldSpec.intField(ConfigFieldId.AUTOMATIC_PARTIAL_INTERVAL_MINUTES, 1, Integer.MAX_VALUE),
-            ConfigFieldSpec.intField(ConfigFieldId.INTERVAL_MINUTES, 1, Integer.MAX_VALUE),
+
+            ConfigFieldSpec.of(ConfigFieldId.PAUSE_WITHOUT_PLAYERS),
+            ConfigFieldSpec.of(ConfigFieldId.BACKUP_ON_START),
+            ConfigFieldSpec.of(ConfigFieldId.BACKUP_ON_STOP),
+
             ConfigFieldSpec.of(ConfigFieldId.AUTOMATIC_BACKUP_WARNING),
             ConfigFieldSpec.intField(ConfigFieldId.AUTOMATIC_BACKUP_WARNING_MINUTES, 1, Integer.MAX_VALUE),
             ConfigFieldSpec.intField(ConfigFieldId.KEEP_FULL, 1, Integer.MAX_VALUE),

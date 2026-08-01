@@ -7,5 +7,6 @@ enum ConfigControlType {
     TEXT,
     COLOR,
     CHANNEL,
-    ACTION
+    ACTION,
+    SECTION_HEADER
 }

@@ -16,12 +16,16 @@ public enum ConfigFieldId {
     MINIMUM_FREE_SPACE_RESERVE_MB("screen.justenoughbackups.config.minimum_free_space_reserve_mb", ConfigTab.BACKUPS, ConfigControlType.INT),
     PERMISSION_LEVEL("screen.justenoughbackups.config.permission_level", ConfigTab.BACKUPS, ConfigControlType.INT),
     MESSAGE_CHANNEL("screen.justenoughbackups.config.message_channel", ConfigTab.BACKUPS, ConfigControlType.ENUM),
+
+    AUTOMATIC_BACKUPS_HEADER("screen.justenoughbackups.config.automatic_backups_header", ConfigTab.BACKUPS, ConfigControlType.SECTION_HEADER),
     AUTOMATIC_FULL_ENABLED("screen.justenoughbackups.config.automatic_full_enabled", ConfigTab.BACKUPS, ConfigControlType.BOOLEAN),
     AUTOMATIC_DIFFERENTIAL_ENABLED("screen.justenoughbackups.config.automatic_differential_enabled", ConfigTab.BACKUPS, ConfigControlType.BOOLEAN),
     AUTOMATIC_PARTIAL_ENABLED("screen.justenoughbackups.config.automatic_partial_enabled", ConfigTab.BACKUPS, ConfigControlType.BOOLEAN),
     AUTOMATIC_FULL_INTERVAL_MINUTES("screen.justenoughbackups.config.automatic_full_interval_minutes", ConfigTab.BACKUPS, ConfigControlType.INT),
     AUTOMATIC_DIFFERENTIAL_INTERVAL_MINUTES("screen.justenoughbackups.config.automatic_differential_interval_minutes", ConfigTab.BACKUPS, ConfigControlType.INT),
-    AUTOMATIC_PARTIAL_INTERVAL_MINUTES("screen.justenoughbackups.config.automatic_partial_interval_minutes", ConfigTab.BACKUPS, ConfigControlType.INT),    INTEGRITY_MODE("screen.justenoughbackups.config.integrity_mode", ConfigTab.BACKUPS, ConfigControlType.ENUM),
+    AUTOMATIC_PARTIAL_INTERVAL_MINUTES("screen.justenoughbackups.config.automatic_partial_interval_minutes", ConfigTab.BACKUPS, ConfigControlType.INT),
+
+    INTEGRITY_MODE("screen.justenoughbackups.config.integrity_mode", ConfigTab.BACKUPS, ConfigControlType.ENUM),
     INCLUDE_SUMMARY_FILE("screen.justenoughbackups.config.include_summary_file", ConfigTab.BACKUPS, ConfigControlType.BOOLEAN),
     BACKUP_DIRECTORY("screen.justenoughbackups.config.backup_directory", ConfigTab.BACKUPS, ConfigControlType.TEXT),
     EXCLUDED_PATHS("screen.justenoughbackups.config.excluded_paths", ConfigTab.BACKUPS, ConfigControlType.ACTION),

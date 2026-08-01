@@ -77,20 +77,37 @@ public final class JEBConfigScreen extends Screen {
 
     private void buildRowsForTab(ConfigTab tab) {
         int y = 0;
-        int x = contentWidth()/6; // returns OUTER ( padding)
-        int w = 4 * contentWidth()/6; // width of the row
-        int controlsW = Math.min(w, Math.clamp(w / 2, 80, 240));
+        int baseContainerX = contentWidth() / 6;
+        int indentX = 16;
+
         for (ConfigFieldSpec spec : ConfigFieldSpecs.forTab(tab)) {
-            y = switch (spec.id().controlType()) {
-                case BOOLEAN -> booleanRow(x, y, w, controlsW, spec.id(), booleanGetter(spec.id()), booleanSetter(spec.id()));
-                case ENUM -> enumRow(x, y, w, controlsW, spec.id());
-                case INT -> intRow(x, y, w, controlsW, spec, intGetter(spec.id()), intSetter(spec.id()));
-                case TEXT -> textRow(x, y, w, controlsW, spec, textGetter(spec.id()), textSetter(spec.id()));
-                case COLOR -> colorRow(x, y, w, controlsW, spec.id(), colorTarget(spec.id()));
-                case CHANNEL -> channelRow(x, y, w, controlsW, channelFor(spec.id()));
-                case ACTION -> actionRow(x, y, w, controlsW, spec.id());
+            ConfigFieldId id = spec.id();
+
+            boolean isSubOption = isAutomaticBackupSubOption(id);
+            int x = isSubOption ? baseContainerX + indentX : baseContainerX;
+            int w = isSubOption ? (4 * contentWidth() / 6) - indentX : (4 * contentWidth() / 6);
+            int controlsW = Math.min(w, Math.clamp(w / 2, 80, 240));
+
+            y = switch (id.controlType()) {
+                case BOOLEAN -> booleanRow(x, y, w, controlsW, id, booleanGetter(id), booleanSetter(id));
+                case ENUM -> enumRow(x, y, w, controlsW, id);
+                case INT -> intRow(x, y, w, controlsW, spec, intGetter(id), intSetter(id));
+                case TEXT -> textRow(x, y, w, controlsW, spec, textGetter(id), textSetter(id));
+                case COLOR -> colorRow(x, y, w, controlsW, id, colorTarget(id));
+                case CHANNEL -> channelRow(x, y, w, controlsW, channelFor(id));
+                case ACTION -> actionRow(x, y, w, controlsW, id);
+                case SECTION_HEADER -> sectionHeaderRow(x, y, w, id);
             };
         }
+    }
+
+    private boolean isAutomaticBackupSubOption(ConfigFieldId id) {
+        return id == ConfigFieldId.AUTOMATIC_FULL_ENABLED
+                || id == ConfigFieldId.AUTOMATIC_FULL_INTERVAL_MINUTES
+                || id == ConfigFieldId.AUTOMATIC_PARTIAL_ENABLED
+                || id == ConfigFieldId.AUTOMATIC_PARTIAL_INTERVAL_MINUTES
+                || id == ConfigFieldId.AUTOMATIC_DIFFERENTIAL_ENABLED
+                || id == ConfigFieldId.AUTOMATIC_DIFFERENTIAL_INTERVAL_MINUTES;
     }
 
     private Supplier<Boolean> booleanGetter(ConfigFieldId fieldId) {
@@ -100,6 +117,9 @@ public final class JEBConfigScreen extends Screen {
             case BACKUP_ON_START -> () -> state.working.backupOnServerStart;
             case BACKUP_ON_STOP -> () -> state.working.backupOnServerStop;
             case AUTOMATIC_BACKUP_WARNING -> () -> state.working.automaticBackupWarningEnabled;
+            case AUTOMATIC_FULL_ENABLED -> () -> state.working.automaticSchedule.full.enabled;
+            case AUTOMATIC_PARTIAL_ENABLED -> () -> state.working.automaticSchedule.partial.enabled;
+            case AUTOMATIC_DIFFERENTIAL_ENABLED -> () -> state.working.automaticSchedule.differential.enabled;
             case INCLUDE_SUMMARY_FILE -> () -> state.working.includeSummaryFile;
             case POPUP_ENABLED -> () -> state.working.popup.enabled;
             case POPUP_SHOW_TITLE -> () -> state.working.popup.showTitle;
@@ -116,6 +136,9 @@ public final class JEBConfigScreen extends Screen {
             case BACKUP_ON_START -> value -> state.working.backupOnServerStart = value;
             case BACKUP_ON_STOP -> value -> state.working.backupOnServerStop = value;
             case AUTOMATIC_BACKUP_WARNING -> value -> state.working.automaticBackupWarningEnabled = value;
+            case AUTOMATIC_FULL_ENABLED -> value -> state.working.automaticSchedule.full.enabled = value;
+            case AUTOMATIC_PARTIAL_ENABLED -> value -> state.working.automaticSchedule.partial.enabled = value;
+            case AUTOMATIC_DIFFERENTIAL_ENABLED -> value -> state.working.automaticSchedule.differential.enabled = value;
             case INCLUDE_SUMMARY_FILE -> value -> state.working.includeSummaryFile = value;
             case POPUP_ENABLED -> value -> state.working.popup.enabled = value;
             case POPUP_SHOW_TITLE -> value -> state.working.popup.showTitle = value;
@@ -129,6 +152,9 @@ public final class JEBConfigScreen extends Screen {
         return switch (fieldId) {
             case INTERVAL_MINUTES -> () -> state.working.automaticIntervalMinutes;
             case AUTOMATIC_BACKUP_WARNING_MINUTES -> () -> state.working.automaticBackupWarningMinutes;
+            case AUTOMATIC_FULL_INTERVAL_MINUTES -> () -> state.working.automaticSchedule.full.intervalMinutes;
+            case AUTOMATIC_PARTIAL_INTERVAL_MINUTES -> () -> state.working.automaticSchedule.partial.intervalMinutes;
+            case AUTOMATIC_DIFFERENTIAL_INTERVAL_MINUTES -> () -> state.working.automaticSchedule.differential.intervalMinutes;
             case KEEP_FULL -> () -> state.working.retention.full;
             case KEEP_PARTIAL -> () -> state.working.retention.incremental;
             case KEEP_DIFFERENTIAL -> () -> state.working.retention.differential;
@@ -143,6 +169,9 @@ public final class JEBConfigScreen extends Screen {
         return switch (fieldId) {
             case INTERVAL_MINUTES -> value -> state.working.automaticIntervalMinutes = value;
             case AUTOMATIC_BACKUP_WARNING_MINUTES -> value -> state.working.automaticBackupWarningMinutes = value;
+            case AUTOMATIC_FULL_INTERVAL_MINUTES -> value -> state.working.automaticSchedule.full.intervalMinutes = value;
+            case AUTOMATIC_PARTIAL_INTERVAL_MINUTES -> value -> state.working.automaticSchedule.partial.intervalMinutes = value;
+            case AUTOMATIC_DIFFERENTIAL_INTERVAL_MINUTES -> value -> state.working.automaticSchedule.differential.intervalMinutes = value;
             case KEEP_FULL -> value -> state.working.retention.full = value;
             case KEEP_PARTIAL -> value -> state.working.retention.incremental = value;
             case KEEP_DIFFERENTIAL -> value -> state.working.retention.differential = value;
@@ -434,6 +463,12 @@ public final class JEBConfigScreen extends Screen {
             });
             return y + rowHeight + ROW_GAP;
         }
+        return y + ROW_H + ROW_GAP;
+    }
+
+    private int sectionHeaderRow(int x, int y, int w, ConfigFieldId fieldId) {
+        addRow(x, y, w, fieldId, (_, _, _, _, _) -> {
+        }, (_, _, _, _) -> false);
         return y + ROW_H + ROW_GAP;
     }
 
@@ -775,6 +810,9 @@ public final class JEBConfigScreen extends Screen {
         switch (state.focusedField) {
             case INTERVAL_MINUTES -> parseInt(input).ifPresent(value -> state.working.automaticIntervalMinutes = value);
             case AUTOMATIC_BACKUP_WARNING_MINUTES -> parseInt(input).ifPresent(value -> state.working.automaticBackupWarningMinutes = value);
+            case AUTOMATIC_FULL_INTERVAL_MINUTES -> parseInt(input).ifPresent(value -> state.working.automaticSchedule.full.intervalMinutes = value);
+            case AUTOMATIC_PARTIAL_INTERVAL_MINUTES -> parseInt(input).ifPresent(value -> state.working.automaticSchedule.partial.intervalMinutes = value);
+            case AUTOMATIC_DIFFERENTIAL_INTERVAL_MINUTES -> parseInt(input).ifPresent(value -> state.working.automaticSchedule.differential.intervalMinutes = value);
             case KEEP_FULL -> parseInt(input).ifPresent(value -> state.working.retention.full = value);
             case KEEP_PARTIAL -> parseInt(input).ifPresent(value -> state.working.retention.incremental = value);
             case KEEP_DIFFERENTIAL -> parseInt(input).ifPresent(value -> state.working.retention.differential = value);

@@ -90,6 +90,7 @@ public final class BackupConfig {
         copy.backupOnServerStart = backupOnServerStart;
         copy.backupOnServerStop = backupOnServerStop;
         copy.automaticIntervalMinutes = automaticIntervalMinutes;
+        copy.automaticSchedule = automaticSchedule.copy();
         copy.automaticBackupWarningEnabled = automaticBackupWarningEnabled;
         copy.automaticBackupWarningMinutes = automaticBackupWarningMinutes;
         copy.commandPermissionLevel = commandPermissionLevel;
@@ -213,6 +214,14 @@ public final class BackupConfig {
                 case PARTIAL -> partial;
             };
         }
+
+        public AutomaticSchedule copy() {
+            AutomaticSchedule copy = new AutomaticSchedule();
+            copy.full = full.copy();
+            copy.differential = differential.copy();
+            copy.partial = partial.copy();
+            return copy;
+        }
     }
 
     public static final class ScheduledBackup {
@@ -222,6 +231,10 @@ public final class BackupConfig {
         public ScheduledBackup(boolean enabled, int intervalMinutes) {
             this.enabled = enabled;
             this.intervalMinutes = intervalMinutes;
+        }
+
+        public ScheduledBackup copy() {
+            return new ScheduledBackup(enabled, intervalMinutes);
         }
 
         private void normalize() {
