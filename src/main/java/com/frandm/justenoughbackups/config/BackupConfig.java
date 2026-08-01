@@ -51,6 +51,7 @@ public final class BackupConfig {
 
     public static BackupConfig defaults() {
         BackupConfig config = new BackupConfig();
+        config.automaticSchedule = new AutomaticSchedule();
         config.normalize();
         return config;
     }
