@@ -326,7 +326,7 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
     @Override
     public void handleResponse(BackupUiResponsePayload payload) {
         setStatus(payload.success(), payload.message());
-        if (!payload.backups().isEmpty() || payload.success()) {
+        if (payload.backups() != null && payload.success()) {
             backups.clear();
             backups.addAll(payload.backups());
             backups.sort(Comparator.comparing((BackupUiBackup backup) -> value(backup.createdAt())).reversed());
@@ -444,9 +444,12 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
 
     private void confirmDelete(BackupUiBackup backup) {
         minecraft.setScreenAndShow(new ConfirmScreen(confirmed -> {
-            minecraft.setScreenAndShow(this);
             if (confirmed) {
+                minecraft.setScreenAndShow(this);
+                BackupUiClient.setActiveScreen(this);
                 BackupUiClient.deleteBackup(backup.id());
+            } else {
+                minecraft.setScreenAndShow(this);
             }
         }, Component.translatable("screen.justenoughbackups.backups.delete_title", backup.displayName()), Component.translatable("screen.justenoughbackups.backups.delete_message")));
     }
