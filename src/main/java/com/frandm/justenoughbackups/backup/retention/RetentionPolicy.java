@@ -60,7 +60,7 @@ public final class RetentionPolicy {
             if (protectedIds.contains(entry.id())) {
                 continue;
             }
-            if (isOverLimit(entry.manifest(), manifestsForRules, protectedIds, config)) {
+            if (isOverLimit(entry.manifest(), manifestsForRules, config)) {
                 deletionIds.add(entry.id());
             }
         }
@@ -127,7 +127,7 @@ public final class RetentionPolicy {
         return ids;
     }
 
-    private static boolean isOverLimit(BackupManifest candidate, List<BackupManifest> manifests, Set<String> protectedIds, BackupConfig config) {
+    private static boolean isOverLimit(BackupManifest candidate, List<BackupManifest> manifests, BackupConfig config) {
         int limit = switch (candidate.type) {
             case FULL -> config.retention.full;
             case PARTIAL -> config.retention.incremental;
@@ -139,7 +139,7 @@ public final class RetentionPolicy {
 
         long newerOrSame = manifests.stream()
                 .filter(manifest -> manifest.type == candidate.type)
-                .filter(manifest -> protectedIds.contains(manifest.id) || manifest.createdAt.compareTo(candidate.createdAt) >= 0)
+                .filter(manifest -> manifest.createdAt.compareTo(candidate.createdAt) >= 0)
                 .count();
         return newerOrSame > limit;
     }
