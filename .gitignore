@@ -42,4 +42,4 @@ build/
 .idea/
 
 run/
-
+logs/

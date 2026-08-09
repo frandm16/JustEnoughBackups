@@ -206,20 +206,6 @@ If no custom name is provided, the mod uses the automatic naming scheme based on
 
 Rename uses the same sanitization rules as manual creation to keep naming behavior consistent.
 
-
-## Requirements
-
-From the current project configuration:
-
-- Minecraft: `26.1.2`
-- Fabric Loader: `0.18.5+`
-- Fabric API: `0.147.0+26.1.2`
-- Java: `25`
-
-Optional:
-
-- [Mod Menu](https://modrinth.com/mod/modmenu) for a cleaner config entry point
-
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
