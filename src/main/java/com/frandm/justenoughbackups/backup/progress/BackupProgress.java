@@ -6,6 +6,7 @@ public record BackupProgress(
         String backupId,
         BackupType type,
         String reason,
+        BackupProgressPhase phase,
         long bytesWritten,
         long totalBytes,
         int filesWritten,

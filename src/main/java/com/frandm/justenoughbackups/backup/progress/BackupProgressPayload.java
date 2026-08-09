@@ -11,6 +11,7 @@ public record BackupProgressPayload(
         String backupId,
         BackupType backupType,
         String reason,
+        BackupProgressPhase phase,
         long bytesWritten,
         long totalBytes,
         int filesWritten,
@@ -30,6 +31,7 @@ public record BackupProgressPayload(
                 progress.backupId(),
                 progress.type(),
                 progress.reason(),
+                progress.phase(),
                 progress.bytesWritten(),
                 progress.totalBytes(),
                 progress.filesWritten(),
@@ -47,6 +49,7 @@ public record BackupProgressPayload(
         buffer.writeUtf(payload.backupId());
         buffer.writeEnum(payload.backupType());
         buffer.writeUtf(payload.reason());
+        buffer.writeEnum(payload.phase());
         buffer.writeLong(payload.bytesWritten());
         buffer.writeLong(payload.totalBytes());
         buffer.writeInt(payload.filesWritten());
@@ -59,6 +62,7 @@ public record BackupProgressPayload(
                 buffer.readUtf(),
                 buffer.readEnum(BackupType.class),
                 buffer.readUtf(),
+                buffer.readEnum(BackupProgressPhase.class),
                 buffer.readLong(),
                 buffer.readLong(),
                 buffer.readInt(),

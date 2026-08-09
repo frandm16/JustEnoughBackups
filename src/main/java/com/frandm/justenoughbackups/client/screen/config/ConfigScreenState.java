@@ -2,6 +2,7 @@ package com.frandm.justenoughbackups.client.screen.config;
 
 import com.frandm.justenoughbackups.backup.model.BackupType;
 import com.frandm.justenoughbackups.backup.progress.BackupProgressPayload;
+import com.frandm.justenoughbackups.backup.progress.BackupProgressPhase;
 import com.frandm.justenoughbackups.config.BackupConfig;
 
 import java.util.EnumMap;
@@ -76,7 +77,7 @@ final class ConfigScreenState {
 
     BackupProgressPayload previewPayload() {
         long written = previewState == ConfigPreviewState.COMPLETED ? DEFAULT_TOTAL_BYTES : DEFAULT_PREVIEW_BYTES;
-        return new BackupProgressPayload("preview", BackupType.FULL, "automatic", written, DEFAULT_TOTAL_BYTES, 42, 100, previewState.progressState());
+        return new BackupProgressPayload("preview", BackupType.FULL, "automatic", previewState.phase(), written, DEFAULT_TOTAL_BYTES, 42, 100, previewState.progressState());
     }
 
     int currentScroll() {

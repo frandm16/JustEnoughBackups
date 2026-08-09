@@ -2,6 +2,7 @@ package com.frandm.justenoughbackups.client.ui.popup;
 
 import com.frandm.justenoughbackups.backup.progress.BackupProgressPayload;
 import com.frandm.justenoughbackups.backup.progress.BackupProgressState;
+import com.frandm.justenoughbackups.backup.progress.BackupProgressPhase;
 import com.frandm.justenoughbackups.config.BackupConfig;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -59,7 +60,7 @@ public final class BackupPopupRenderer {
 
     private static String detail(BackupProgressPayload progress, BackupConfig.Popup popup) {
         String template = switch (progress.state()) {
-            case STARTED, RUNNING -> popup.runningText;
+            case STARTED, RUNNING -> progress.phase() == BackupProgressPhase.SCANNING ? popup.scanningText : popup.runningText;
             case COMPLETED -> popup.completedText;
             case FAILED -> popup.failedText;
         };
@@ -74,10 +75,12 @@ public final class BackupPopupRenderer {
             return "100% - " + formatBytes(progress.totalBytes()) + " copied";
         }
 
+        String action = progress.phase() == BackupProgressPhase.SCANNING ? " scanned" : " copied";
         return percent(progress) + "% - "
                 + formatBytes(progress.bytesWritten())
                 + " / "
-                + formatBytes(progress.totalBytes());
+                + formatBytes(progress.totalBytes())
+                + action;
     }
 
     private static int color(BackupProgressPayload progress, BackupConfig.Popup popup) {

@@ -10,6 +10,7 @@ import com.frandm.justenoughbackups.backup.model.BackupStatus;
 import com.frandm.justenoughbackups.backup.model.BackupType;
 import com.frandm.justenoughbackups.backup.progress.BackupProgress;
 import com.frandm.justenoughbackups.backup.progress.BackupProgressListener;
+import com.frandm.justenoughbackups.backup.progress.BackupProgressPhase;
 import com.frandm.justenoughbackups.backup.progress.BackupProgressState;
 import com.frandm.justenoughbackups.backup.retention.RetentionPolicy;
 import com.frandm.justenoughbackups.config.BackupConfig;
@@ -72,7 +73,7 @@ public final class BackupStorage {
         Files.createDirectories(backupDir);
 
         List<BackupManifest> manifests = readManifests(backupDir);
-        Map<String, BackupManifest.FileState> snapshot = WorldSnapshotter.snapshot(worldPath);
+        Map<String, BackupManifest.FileState> snapshot = WorldSnapshotter.snapshot(worldPath, type, reason, progressListener);
         if (type != BackupType.FULL && hasNoFullBackup(manifests)) {
             BackupManifest fullBase = writeBackup(
                     worldPath,
@@ -626,6 +627,7 @@ public final class BackupStorage {
                     backupId,
                     type,
                     reason,
+                    BackupProgressPhase.COPYING,
                     bytesWritten,
                     totalBytes,
                     filesWritten,

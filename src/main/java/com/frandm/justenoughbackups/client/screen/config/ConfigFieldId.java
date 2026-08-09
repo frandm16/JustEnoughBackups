@@ -31,6 +31,7 @@ public enum ConfigFieldId {
     EXCLUDED_PATHS("screen.justenoughbackups.config.excluded_paths", ConfigTab.BACKUPS, ConfigControlType.ACTION),
     POPUP_TITLE("screen.justenoughbackups.config.popup_title", ConfigTab.HUD, ConfigControlType.TEXT),
     POPUP_RUNNING_TEXT("screen.justenoughbackups.config.running_text", ConfigTab.HUD, ConfigControlType.TEXT),
+    POPUP_SCANNING_TEXT("screen.justenoughbackups.config.scanning_text", ConfigTab.HUD, ConfigControlType.TEXT),
     POPUP_COMPLETED_TEXT("screen.justenoughbackups.config.completed_text", ConfigTab.HUD, ConfigControlType.TEXT),
     POPUP_FAILED_TEXT("screen.justenoughbackups.config.failed_text", ConfigTab.HUD, ConfigControlType.TEXT),
     POPUP_ENABLED("screen.justenoughbackups.config.show_popup", ConfigTab.HUD, ConfigControlType.BOOLEAN),

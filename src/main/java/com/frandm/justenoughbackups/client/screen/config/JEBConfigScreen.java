@@ -185,6 +185,7 @@ public final class JEBConfigScreen extends Screen {
             case BACKUP_DIRECTORY -> () -> state.working.backupDirectory;
             case POPUP_TITLE -> () -> state.working.popup.title;
             case POPUP_RUNNING_TEXT -> () -> state.working.popup.runningText;
+            case POPUP_SCANNING_TEXT -> () -> state.working.popup.scanningText;
             case POPUP_COMPLETED_TEXT -> () -> state.working.popup.completedText;
             case POPUP_FAILED_TEXT -> () -> state.working.popup.failedText;
             default -> throw new IllegalArgumentException("Not a text field: " + fieldId);
@@ -196,6 +197,7 @@ public final class JEBConfigScreen extends Screen {
             case BACKUP_DIRECTORY -> value -> state.working.backupDirectory = value;
             case POPUP_TITLE -> value -> state.working.popup.title = value;
             case POPUP_RUNNING_TEXT -> value -> state.working.popup.runningText = value;
+            case POPUP_SCANNING_TEXT -> value -> state.working.popup.scanningText = value;
             case POPUP_COMPLETED_TEXT -> value -> state.working.popup.completedText = value;
             case POPUP_FAILED_TEXT -> value -> state.working.popup.failedText = value;
             default -> throw new IllegalArgumentException("Not a text field: " + fieldId);
@@ -373,23 +375,29 @@ public final class JEBConfigScreen extends Screen {
         if (fieldId == ConfigFieldId.PREVIEW_STATE) {
             addRow(x, y, w, fieldId, (graphics, row, screenY, mouseX, mouseY) -> {
                 Rect control = controlRect(row, screenY, controlsW);
-                Rect running = segment(control, 0, 3);
-                Rect done = segment(control, 1, 3);
-                Rect failed = segment(control, 2, 3);
+                Rect scanning = segment(control, 0, 4);
+                Rect running = segment(control, 1, 4);
+                Rect done = segment(control, 2, 4);
+                Rect failed = segment(control, 3, 4);
+                drawButton(graphics, scanning, Component.translatable(ConfigPreviewState.SCANNING.key()), state.previewState != ConfigPreviewState.SCANNING, scanning.contains(mouseX, mouseY));
                 drawButton(graphics, running, Component.translatable(ConfigPreviewState.RUNNING.key()), state.previewState != ConfigPreviewState.RUNNING, running.contains(mouseX, mouseY));
                 drawButton(graphics, done, Component.translatable(ConfigPreviewState.COMPLETED.key()), state.previewState != ConfigPreviewState.COMPLETED, done.contains(mouseX, mouseY));
                 drawButton(graphics, failed, Component.translatable(ConfigPreviewState.FAILED.key()), state.previewState != ConfigPreviewState.FAILED, failed.contains(mouseX, mouseY));
             }, (row, screenY, mouseX, mouseY) -> {
                 Rect control = controlRect(row, screenY, controlsW);
-                if (segment(control, 0, 3).contains(mouseX, mouseY)) {
+                if (segment(control, 0, 4).contains(mouseX, mouseY)) {
+                    state.previewState = ConfigPreviewState.SCANNING;
+                    return true;
+                }
+                if (segment(control, 1, 4).contains(mouseX, mouseY)) {
                     state.previewState = ConfigPreviewState.RUNNING;
                     return true;
                 }
-                if (segment(control, 1, 3).contains(mouseX, mouseY)) {
+                if (segment(control, 2, 4).contains(mouseX, mouseY)) {
                     state.previewState = ConfigPreviewState.COMPLETED;
                     return true;
                 }
-                if (segment(control, 2, 3).contains(mouseX, mouseY)) {
+                if (segment(control, 3, 4).contains(mouseX, mouseY)) {
                     state.previewState = ConfigPreviewState.FAILED;
                     return true;
                 }
@@ -820,6 +828,7 @@ public final class JEBConfigScreen extends Screen {
             case BACKUP_DIRECTORY -> state.working.backupDirectory = input;
             case POPUP_TITLE -> state.working.popup.title = input;
             case POPUP_RUNNING_TEXT -> state.working.popup.runningText = input;
+            case POPUP_SCANNING_TEXT -> state.working.popup.scanningText = input;
             case POPUP_COMPLETED_TEXT -> state.working.popup.completedText = input;
             case POPUP_FAILED_TEXT -> state.working.popup.failedText = input;
             case POPUP_BACKGROUND_COLOR, POPUP_RUNNING_COLOR, POPUP_COMPLETED_COLOR, POPUP_FAILED_COLOR, POPUP_TEXT_COLOR -> {

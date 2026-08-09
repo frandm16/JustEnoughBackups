@@ -8,6 +8,7 @@ import com.frandm.justenoughbackups.backup.model.PendingRestore;
 import com.frandm.justenoughbackups.backup.progress.BackupProgress;
 import com.frandm.justenoughbackups.backup.progress.BackupProgressBroadcaster;
 import com.frandm.justenoughbackups.backup.progress.BackupProgressState;
+import com.frandm.justenoughbackups.backup.progress.BackupProgressPhase;
 import com.frandm.justenoughbackups.backup.restore.RestoreService;
 import com.frandm.justenoughbackups.backup.retention.RetentionPolicy;
 import com.frandm.justenoughbackups.backup.storage.BackupStorage;
@@ -25,6 +26,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 public final class BackupService {
     private static final AtomicBoolean BACKUP_RUNNING = new AtomicBoolean(false);
@@ -60,6 +62,7 @@ public final class BackupService {
         String worldName = BackupPaths.worldName(server, worldPath);
         String worldDirectoryName = BackupPaths.worldDirectoryName(server, worldPath);
         BackupConfig config = BackupConfig.get();
+        AtomicReference<BackupProgressPhase> progressPhase = new AtomicReference<>(BackupProgressPhase.SCANNING);
 
         return CompletableFuture.supplyAsync(() -> {
             try {
@@ -71,7 +74,10 @@ public final class BackupService {
                         type,
                         reason,
                         requestedName,
-                        progress -> BackupProgressBroadcaster.broadcast(server, progress)
+                        progress -> {
+                            progressPhase.set(progress.phase());
+                            BackupProgressBroadcaster.broadcast(server, progress);
+                        }
                 );
                 RetentionPolicy.apply(worldDirectoryName, config);
                 WorldBackupMod.LOGGER.info("Backup created: {}", manifest.id);
@@ -82,6 +88,7 @@ public final class BackupService {
                         "",
                         type,
                         reason,
+                        progressPhase.get(),
                         0L,
                         0L,
                         0,

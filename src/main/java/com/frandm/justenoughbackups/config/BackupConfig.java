@@ -283,6 +283,7 @@ public final class BackupConfig {
         private static final String DEFAULT_TEXT = "0xFFE0E0E0";
         private static final String DEFAULT_TITLE = "Just Enough Backups";
         private static final String DEFAULT_RUNNING_TEXT = "Running {reason} {type}";
+        private static final String DEFAULT_SCANNING_TEXT = "Scanning {reason} {type}";
         private static final String DEFAULT_COMPLETED_TEXT = "Completed {reason} {type}";
         private static final String DEFAULT_FAILED_TEXT = "Unable to Backup";
 
@@ -301,6 +302,7 @@ public final class BackupConfig {
         public String textColor = DEFAULT_TEXT;
         public String title = DEFAULT_TITLE;
         public String runningText = DEFAULT_RUNNING_TEXT;
+        public String scanningText = DEFAULT_SCANNING_TEXT;
         public String completedText = DEFAULT_COMPLETED_TEXT;
         public String failedText = DEFAULT_FAILED_TEXT;
 
@@ -336,6 +338,7 @@ public final class BackupConfig {
             textColor = normalizeColor(textColor, DEFAULT_TEXT);
             title = normalizeText(title, DEFAULT_TITLE);
             runningText = normalizeText(runningText, DEFAULT_RUNNING_TEXT);
+            scanningText = normalizeText(scanningText, DEFAULT_SCANNING_TEXT);
             completedText = normalizeText(completedText, DEFAULT_COMPLETED_TEXT);
             failedText = normalizeText(failedText, DEFAULT_FAILED_TEXT);
         }
@@ -357,6 +360,7 @@ public final class BackupConfig {
             copy.textColor = textColor;
             copy.title = title;
             copy.runningText = runningText;
+            copy.scanningText = scanningText;
             copy.completedText = completedText;
             copy.failedText = failedText;
             return copy;

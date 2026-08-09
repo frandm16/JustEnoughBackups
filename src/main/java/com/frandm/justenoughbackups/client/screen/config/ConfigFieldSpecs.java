@@ -32,6 +32,7 @@ final class ConfigFieldSpecs {
 
             // HUD tab
             ConfigFieldSpec.textField(ConfigFieldId.POPUP_TITLE, 256),
+            ConfigFieldSpec.textField(ConfigFieldId.POPUP_SCANNING_TEXT, 256),
             ConfigFieldSpec.textField(ConfigFieldId.POPUP_RUNNING_TEXT, 256),
             ConfigFieldSpec.textField(ConfigFieldId.POPUP_COMPLETED_TEXT, 256),
             ConfigFieldSpec.textField(ConfigFieldId.POPUP_FAILED_TEXT, 256),
