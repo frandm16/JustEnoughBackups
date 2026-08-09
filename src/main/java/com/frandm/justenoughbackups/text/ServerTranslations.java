@@ -34,13 +34,15 @@ public final class ServerTranslations {
 
         String result = template;
         Object[] safeArgs = args == null ? new Object[0] : args;
+        int searchOffset = 0;
         for (Object arg : safeArgs) {
-            int placeholder = result.indexOf("%s");
+            int placeholder = result.indexOf("%s", searchOffset);
             if (placeholder < 0) {
                 break;
             }
             String replacement = String.valueOf(arg);
             result = result.substring(0, placeholder) + replacement + result.substring(placeholder + 2);
+            searchOffset = placeholder + replacement.length();
         }
         return result;
     }
