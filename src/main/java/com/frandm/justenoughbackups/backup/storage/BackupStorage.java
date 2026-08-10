@@ -96,7 +96,7 @@ public final class BackupStorage {
         return writeBackup(worldPath, backupDir, worldName, worldDirectoryName, type, base, snapshot, reason, config, requestedName, progressListener);
     }
 
-    private static BackupManifest writeBackup(
+    public static BackupManifest writeBackup(
             Path worldPath,
             Path backupDir,
             String worldName,

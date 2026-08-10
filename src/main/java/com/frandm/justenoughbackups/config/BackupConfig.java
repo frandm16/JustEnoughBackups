@@ -107,13 +107,23 @@ public final class BackupConfig {
         return copy;
     }
 
+    public static void setCurrent(BackupConfig config) {
+        current = config;
+    }
+
     public Path resolveBackupRoot() {
         Path configured = Path.of(backupDirectory);
         if (configured.isAbsolute()) {
             return configured.normalize();
         }
 
-        return FabricLoader.getInstance().getGameDir().resolve(configured).normalize();
+        try {
+            if (FabricLoader.getInstance() != null && FabricLoader.getInstance().getGameDir() != null) {
+                return FabricLoader.getInstance().getGameDir().resolve(configured).normalize();
+            }
+        } catch (Throwable ignored) {
+        }
+        return configured.toAbsolutePath().normalize();
     }
 
     private static void save(BackupConfig config) {
@@ -129,7 +139,13 @@ public final class BackupConfig {
     }
 
     private static Path configFile() {
-        return FabricLoader.getInstance().getConfigDir().resolve("justenoughbackups.json");
+        try {
+            if (FabricLoader.getInstance() != null && FabricLoader.getInstance().getConfigDir() != null) {
+                return FabricLoader.getInstance().getConfigDir().resolve("justenoughbackups.json");
+            }
+        } catch (Throwable ignored) {
+        }
+        return Path.of("config", "justenoughbackups.json");
     }
 
     private void normalize() {
