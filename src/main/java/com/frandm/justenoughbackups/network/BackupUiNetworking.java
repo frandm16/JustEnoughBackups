@@ -112,7 +112,7 @@ public final class BackupUiNetworking {
                     .filter(backup -> isSendable(backup, server))
                     .toList();
             sendFailure(player, request, defaultMessageKey, throwable, backups);
-        } catch (IOException exception) {
+        } catch (IOException | RuntimeException exception) {
             sendFailure(player, request, defaultMessageKey, exception, List.of());
         }
     }

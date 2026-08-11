@@ -106,11 +106,13 @@ The config screen exposes:
 - retention rules
 - permission level
 - integrity mode
-- backup directory
+- backup directory and temporary backup directory
 - excluded paths
 - popup text, colors, channels, and layout
 
 The popup preview screen lets you move and preview the HUD state before saving.
+
+On a dedicated server the config screen is client-side only: it shows the HUD and Preview tabs (which apply locally to the popup), and server settings are edited on the server's `config/justenoughbackups.json` file followed by `/jeb config reload`. In single-player the whole config is shared and editable from the screen.
 
 ## Commands
 

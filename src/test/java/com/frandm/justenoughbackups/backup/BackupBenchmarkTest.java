@@ -34,6 +34,7 @@ import java.util.zip.ZipFile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -75,6 +76,50 @@ public class BackupBenchmarkTest {
     void tearDown() throws IOException {
         if (Files.exists(testBackupRootDir)) {
             deleteRecursively(testBackupRootDir);
+        }
+    }
+
+    @Test
+    void rejectsTempDirectoryOverlappingWorld() throws IOException {
+        Path worldParent = tempWorkingDir.resolve("OverlapWorld");
+        Files.createDirectories(worldParent);
+        Files.writeString(worldParent.resolve("level.dat"), "Synthetic Level Data");
+
+        BackupConfig config = new BackupConfig();
+        config.backupDirectory = tempWorkingDir.resolve("backups").toAbsolutePath().toString();
+        config.tempBackupDirectory = worldParent.toAbsolutePath().toString();
+        config.threadCount = 1;
+        config.minimumFreeSpaceReserveMb = 0;
+        BackupConfig.setCurrent(config);
+
+        String worldName = "OverlapWorld";
+        String worldDirName = "OverlapWorld";
+        Path backupDir = config.resolveBackupRoot().resolve(worldDirName);
+        Files.createDirectories(backupDir);
+        try {
+            Map<String, BackupManifest.FileState> snapshot = WorldSnapshotter.snapshot(
+                    worldParent,
+                    BackupType.FULL,
+                    "Overlap Test",
+                    BackupProgressListener.noop()
+            );
+            assertThrows(IOException.class, () -> BackupStorage.writeBackup(
+                    worldParent,
+                    backupDir,
+                    worldName,
+                    worldDirName,
+                    BackupType.FULL,
+                    null,
+                    snapshot,
+                    "Overlap Test",
+                    config,
+                    "",
+                    BackupProgressListener.noop()
+            ));
+        } finally {
+            if (Files.exists(backupDir)) {
+                deleteRecursively(backupDir);
+            }
         }
     }
 

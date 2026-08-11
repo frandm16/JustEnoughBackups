@@ -223,6 +223,11 @@ public final class BackupStorage {
         String zipFileName = resolveBackupFileName(backupDir, requestedName, id + ".zip");
         Path backupFile = backupDir.resolve(zipFileName);
         Path tempDir = config.resolveTempRoot().resolve(worldDirectoryName);
+        Path worldAbs = worldPath.toAbsolutePath().normalize();
+        Path tempAbs = tempDir.toAbsolutePath().normalize();
+        if (tempAbs.startsWith(worldAbs) || worldAbs.startsWith(tempAbs)) {
+            throw new IOException("tempBackupDirectory must not overlap the world directory: " + tempAbs);
+        }
         Files.createDirectories(tempDir);
         Path tempBackupFile = tempDir.resolve(zipFileName + ".tmp");
 
