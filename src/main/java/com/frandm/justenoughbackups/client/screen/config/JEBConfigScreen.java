@@ -68,10 +68,15 @@ public final class JEBConfigScreen extends Screen {
 
     private void rebuildRows() {
         rows.clear();
+        if (!visibleTabs().contains(state.selectedTab)) {
+            state.selectedTab = visibleTabs().get(0);
+        }
         PopupPositioning.applyRatios(font, state.working.popup, state.previewPayload(), width, height);
         buildRowsForTab(state.selectedTab);
         clampScroll();
-        validationErrors = validator.validate(state);
+        validationErrors = validator.validate(state).stream()
+                .filter(error -> visibleTabs().contains(error.fieldId().tab()))
+                .toList();
         clampPreviewPosition();
     }
 
@@ -494,6 +499,15 @@ public final class JEBConfigScreen extends Screen {
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         graphics.fill(0, 0, width, height, ScreenChrome.BG_COLOR);
         graphics.centeredText(font, title, width / 2, ScreenChrome.TITLE_Y, ScreenChrome.TITLE_COLOR);
+        if (isDedicatedServer()) {
+            graphics.centeredText(
+                    font,
+                    Component.translatable("screen.justenoughbackups.config.dedicated_server_notice"),
+                    width / 2,
+                    ScreenChrome.TITLE_Y + 11,
+                    0xFFFFFF55
+            );
+        }
         renderTabs(graphics, mouseX, mouseY);
         graphics.horizontalLine(0, width, viewportTop(), ScreenChrome.LINE_COLOR);
         graphics.horizontalLine(0, width, viewportBottom(), ScreenChrome.LINE_COLOR);
@@ -523,8 +537,18 @@ public final class JEBConfigScreen extends Screen {
         }
     }
 
+    private boolean isDedicatedServer() {
+        return !minecraft.hasSingleplayerServer();
+    }
+
+    private List<ConfigTab> visibleTabs() {
+        return isDedicatedServer()
+                ? List.of(ConfigTab.HUD, ConfigTab.PREVIEW)
+                : List.of(ConfigTab.values());
+    }
+
     private void renderTabs(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
-        for (ConfigTab tab : ConfigTab.values()) {
+        for (ConfigTab tab : visibleTabs()) {
             Rect rect = tabRect(tab);
             drawButton(graphics, rect, Component.translatable(tab.key()), state.selectedTab != tab, rect.contains(mouseX, mouseY));
         }
@@ -605,7 +629,7 @@ public final class JEBConfigScreen extends Screen {
     }
 
     private boolean handleTabClick(double mouseX, double mouseY) {
-        for (ConfigTab tab : ConfigTab.values()) {
+        for (ConfigTab tab : visibleTabs()) {
             if (tabRect(tab).contains(mouseX, mouseY)) {
                 state.selectedTab = tab;
                 rebuildRows();
@@ -619,11 +643,12 @@ public final class JEBConfigScreen extends Screen {
         int areaX = width / 3;
         int areaW = width / 3;
         int gap = 4;
-        int tabCount = ConfigTab.values().length;
+        List<ConfigTab> tabs = visibleTabs();
+        int tabCount = tabs.size();
         int tabW = Math.max(48, (areaW - gap * (tabCount - 1)) / tabCount);
         int totalW = tabW * tabCount + gap * (tabCount - 1);
         int x = areaX + (areaW - totalW) / 2;
-        int tabX = x + tab.ordinal() * (tabW + gap);
+        int tabX = x + tabs.indexOf(tab) * (tabW + gap);
         return new Rect(tabX, TAB_Y, tabW, TAB_H);
     }
 

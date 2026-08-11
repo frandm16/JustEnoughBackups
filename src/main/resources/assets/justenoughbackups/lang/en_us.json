@@ -84,6 +84,7 @@
   "screen.justenoughbackups.config.automatic_backup_warning_minutes": "Warning minutes before backup",
   "screen.justenoughbackups.config.backup_directory": "Backup directory",
   "screen.justenoughbackups.config.temp_directory": "Temporary backup directory",
+  "screen.justenoughbackups.config.dedicated_server_notice": "On a dedicated server only the popup and preview settings are available here. Server settings are configured on the server's config file.",
   "screen.justenoughbackups.config.permission_level": "Command permission level",
   "screen.justenoughbackups.config.message_channel": "Message channel",
   "screen.justenoughbackups.config.integrity_mode": "Integrity mode",
