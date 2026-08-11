@@ -55,14 +55,16 @@ public final class BackupUiNetworking {
     }
 
     private static void createBackup(BackupUiRequestPayload payload, MinecraftServer server, ServerPlayer player) {
-        BackupService.createBackup(server, payload.backupType(), "manual", payload.value())
-                .thenAccept(manifest -> server.execute(() -> sendList(server, player, payload, true, "message.justenoughbackups.backup_completed", BackupStorage.displayName(manifest))))
+        var future = BackupService.createBackup(server, payload.backupType(), "manual", payload.value());
+        future.thenAccept(manifest -> server.execute(() -> sendList(server, player, payload, true, "message.justenoughbackups.backup_completed", BackupStorage.displayName(manifest))))
                 .exceptionally(exception -> {
                     WorldBackupMod.LOGGER.error("Backup UI create failed.", exception);
                     server.execute(() -> sendFailure(server, player, payload, "text.justenoughbackups.backup_ui.backup_failed", exception));
                     return null;
                 });
-        sendList(server, player, payload, true, "message.justenoughbackups.backup_started", "manual", payload.backupType().commandName());
+        if (!future.isDone()) {
+            sendList(server, player, payload, true, "message.justenoughbackups.backup_started", "manual", payload.backupType().commandName());
+        }
     }
 
     private static void restoreBackup(BackupUiRequestPayload payload, MinecraftServer server, ServerPlayer player) {

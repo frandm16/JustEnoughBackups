@@ -214,6 +214,6 @@
   "message.justenoughbackups.list_failed": "Failed to list backups.",
   "message.justenoughbackups.next_disabled": "Automatic backups are disabled.",
   "message.justenoughbackups.next_ready": "The next automatic backup is ready and will start on the next scheduler check.",
-  "message.justenoughbackups.next_waiting": "Next automatic backup in %s.",
+  "message.justenoughbackups.next_waiting": "Next %s backup in %s.",
   "message.justenoughbackups.config_reloaded": "Config reloaded. Mode=%s, automatic=%s, interval=%sm, permissionLevel=%s, messageChannel=%s"
 }

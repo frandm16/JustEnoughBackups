@@ -84,6 +84,10 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
     protected void rebuildWidgets() {
         clearWidgets();
         buildToolbar();
+        refreshList();
+    }
+
+    private void refreshList() {
         items = buildItems();
         rowLayouts = buildRowLayouts(filteredItems());
         scroll = Math.clamp(scroll, 0, maxScroll());
@@ -99,7 +103,7 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
         searchBox.setResponder(value -> {
             filter = value == null ? "" : value;
             scroll = 0;
-            rebuildWidgets();
+            refreshList();
         });
         addRenderableWidget(searchBox);
         setInitialFocus(searchBox);

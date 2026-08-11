@@ -538,7 +538,7 @@ public final class JEBConfigScreen extends Screen {
     }
 
     private boolean isDedicatedServer() {
-        return !minecraft.hasSingleplayerServer();
+        return minecraft.level != null && !minecraft.hasSingleplayerServer();
     }
 
     private List<ConfigTab> visibleTabs() {

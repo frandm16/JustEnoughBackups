@@ -61,21 +61,25 @@ public final class BackupConfig {
     public static BackupConfig reload() {
         Path configFile = configFile();
         BackupConfig config = new BackupConfig();
+        boolean persist = !Files.exists(configFile);
 
         if (Files.exists(configFile)) {
             try (Reader reader = Files.newBufferedReader(configFile)) {
                 BackupConfig loaded = GSON.fromJson(reader, BackupConfig.class);
                 if (loaded != null) {
                     config = loaded;
+                    persist = true;
                 }
             } catch (IOException | RuntimeException exception) {
-                WorldBackupMod.LOGGER.error("Failed to read Just Enough Backups config. Defaults will be used.", exception);
+                WorldBackupMod.LOGGER.error("Failed to read Just Enough Backups config. Defaults will be used in memory, but the file will not be overwritten.", exception);
             }
         }
 
         config.normalize();
         current = config;
-        save(config);
+        if (persist) {
+            save(config);
+        }
         return config;
     }
 

@@ -57,15 +57,30 @@ public final class BackupService {
         }
 
         BackupMessages.broadcastBackupStarted(server, type, reason);
-        server.saveEverything(true, true, true);
+        Path worldPath;
+        String worldName;
+        String worldDirectoryName;
         boolean previousAutoSave = server.isAutoSave();
-        server.setAutoSave(false);
-        WorldSavingState previousWorldSavingState = WorldSavingState.captureAndDisable(server);
-        Path worldPath = server.getWorldPath(LevelResource.ROOT);
-        String worldName = BackupPaths.worldName(server, worldPath);
-        String worldDirectoryName = BackupPaths.worldDirectoryName(server, worldPath);
+        boolean savingDisabled = false;
+        WorldSavingState previousWorldSavingState = null;
+        try {
+            server.saveEverything(true, true, true);
+            server.setAutoSave(false);
+            savingDisabled = true;
+            previousWorldSavingState = WorldSavingState.captureAndDisable(server);
+            worldPath = server.getWorldPath(LevelResource.ROOT);
+            worldName = BackupPaths.worldName(server, worldPath);
+            worldDirectoryName = BackupPaths.worldDirectoryName(server, worldPath);
+        } catch (RuntimeException | Error exception) {
+            restoreSavingBestEffort(server, previousAutoSave, savingDisabled, previousWorldSavingState);
+            BACKUP_RUNNING.set(false);
+            BackupMessages.broadcastBackupFailed(server, type, reason, exception);
+            return CompletableFuture.failedFuture(exception);
+        }
         BackupConfig config = BackupConfig.get();
         AtomicReference<BackupProgress> lastProgress = new AtomicReference<>();
+        boolean autoSaveToRestore = previousAutoSave;
+        WorldSavingState worldSavingStateToRestore = previousWorldSavingState;
 
         return CompletableFuture.supplyAsync(() -> {
             BackupWatchdog watchdog = new BackupWatchdog(progress -> {
@@ -108,7 +123,7 @@ public final class BackupService {
                 throw exception;
             } finally {
                 watchdog.stop();
-                restoreSaving(server, previousAutoSave, previousWorldSavingState);
+                restoreSaving(server, autoSaveToRestore, worldSavingStateToRestore);
                 BACKUP_RUNNING.set(false);
             }
         });
@@ -228,9 +243,17 @@ public final class BackupService {
         }
 
         BackupMessages.broadcastRestoreStarted(server, backup);
-        server.saveEverything(true, true, true);
-        Path worldPath = server.getWorldPath(LevelResource.ROOT);
-        Path backupDir = BackupPaths.worldBackupDir(server);
+        Path worldPath;
+        Path backupDir;
+        try {
+            server.saveEverything(true, true, true);
+            worldPath = server.getWorldPath(LevelResource.ROOT);
+            backupDir = BackupPaths.worldBackupDir(server);
+        } catch (RuntimeException | Error exception) {
+            BACKUP_RUNNING.set(false);
+            BackupMessages.broadcastRestoreFailed(server, rootMessage(exception));
+            return CompletableFuture.failedFuture(exception);
+        }
 
         return CompletableFuture.supplyAsync(() -> {
             try {
@@ -297,5 +320,18 @@ public final class BackupService {
             previousWorldSavingState.restore(server);
             server.setAutoSave(previousAutoSave);
         });
+    }
+
+    private static void restoreSavingBestEffort(MinecraftServer server, boolean previousAutoSave, boolean savingDisabled, WorldSavingState previousWorldSavingState) {
+        try {
+            if (savingDisabled) {
+                server.setAutoSave(previousAutoSave);
+            }
+            if (previousWorldSavingState != null) {
+                previousWorldSavingState.restore(server);
+            }
+        } catch (RuntimeException exception) {
+            WorldBackupMod.LOGGER.error("Failed to restore world saving state after backup setup failure.", exception);
+        }
     }
 }
