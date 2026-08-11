@@ -2,16 +2,20 @@ package com.frandm.justenoughbackups.backup.restore;
 
 import com.frandm.justenoughbackups.WorldBackupMod;
 import com.frandm.justenoughbackups.backup.BackupConstants;
+import com.frandm.justenoughbackups.backup.BackupPaths;
 import com.frandm.justenoughbackups.backup.model.BackupManifest;
 import com.frandm.justenoughbackups.backup.model.BackupIntegrityMode;
 import com.frandm.justenoughbackups.backup.model.BackupStatus;
 import com.frandm.justenoughbackups.backup.model.BackupType;
 import com.frandm.justenoughbackups.backup.model.PendingRestore;
-import com.frandm.justenoughbackups.backup.retention.RetentionPolicy;
+import com.frandm.justenoughbackups.backup.progress.BackupProgressListener;
+import com.frandm.justenoughbackups.backup.progress.RestoreProgressTracker;
 import com.frandm.justenoughbackups.backup.storage.BackupStorage;
 import com.frandm.justenoughbackups.backup.storage.WorldSnapshotter;
 import com.frandm.justenoughbackups.config.BackupConfig;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.world.level.storage.LevelResource;
 
 import java.io.IOException;
 import java.nio.file.FileVisitResult;
@@ -30,12 +34,16 @@ import java.util.Map;
 import java.util.Set;
 
 public final class RestoreService {
+    private static final String RESTORE_PREFIX = ".restore-";
+    private static final String STAGING_PREFIX = ".justenoughbackups-staging-";
+
     private static volatile PendingRestore pendingRestore;
 
     private RestoreService() {
     }
 
     public static void registerRestoreHandler() {
+        ServerLifecycleEvents.SERVER_STARTED.register(RestoreService::cleanupOrphanedRestoreArtifacts);
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
             PendingRestore restore = pendingRestore;
             if (restore == null) {
@@ -45,7 +53,6 @@ public final class RestoreService {
             pendingRestore = null;
             try {
                 applyPreparedRestore(restore);
-                RetentionPolicy.apply(restore.worldDirectoryName(), BackupConfig.get());
                 WorldBackupMod.LOGGER.warn(
                         "World restore {} applied. Previous world was saved as a normal Old_World backup.",
                         restore.backupId()
@@ -56,16 +63,23 @@ public final class RestoreService {
         });
     }
 
-    public static PendingRestore prepareRestore(Path backupDir, Path worldPath, BackupManifest targetManifest, String requestedName) throws IOException {
+    public static PendingRestore prepareRestore(
+            Path backupDir,
+            Path worldPath,
+            BackupManifest targetManifest,
+            String requestedName,
+            BackupProgressListener progressListener
+    ) throws IOException {
         List<BackupManifest> chain = resolveRestoreChain(backupDir, targetManifest);
         String backupId = targetManifest.id;
-        Path tempRestore = backupDir.resolve(".restore-" + backupId);
+        String reason = "Restore " + backupId;
+        Path tempRestore = backupDir.resolve(RESTORE_PREFIX + backupId);
         BackupManifest target = chain.getLast();
 
         deleteIfExists(tempRestore);
         Files.createDirectories(tempRestore);
         for (BackupManifest manifest : chain) {
-            BackupStorage.extractBackup(backupDir.resolve(manifest.zipFileName), tempRestore);
+            BackupStorage.extractBackup(backupDir.resolve(manifest.zipFileName), tempRestore, backupId, reason, progressListener);
         }
         Path targetBackupFile = backupDir.resolve(target.zipFileName);
         if (!BackupStorage.hasSummaryFile(targetBackupFile)) {
@@ -84,6 +98,12 @@ public final class RestoreService {
                 hasStatusForChain(backupDir, chain),
                 Map.copyOf(chain.getLast().snapshot)
         );
+
+        Path stagingWorld = stagingWorldPath(restore);
+        deleteIfExists(stagingWorld);
+        copyDirectory(tempRestore, stagingWorld, backupId, reason, progressListener);
+        verifyRestoreSnapshot(stagingWorld, restore);
+
         pendingRestore = restore;
         WorldBackupMod.LOGGER.warn("Restore {} prepared from request {}. It will be applied when the server stops.", backupId, requestedName);
         return restore;
@@ -130,28 +150,51 @@ public final class RestoreService {
         }
 
         Path stagingWorld = stagingWorldPath(restore);
-        deleteIfExists(stagingWorld);
-        copyDirectory(restore.tempRestore(), stagingWorld);
-        verifyRestoreSnapshot(stagingWorld, restore);
+        if (!Files.isDirectory(stagingWorld)) {
+            throw new IOException("Prepared restore staging directory is missing: " + stagingWorld);
+        }
 
         if (Files.exists(restore.worldPath())) {
-            BackupStorage.createBackup(
-                    restore.worldPath(),
-                    restore.worldName(),
-                    restore.worldDirectoryName(),
-                    BackupConfig.get(),
-                    BackupType.FULL,
-                    "Old_World restore " + restore.backupId()
-            );
             clearDirectoryContents(restore.worldPath(), restore.backupDir());
         } else {
             Files.createDirectories(restore.worldPath());
         }
 
-        copyDirectory(stagingWorld, restore.worldPath());
+        copyDirectory(stagingWorld, restore.worldPath(), restore.backupId(), "Restore " + restore.backupId(), BackupProgressListener.noop());
         verifyRestoreSnapshot(restore.worldPath(), restore);
         deleteIfExists(stagingWorld);
         deleteIfExists(restore.tempRestore());
+    }
+
+    private static void cleanupOrphanedRestoreArtifacts(MinecraftServer server) {
+        try {
+            Path worldPath = server.getWorldPath(LevelResource.ROOT).toAbsolutePath().normalize();
+            Path worldParent = worldPath.getParent();
+            if (worldParent != null && Files.isDirectory(worldParent)) {
+                try (var stream = Files.list(worldParent)) {
+                    for (Path candidate : stream
+                            .filter(path -> path.getFileName().toString().startsWith(STAGING_PREFIX))
+                            .toList()) {
+                        deleteIfExists(candidate);
+                        WorldBackupMod.LOGGER.info("Removed orphaned restore staging directory: {}", candidate);
+                    }
+                }
+            }
+
+            Path backupDir = BackupPaths.worldBackupDir(server).toAbsolutePath().normalize();
+            if (Files.isDirectory(backupDir)) {
+                try (var stream = Files.list(backupDir)) {
+                    for (Path candidate : stream
+                            .filter(path -> path.getFileName().toString().startsWith(RESTORE_PREFIX))
+                            .toList()) {
+                        deleteIfExists(candidate);
+                        WorldBackupMod.LOGGER.info("Removed orphaned restore temporary directory: {}", candidate);
+                    }
+                }
+            }
+        } catch (IOException exception) {
+            WorldBackupMod.LOGGER.warn("Failed to clean up orphaned restore artifacts on server start.", exception);
+        }
     }
 
     private static Path stagingWorldPath(PendingRestore restore) {
@@ -160,15 +203,26 @@ public final class RestoreService {
         if (parent == null) {
             parent = normalizedWorld;
         }
-        return parent.resolve(".justenoughbackups-staging-" + restore.backupId());
+        return parent.resolve(STAGING_PREFIX + restore.backupId());
     }
 
-    private static void copyDirectory(Path source, Path target, Path... skippedRoots) throws IOException {
+    private static void copyDirectory(
+            Path source,
+            Path target,
+            String backupId,
+            String reason,
+            BackupProgressListener progressListener,
+            Path... skippedRoots
+    ) throws IOException {
         Path normalizedSource = source.toAbsolutePath().normalize();
         Path normalizedTarget = target.toAbsolutePath().normalize();
         List<Path> normalizedSkippedRoots = normalizeSkippedRoots(skippedRoots);
 
-        List<Path> filesToCopy = new ArrayList<>();
+        record FileEntry(Path path, long size) {
+        }
+
+        List<FileEntry> filesToCopy = new ArrayList<>();
+        long[] totalBytes = {0L};
 
         Files.walkFileTree(normalizedSource, new SimpleFileVisitor<>() {
             @Override
@@ -190,24 +244,33 @@ public final class RestoreService {
                     return FileVisitResult.CONTINUE;
                 }
 
-                filesToCopy.add(file);
+                filesToCopy.add(new FileEntry(file, attrs.size()));
+                totalBytes[0] += attrs.size();
                 return FileVisitResult.CONTINUE;
             }
         });
 
+        RestoreProgressTracker tracker = new RestoreProgressTracker(
+                backupId, BackupType.FULL, reason, totalBytes[0], filesToCopy.size(), progressListener);
+        tracker.start();
+
         int threadCount = Math.clamp(BackupConfig.get().threadCount, 1, Math.max(1, Runtime.getRuntime().availableProcessors()));
         if (threadCount <= 1 || filesToCopy.size() <= 1) {
-            for (Path file : filesToCopy) {
-                Path relative = normalizedSource.relativize(file);
-                Files.copy(file, normalizedTarget.resolve(relative), StandardCopyOption.REPLACE_EXISTING);
+            for (FileEntry entry : filesToCopy) {
+                Path relative = normalizedSource.relativize(entry.path());
+                Files.copy(entry.path(), normalizedTarget.resolve(relative), StandardCopyOption.REPLACE_EXISTING);
+                tracker.fileCompleted();
+                tracker.advance(entry.size());
             }
         } else {
             java.util.concurrent.ExecutorService executor = com.frandm.justenoughbackups.backup.parallel.BackupThreadPool.getExecutor();
             List<java.util.concurrent.Callable<Void>> tasks = new ArrayList<>(filesToCopy.size());
-            for (Path file : filesToCopy) {
+            for (FileEntry entry : filesToCopy) {
                 tasks.add(() -> {
-                    Path relative = normalizedSource.relativize(file);
-                    Files.copy(file, normalizedTarget.resolve(relative), StandardCopyOption.REPLACE_EXISTING);
+                    Path relative = normalizedSource.relativize(entry.path());
+                    Files.copy(entry.path(), normalizedTarget.resolve(relative), StandardCopyOption.REPLACE_EXISTING);
+                    tracker.fileCompleted();
+                    tracker.advance(entry.size());
                     return null;
                 });
             }
@@ -226,6 +289,8 @@ public final class RestoreService {
                 throw new IOException("Failed during parallel directory copy", e.getCause());
             }
         }
+
+        tracker.complete();
     }
 
     private static List<Path> normalizeSkippedRoots(Path... skippedRoots) {
@@ -317,7 +382,7 @@ public final class RestoreService {
         for (Map.Entry<String, BackupManifest.FileState> entry : expectedSnapshot.entrySet()) {
             BackupManifest.FileState expected = entry.getValue();
             BackupManifest.FileState actual = actualSnapshot.get(entry.getKey());
-            if (actual == null || actual.size != expected.size || !actual.sha256.equals(expected.sha256)) {
+            if (actual == null || (expected.sha256 != null && !expected.sha256.equals(actual.sha256))) {
                 throw new IOException("Restored world file does not match backup snapshot: " + entry.getKey());
             }
         }

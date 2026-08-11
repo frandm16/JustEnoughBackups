@@ -203,6 +203,59 @@ public class BackupBenchmarkTest {
         }
     }
 
+    @Test
+    void manifestSnapshotTracksFileChangedAfterScan() throws IOException {
+        Path worldParent = tempWorkingDir.resolve("ChangingWorld");
+        Files.createDirectories(worldParent.resolve("players").resolve("data"));
+        Path mutableFile = worldParent.resolve("players/data/player.dat");
+        Files.writeString(mutableFile, "original-content");
+
+        BackupConfig config = new BackupConfig();
+        config.backupDirectory = tempWorkingDir.resolve("changing-backups").toAbsolutePath().toString();
+        config.tempBackupDirectory = tempWorkingDir.resolve("changing-temp").toAbsolutePath().toString();
+        config.threadCount = 1;
+        config.minimumFreeSpaceReserveMb = 0;
+        config.includeSummaryFile = false;
+        BackupConfig.setCurrent(config);
+
+        String worldName = "ChangingWorld";
+        String worldDirName = "ChangingWorld";
+        Path backupDir = config.resolveBackupRoot().resolve(worldDirName);
+        Files.createDirectories(backupDir);
+        try {
+            Map<String, BackupManifest.FileState> snapshot = WorldSnapshotter.snapshot(
+                    worldParent,
+                    BackupType.FULL,
+                    "Changing Test",
+                    BackupProgressListener.noop()
+            );
+
+            Files.writeString(mutableFile, "the-world-file-was-rewritten-with-more-bytes-before-compression");
+
+            BackupManifest manifest = BackupStorage.writeBackup(
+                    worldParent,
+                    backupDir,
+                    worldName,
+                    worldDirName,
+                    BackupType.FULL,
+                    null,
+                    snapshot,
+                    "Changing Test",
+                    config,
+                    "",
+                    BackupProgressListener.noop()
+            );
+
+            Path published = backupDir.resolve(manifest.zipFileName);
+            assertTrue(Files.isRegularFile(published), "Published backup should exist in backup directory");
+            verifyBackupIntegrity(published, manifest.snapshot);
+        } finally {
+            if (Files.exists(backupDir)) {
+                deleteRecursively(backupDir);
+            }
+        }
+    }
+
     private RunResult runBenchmark(BackupConfig config, int threads) throws IOException {
         String worldName = "BenchmarkWorld";
         String worldDirName = "BenchmarkWorld";

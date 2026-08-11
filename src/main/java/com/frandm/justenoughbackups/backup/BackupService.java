@@ -9,6 +9,7 @@ import com.frandm.justenoughbackups.backup.model.PendingRestore;
 import com.frandm.justenoughbackups.backup.progress.BackupProgress;
 import com.frandm.justenoughbackups.backup.parallel.BackupWatchdog;
 import com.frandm.justenoughbackups.backup.progress.BackupProgressBroadcaster;
+import com.frandm.justenoughbackups.backup.progress.BackupProgressListener;
 import com.frandm.justenoughbackups.backup.progress.BackupProgressState;
 import com.frandm.justenoughbackups.backup.progress.BackupProgressPhase;
 import com.frandm.justenoughbackups.backup.restore.RestoreService;
@@ -28,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -56,6 +58,10 @@ public final class BackupService {
             return CompletableFuture.failedFuture(exception);
         }
 
+        return performBackup(server, type, reason, requestedName, true);
+    }
+
+    private static CompletableFuture<BackupManifest> performBackup(MinecraftServer server, BackupType type, String reason, String requestedName, boolean resetLock) {
         BackupMessages.broadcastBackupStarted(server, type, reason);
         Path worldPath;
         String worldName;
@@ -73,7 +79,9 @@ public final class BackupService {
             worldDirectoryName = BackupPaths.worldDirectoryName(server, worldPath);
         } catch (RuntimeException | Error exception) {
             restoreSavingBestEffort(server, previousAutoSave, savingDisabled, previousWorldSavingState);
-            BACKUP_RUNNING.set(false);
+            if (resetLock) {
+                BACKUP_RUNNING.set(false);
+            }
             BackupMessages.broadcastBackupFailed(server, type, reason, exception);
             return CompletableFuture.failedFuture(exception);
         }
@@ -124,7 +132,9 @@ public final class BackupService {
             } finally {
                 watchdog.stop();
                 restoreSaving(server, autoSaveToRestore, worldSavingStateToRestore);
-                BACKUP_RUNNING.set(false);
+                if (resetLock) {
+                    BACKUP_RUNNING.set(false);
+                }
             }
         });
     }
@@ -255,22 +265,50 @@ public final class BackupService {
             return CompletableFuture.failedFuture(exception);
         }
 
-        return CompletableFuture.supplyAsync(() -> {
+        BackupProgressListener restoreProgress = progress -> BackupProgressBroadcaster.broadcast(server, progress);
+
+        CompletableFuture<PendingRestore> prepared = CompletableFuture.supplyAsync(() -> {
             try {
                 BackupManifest target = byId
                         ? BackupStorage.findById(backupDir, backup)
                         : BackupStorage.findByZipName(backupDir, backup);
-                String displayName = BackupStorage.displayName(target);
-                PendingRestore restore = RestoreService.prepareRestore(backupDir, worldPath, target, backup);
-                BackupMessages.broadcastRestorePrepared(server, displayName);
-                return restore;
+                return RestoreService.prepareRestore(backupDir, worldPath, target, backup, restoreProgress);
             } catch (IOException exception) {
-                BackupMessages.broadcastRestoreFailed(server, rootMessage(exception));
                 throw new RuntimeException("Failed to prepare restore: " + backup, exception);
-            } finally {
-                BACKUP_RUNNING.set(false);
             }
         });
+
+        return prepared.thenCompose(restore -> runSafetyBackup(server, restore))
+                .handle((restore, error) -> {
+                    if (error != null) {
+                        BACKUP_RUNNING.set(false);
+                        Throwable cause = error.getCause() != null ? error.getCause() : error;
+                        BackupMessages.broadcastRestoreFailed(server, rootMessage(cause));
+                        throw new CompletionException(cause);
+                    }
+                    BACKUP_RUNNING.set(false);
+                    BackupMessages.broadcastRestorePrepared(server, restore.backupId());
+                    return restore;
+                });
+    }
+
+    private static CompletableFuture<PendingRestore> runSafetyBackup(MinecraftServer server, PendingRestore restore) {
+        CompletableFuture<BackupManifest> backup = new CompletableFuture<>();
+        server.execute(() -> {
+            try {
+                performBackup(server, BackupType.FULL, "Old_World restore " + restore.backupId(), "", false)
+                        .whenComplete((manifest, error) -> {
+                            if (error != null) {
+                                backup.completeExceptionally(error);
+                            } else {
+                                backup.complete(manifest);
+                            }
+                        });
+            } catch (Throwable error) {
+                backup.completeExceptionally(error);
+            }
+        });
+        return backup.thenApply(ignored -> restore);
     }
 
     public static BackupConfig reloadConfig() {

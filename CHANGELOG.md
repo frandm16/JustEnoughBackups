@@ -6,6 +6,8 @@ All notable changes to this project are documented in this file.
 
 ### Added
 
+- Restore progress popup: the HUD popup now shows real-time progress while extracting the backup chain, staging the world, and creating the safety "Old_World restore" backup.
+
 - Parallel (multi-threaded) world scanning, ZIP compression, and restore extraction, with a new configurable `threadCount` option (1 to max CPU threads).
 - New `tempBackupDirectory` config to compress the backup ZIP to a temporary folder and then move it to the backup destination, so only the finished ZIP is transferred when backups are stored on a slow or network drive.
 - Backup watchdog that detects a stalled backup, dumps all threads for diagnosis, and aborts after a timeout.
@@ -15,6 +17,10 @@ All notable changes to this project are documented in this file.
 
 ### Fixed
 
+- Restore now completes reliably: the safety "Old_World restore" backup is created while the server is still running, so it no longer fails with C2ME's `saveAll async` guard, and the world swap is applied when the server stops.
+- Fixed restore verification failing on backups created by older builds, whose manifest recorded a stale file size: restore now compares content by SHA-256 only (size differences are ignored) while keeping the structural check (missing/extra files) and the rejection of backups with a damaged status.
+- Backup manifests now record the actual bytes written to the ZIP, so a file that changes between the scan and the compression (e.g. player data) no longer invalidates the manifest or blocks a later restore.
+- Orphaned restore staging and temporary directories (`.justenoughbackups-staging-*` and `.restore-*`) left behind by interrupted restores are now cleaned up automatically on server start.
 - Popup progress now shows the real bytes/percent while running and on completion; fixed the related tooltip error.
 - Popup progress no longer breaks when compression runs multi-threaded.
 - Retention is now applied with the full fresh manifest list after creating a backup, avoiding a stale read.

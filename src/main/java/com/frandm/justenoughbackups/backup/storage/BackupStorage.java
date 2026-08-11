@@ -12,6 +12,7 @@ import com.frandm.justenoughbackups.backup.progress.BackupProgress;
 import com.frandm.justenoughbackups.backup.progress.BackupProgressListener;
 import com.frandm.justenoughbackups.backup.progress.BackupProgressPhase;
 import com.frandm.justenoughbackups.backup.progress.BackupProgressState;
+import com.frandm.justenoughbackups.backup.progress.RestoreProgressTracker;
 import com.frandm.justenoughbackups.backup.retention.RetentionPolicy;
 import com.frandm.justenoughbackups.config.BackupConfig;
 import com.frandm.justenoughbackups.backup.parallel.BackupThreadPool;
@@ -274,9 +275,14 @@ public final class BackupStorage {
     }
 
     public static void extractBackup(Path backupFile, Path targetDir) throws IOException {
+        extractBackup(backupFile, targetDir, "", "", BackupProgressListener.noop());
+    }
+
+    public static void extractBackup(Path backupFile, Path targetDir, String backupId, String reason, BackupProgressListener progressListener) throws IOException {
         Path normalizedTarget = targetDir.toAbsolutePath().normalize();
         try (ZipFile zipFile = new ZipFile(backupFile.toFile())) {
             List<ZipEntry> validEntries = new ArrayList<>();
+            long totalBytes = 0L;
             var entries = zipFile.entries();
             while (entries.hasMoreElements()) {
                 ZipEntry entry = entries.nextElement();
@@ -287,7 +293,12 @@ public final class BackupStorage {
                     continue;
                 }
                 validEntries.add(entry);
+                totalBytes = safeAdd(totalBytes, Math.max(0L, entry.getSize()));
             }
+
+            RestoreProgressTracker tracker = new RestoreProgressTracker(
+                    backupId, BackupType.FULL, reason, totalBytes, validEntries.size(), progressListener);
+            tracker.start();
 
             int threadCount = Math.clamp(BackupConfig.get().threadCount, 1, Math.max(1, Runtime.getRuntime().availableProcessors()));
             if (threadCount <= 1 || validEntries.size() <= 1) {
@@ -298,8 +309,9 @@ public final class BackupStorage {
                     }
                     Files.createDirectories(target.getParent());
                     try (InputStream in = zipFile.getInputStream(entry)) {
-                        Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
+                        tracker.advance(Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING));
                     }
+                    tracker.fileCompleted();
                 }
             } else {
                 ExecutorService executor = BackupThreadPool.getExecutor();
@@ -312,8 +324,9 @@ public final class BackupStorage {
                         }
                         Files.createDirectories(target.getParent());
                         try (InputStream in = zipFile.getInputStream(entry)) {
-                            Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
+                            tracker.advance(Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING));
                         }
+                        tracker.fileCompleted();
                         return null;
                     });
                 }
@@ -332,6 +345,7 @@ public final class BackupStorage {
                     throw new IOException("Failed during parallel extraction", e.getCause());
                 }
             }
+            tracker.complete();
         }
     }
 
@@ -449,9 +463,6 @@ public final class BackupStorage {
         try {
             ParallelScatterZipCreator creator = new ParallelScatterZipCreator(compressExecutor);
             for (String relativeName : files) {
-                BackupManifest.FileState state = finalSnapshot.get(relativeName);
-                long size = state == null ? 0L : state.size;
-                long lastModified = state == null ? 0L : state.modifiedTime;
                 ZipArchiveEntry entry = new ZipArchiveEntry(relativeName.replace('\\', '/'));
                 entry.setMethod(ZipMethod.DEFLATED.getCode());
                 creator.addArchiveEntry(entry, () -> {
@@ -459,8 +470,6 @@ public final class BackupStorage {
                         return new HashingCountingInputStream(
                                 worldPath.resolve(relativeName),
                                 relativeName,
-                                size,
-                                lastModified,
                                 progress::bytesRead,
                                 results
                         );
@@ -543,13 +552,10 @@ public final class BackupStorage {
         if (!Files.isRegularFile(file)) {
             throw new IOException("Included file is missing: " + file);
         }
-        BackupManifest.FileState state = finalSnapshot.get(relativeName);
-        long size = state == null ? Files.size(file) : state.size;
-        long lastModified = state == null ? Files.getLastModifiedTime(file).toMillis() : state.modifiedTime;
 
         ZipArchiveEntry entry = new ZipArchiveEntry(relativeName.replace('\\', '/'));
         zipOut.putArchiveEntry(entry);
-        HashingCountingInputStream in = new HashingCountingInputStream(file, relativeName, size, lastModified, progress::bytesRead, null);
+        HashingCountingInputStream in = new HashingCountingInputStream(file, relativeName, progress::bytesRead, null);
         try {
             in.transferTo(zipOut);
         } finally {
@@ -963,25 +969,22 @@ public final class BackupStorage {
     private static final class HashingCountingInputStream extends InputStream {
         private final String relativeName;
         private final DigestInputStream digestStream;
-        private final long size;
-        private final long lastModified;
+        private final Path file;
         private final LongConsumer onBytesRead;
         private final Map<String, ReadResult> results;
+        private long bytesRead;
         private ReadResult result;
         private boolean completed;
 
         private HashingCountingInputStream(
                 Path file,
                 String relativeName,
-                long size,
-                long lastModified,
                 LongConsumer onBytesRead,
                 Map<String, ReadResult> results
         ) throws IOException {
+            this.file = file;
             this.relativeName = relativeName;
             this.digestStream = new DigestInputStream(Files.newInputStream(file), newDigest());
-            this.size = size;
-            this.lastModified = lastModified;
             this.onBytesRead = onBytesRead;
             this.results = results;
         }
@@ -990,6 +993,7 @@ public final class BackupStorage {
         public int read() throws IOException {
             int value = digestStream.read();
             if (value >= 0) {
+                bytesRead++;
                 onBytesRead.accept(1L);
             } else {
                 completed = true;
@@ -1001,6 +1005,7 @@ public final class BackupStorage {
         public int read(byte[] buffer, int offset, int length) throws IOException {
             int read = digestStream.read(buffer, offset, length);
             if (read > 0) {
+                bytesRead += read;
                 onBytesRead.accept(read);
             } else if (read == -1) {
                 completed = true;
@@ -1015,8 +1020,8 @@ public final class BackupStorage {
                     result = new ReadResult(
                             relativeName,
                             toHex(digestStream.getMessageDigest().digest()),
-                            size,
-                            lastModified
+                            bytesRead,
+                            Files.getLastModifiedTime(file).toMillis()
                     );
                     if (results != null) {
                         results.put(relativeName, result);
