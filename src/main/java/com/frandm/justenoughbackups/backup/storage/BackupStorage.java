@@ -50,6 +50,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import java.util.zip.ZipEntry;
@@ -325,7 +326,9 @@ public final class BackupStorage {
         Map<String, ReadResult> hashedFiles = new LinkedHashMap<>();
         for (String relativeName : orderedFiles) {
             try {
-                hashedFiles.put(relativeName, hashFile(worldPath, relativeName));
+                ReadResult result = hashFile(worldPath, relativeName);
+                hashedFiles.put(relativeName, result);
+                progress.bytesWritten(result.bytes());
             } catch (IOException exception) {
                 handleBrokenFile(status, relativeName, exception, integrityMode, progress);
             }
@@ -364,7 +367,12 @@ public final class BackupStorage {
 
             Future<ReadResult> future;
             try {
-                future = completionService.take();
+                do {
+                    future = completionService.poll(200L, TimeUnit.MILLISECONDS);
+                    if (future == null) {
+                        progress.keepAlive();
+                    }
+                } while (future == null);
             } catch (InterruptedException exception) {
                 Thread.currentThread().interrupt();
                 throw new IOException("Hash calculation interrupted", exception);
@@ -373,6 +381,7 @@ public final class BackupStorage {
             try {
                 ReadResult result = future.get();
                 hashedFiles.put(result.relativeName(), result);
+                progress.bytesWritten(result.bytes());
             } catch (InterruptedException exception) {
                 Thread.currentThread().interrupt();
                 throw new IOException("Hash calculation interrupted", exception);
@@ -476,7 +485,15 @@ public final class BackupStorage {
                 });
             }
             try {
-                creator.writeTo(zipOut);
+                Future<?> compression = executor.submit(() -> {
+                    creator.writeTo(zipOut);
+                    return null;
+                });
+                while (!compression.isDone()) {
+                    progress.keepAlive();
+                    Thread.sleep(200L);
+                }
+                compression.get();
             } catch (InterruptedException exception) {
                 Thread.currentThread().interrupt();
                 throw new IOException("Compression interrupted", exception);
@@ -931,8 +948,17 @@ public final class BackupStorage {
             this.listener = listener;
         }
 
+        private void bytesWritten(long bytes) {
+            bytesWritten += bytes;
+            emit(BackupProgressState.RUNNING, false);
+        }
+
         private void fileCompleted() {
             filesWritten++;
+            emit(BackupProgressState.RUNNING, false);
+        }
+
+        private void keepAlive() {
             emit(BackupProgressState.RUNNING, false);
         }
 
