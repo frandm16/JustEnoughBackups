@@ -59,11 +59,13 @@ public final class RestoreService {
         if (worldParent == null) {
             throw new IOException("Unable to resolve the parent directory of the world: " + normalizedWorld);
         }
-        Path staging = worldParent.resolve(BackupConstants.RESTORE_STAGING_PREFIX + backupId);
-        Path oldWorld = worldParent.resolve(BackupConstants.RESTORE_OLD_PREFIX + backupId);
+        Path container = worldParent.resolve(BackupConstants.RESTORE_CONTAINER);
+        Path staging = container.resolve(BackupConstants.RESTORE_STAGING_PREFIX + backupId);
+        Path oldWorld = container.resolve(BackupConstants.RESTORE_OLD_PREFIX + backupId);
 
         deleteRecursively(staging);
         deleteRecursively(oldWorld);
+        Files.createDirectories(container);
         Files.createDirectories(staging);
         for (BackupManifest manifest : chain) {
             BackupStorage.extractBackup(backupDir.resolve(manifest.zipFileName), staging, backupId, reason, progressListener);
@@ -85,7 +87,7 @@ public final class RestoreService {
                 backupId,
                 normalizedWorld,
                 staging,
-                worldParent.resolve(BackupConstants.RESTORE_OLD_PREFIX + backupId),
+                oldWorld,
                 RestoreIntent.RestoreState.PREPARED,
                 integrityMode,
                 strict,
@@ -283,6 +285,17 @@ public final class RestoreService {
 
         persist(intent, RestoreIntent.RestoreState.APPLIED);
         WorldBackupMod.LOGGER.info("Restore {} applied to world {}.", intent.backupId(), world);
+
+        try {
+            deleteRecursively(old);
+            RestoreJournal.delete(world.getParent(), world);
+            WorldBackupMod.LOGGER.info("Deleted the previous world after restore {}.", intent.backupId());
+        } catch (IOException failure) {
+            WorldBackupMod.LOGGER.warn(
+                    "Restore {} applied, but the previous world could not be deleted; it will be cleaned up on the next start.",
+                    intent.backupId(), failure
+            );
+        }
     }
 
     private static void restorePreviousWorldIfPossible(RestoreIntent intent) throws IOException {
@@ -318,6 +331,7 @@ public final class RestoreService {
         if (worldParent == null) {
             return;
         }
+        Path container = worldParent.resolve(BackupConstants.RESTORE_CONTAINER);
 
         Set<Path> activeArtifacts = new HashSet<>();
         for (RestoreIntent intent : RestoreJournal.readAll(worldParent)) {
@@ -344,18 +358,34 @@ public final class RestoreService {
             }
         }
 
+        if (Files.isDirectory(container)) {
+            try (var stream = Files.list(container)) {
+                for (Path candidate : stream
+                        .filter(Files::isDirectory)
+                        .filter(path -> {
+                            String name = path.getFileName().toString();
+                            return (name.startsWith(BackupConstants.RESTORE_STAGING_PREFIX)
+                                    || name.startsWith(BackupConstants.RESTORE_OLD_PREFIX))
+                                    && !activeArtifacts.contains(path.toAbsolutePath().normalize());
+                        })
+                        .toList()) {
+                    deleteRecursively(candidate);
+                    WorldBackupMod.LOGGER.info("Removed orphaned restore artifact: {}", candidate);
+                }
+            }
+        }
+
         try (var stream = Files.list(worldParent)) {
             for (Path candidate : stream
                     .filter(Files::isDirectory)
                     .filter(path -> {
                         String name = path.getFileName().toString();
-                        return (name.startsWith(BackupConstants.RESTORE_STAGING_PREFIX)
-                                || name.startsWith(BackupConstants.RESTORE_OLD_PREFIX))
-                                && !activeArtifacts.contains(path.toAbsolutePath().normalize());
+                        return name.startsWith(BackupConstants.RESTORE_STAGING_PREFIX)
+                                || name.startsWith(BackupConstants.RESTORE_OLD_PREFIX);
                     })
                     .toList()) {
                 deleteRecursively(candidate);
-                WorldBackupMod.LOGGER.info("Removed orphaned restore artifact: {}", candidate);
+                WorldBackupMod.LOGGER.info("Removed legacy restore artifact: {}", candidate);
             }
         }
 
@@ -369,6 +399,10 @@ public final class RestoreService {
                     WorldBackupMod.LOGGER.info("Removed orphaned restore temporary directory: {}", candidate);
                 }
             }
+        }
+
+        if (Files.isDirectory(container) && isEmptyDirectory(container)) {
+            Files.deleteIfExists(container);
         }
     }
 

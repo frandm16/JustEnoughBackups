@@ -27,7 +27,8 @@ final class RestoreJournal {
     }
 
     static Path intentPath(Path worldParent, Path worldPath) {
-        return worldParent.resolve(BackupConstants.RESTORE_INTENT_PREFIX + worldPath.getFileName() + INTENT_SUFFIX);
+        return worldParent.resolve(BackupConstants.RESTORE_CONTAINER)
+                .resolve(BackupConstants.RESTORE_INTENT_PREFIX + worldPath.getFileName() + INTENT_SUFFIX);
     }
 
     static void write(RestoreIntent intent) throws IOException {
@@ -63,10 +64,11 @@ final class RestoreJournal {
 
     static List<RestoreIntent> readAll(Path worldParent) throws IOException {
         List<RestoreIntent> intents = new ArrayList<>();
-        if (!Files.isDirectory(worldParent)) {
+        Path container = worldParent.resolve(BackupConstants.RESTORE_CONTAINER);
+        if (!Files.isDirectory(container)) {
             return intents;
         }
-        try (var stream = Files.list(worldParent)) {
+        try (var stream = Files.list(container)) {
             for (Path file : stream
                     .filter(Files::isRegularFile)
                     .filter(path -> {
