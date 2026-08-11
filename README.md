@@ -22,6 +22,7 @@ It supports:
 - retention by total backup size per world
 - restore preparation from the backup browser
 - a configurable client HUD popup with live preview
+- parallel (multi-threaded) scanning, compression, and restore extraction
 - optional Mod Menu integration
 
 The mod is designed to keep the actual backup logic on the server side while exposing management and configuration through a client UI.
@@ -72,6 +73,16 @@ Retention can be configured in two ways at the same time:
   - respects dependency chains
 
 If a new backup would exceed the configured space cap even after deleting every backup that is allowed to be removed, creation fails instead of publishing an invalid final state.
+
+### Performance: parallel processing
+
+Backups and restores use multiple worker threads to speed up large worlds:
+
+- **scanning / hashing**: the world snapshot scan runs across `threadCount` threads (up to one per CPU core), reading and hashing files in parallel
+- **compression**: the ZIP archive is written with parallel compression
+- **restore extraction**: backup ZIP files are extracted across `threadCount` threads
+
+The number of threads is controlled by `threadCount` in the config and can be set between `1` and the maximum number of CPU threads (default: CPU cores minus two). Lower values reduce CPU usage; higher values speed up large worlds.
 
 ### Backup management UI
 
@@ -167,6 +178,7 @@ Main config areas:
 - `messageChannel`
 - `integrityMode`
 - `minimumFreeSpaceReserveMb`
+- `threadCount`
 - `backupDirectory`
 - `excludedPaths`
 - `retention`
@@ -179,6 +191,8 @@ Main config areas:
 `backupDirectory` may be relative to the game directory or an absolute path.
 
 `excludedPaths` uses paths relative to the world root. A folder entry excludes that full subtree, while a file entry excludes only that specific file.
+
+`threadCount` controls parallel scanning, compression, and restore extraction, and is clamped between `1` and the number of CPU threads.
 
 Examples:
 

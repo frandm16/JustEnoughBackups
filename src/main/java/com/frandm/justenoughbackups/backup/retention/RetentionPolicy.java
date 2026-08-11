@@ -23,7 +23,16 @@ public final class RetentionPolicy {
 
     public static void apply(String worldDirectoryName, BackupConfig config) throws IOException {
         Path backupDir = config.resolveBackupRoot().resolve(worldDirectoryName);
-        RetentionDecision decision = plan(backupDir, BackupStorage.readManifests(backupDir), config);
+        apply(backupDir, BackupStorage.readManifests(backupDir), config);
+    }
+
+    public static void apply(String worldDirectoryName, BackupConfig config, List<BackupManifest> manifests) throws IOException {
+        Path backupDir = config.resolveBackupRoot().resolve(worldDirectoryName);
+        apply(backupDir, manifests, config);
+    }
+
+    private static void apply(Path backupDir, List<BackupManifest> manifests, BackupConfig config) throws IOException {
+        RetentionDecision decision = plan(backupDir, manifests, config);
         for (BackupEntry entry : decision.deletions()) {
             if (entry.existingFile()) {
                 Files.deleteIfExists(entry.path());

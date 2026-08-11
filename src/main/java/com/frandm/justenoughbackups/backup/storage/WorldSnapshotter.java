@@ -51,9 +51,10 @@ public final class WorldSnapshotter {
         }
         ScanProgressTracker progress = new ScanProgressTracker(type, reason, totals, progressListener);
         progress.emit(BackupProgressState.STARTED, true);
+        boolean hashContents = type != BackupType.FULL;
         try {
             Map<String, BackupManifest.FileState> snapshot = snapshot(worldPath, (file, attrs) -> {
-                BackupManifest.FileState state = readFileState(file, attrs);
+                BackupManifest.FileState state = hashContents ? readFileState(file, attrs) : statFileState(attrs);
                 progress.fileScanned(attrs.size());
                 return state;
             }, excludedPaths);
@@ -226,6 +227,14 @@ public final class WorldSnapshotter {
                 attrs.size(),
                 attrs.lastModifiedTime().toMillis(),
                 sha256(file)
+        );
+    }
+
+    private static BackupManifest.FileState statFileState(BasicFileAttributes attrs) {
+        return new BackupManifest.FileState(
+                attrs.size(),
+                attrs.lastModifiedTime().toMillis(),
+                null
         );
     }
 

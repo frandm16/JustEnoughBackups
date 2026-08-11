@@ -8,9 +8,11 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 
+import java.util.Objects;
+
 public final class BackupProgressHud {
     private static final long FINISHED_VISIBLE_MILLIS = 5_000L;
-    private static final long RUNNING_TIMEOUT_MILLIS = 2_000L;
+    private static final long RUNNING_TIMEOUT_MILLIS = 3_000L;
     private static volatile BackupProgressPayload current;
     private static volatile long lastUpdateMillis;
 
@@ -18,6 +20,14 @@ public final class BackupProgressHud {
     }
 
     public static void update(BackupProgressPayload payload) {
+        BackupProgressPayload previous = current;
+        if (previous != null
+                && (previous.state() == BackupProgressState.COMPLETED || previous.state() == BackupProgressState.FAILED)
+                && (payload.state() == BackupProgressState.STARTED || payload.state() == BackupProgressState.RUNNING)
+                && !previous.backupId().isEmpty()
+                && Objects.equals(previous.backupId(), payload.backupId())) {
+            return;
+        }
         current = payload;
         lastUpdateMillis = System.currentTimeMillis();
     }
@@ -32,6 +42,7 @@ public final class BackupProgressHud {
         long age = System.currentTimeMillis() - lastUpdateMillis;
         if (progress.state() == BackupProgressState.RUNNING || progress.state() == BackupProgressState.STARTED) {
             if (age > RUNNING_TIMEOUT_MILLIS) {
+                current = null;
                 return;
             }
         } else if (age > FINISHED_VISIBLE_MILLIS) {

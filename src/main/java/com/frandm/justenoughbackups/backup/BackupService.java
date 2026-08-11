@@ -2,10 +2,12 @@ package com.frandm.justenoughbackups.backup;
 
 import com.frandm.justenoughbackups.WorldBackupMod;
 import com.frandm.justenoughbackups.backup.model.BackupManifest;
+import com.frandm.justenoughbackups.backup.model.BackupStatus;
 import com.frandm.justenoughbackups.backup.model.BackupSummary;
 import com.frandm.justenoughbackups.backup.model.BackupType;
 import com.frandm.justenoughbackups.backup.model.PendingRestore;
 import com.frandm.justenoughbackups.backup.progress.BackupProgress;
+import com.frandm.justenoughbackups.backup.parallel.BackupWatchdog;
 import com.frandm.justenoughbackups.backup.progress.BackupProgressBroadcaster;
 import com.frandm.justenoughbackups.backup.progress.BackupProgressState;
 import com.frandm.justenoughbackups.backup.progress.BackupProgressPhase;
@@ -18,6 +20,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.storage.LevelResource;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -62,11 +65,19 @@ public final class BackupService {
         String worldName = BackupPaths.worldName(server, worldPath);
         String worldDirectoryName = BackupPaths.worldDirectoryName(server, worldPath);
         BackupConfig config = BackupConfig.get();
-        AtomicReference<BackupProgressPhase> progressPhase = new AtomicReference<>(BackupProgressPhase.SCANNING);
+        AtomicReference<BackupProgress> lastProgress = new AtomicReference<>();
 
         return CompletableFuture.supplyAsync(() -> {
+            BackupWatchdog watchdog = new BackupWatchdog(progress -> {
+                lastProgress.set(progress);
+                BackupProgressBroadcaster.broadcast(server, progress);
+            });
+            watchdog.start();
             try {
-                BackupManifest manifest = BackupStorage.createBackup(
+                lastProgress.set(initialProgress(type, reason));
+                BackupProgressBroadcaster.broadcast(server, lastProgress.get());
+                BackupStorage.resetAbortState();
+                BackupStorage.BackupCreation creation = BackupStorage.createBackupWithManifests(
                         worldPath,
                         worldName,
                         worldDirectoryName,
@@ -74,30 +85,29 @@ public final class BackupService {
                         type,
                         reason,
                         requestedName,
-                        progress -> {
-                            progressPhase.set(progress.phase());
-                            BackupProgressBroadcaster.broadcast(server, progress);
-                        }
+                        watchdog.listener()
                 );
-                RetentionPolicy.apply(worldDirectoryName, config);
+                BackupManifest manifest = creation.manifest();
+                RetentionPolicy.apply(worldDirectoryName, config, creation.manifests());
+                watchdog.stop();
+                broadcastTerminal(server, manifest, creation.status());
                 WorldBackupMod.LOGGER.info("Backup created: {}", manifest.id);
                 BackupMessages.broadcastBackupCompleted(server, manifest);
                 return manifest;
+            } catch (BackupWatchdog.TimeoutException exception) {
+                broadcastFailed(server, type, reason, lastProgress);
+                BackupMessages.broadcastBackupFailed(server, type, reason, exception);
+                throw new RuntimeException("Backup aborted after watchdog timeout.", exception);
             } catch (IOException exception) {
-                BackupProgressBroadcaster.broadcast(server, new BackupProgress(
-                        "",
-                        type,
-                        reason,
-                        progressPhase.get(),
-                        0L,
-                        0L,
-                        0,
-                        0,
-                        BackupProgressState.FAILED
-                ));
+                broadcastFailed(server, type, reason, lastProgress);
                 BackupMessages.broadcastBackupFailed(server, type, reason, exception);
                 throw new RuntimeException("Failed to create " + type + " backup.", exception);
+            } catch (RuntimeException exception) {
+                broadcastFailed(server, type, reason, lastProgress);
+                BackupMessages.broadcastBackupFailed(server, type, reason, exception);
+                throw exception;
             } finally {
+                watchdog.stop();
                 restoreSaving(server, previousAutoSave, previousWorldSavingState);
                 BACKUP_RUNNING.set(false);
             }
@@ -108,6 +118,69 @@ public final class BackupService {
         return BackupStorage.readManifests(BackupPaths.worldBackupDir(server)).stream()
                 .sorted(Comparator.comparing(manifest -> manifest.createdAt))
                 .toList();
+    }
+
+    private static BackupProgress initialProgress(BackupType type, String reason) {
+        return new BackupProgress(
+                "",
+                type,
+                reason,
+                BackupProgressPhase.SCANNING,
+                0L,
+                0L,
+                0,
+                0,
+                BackupProgressState.STARTED
+        );
+    }
+
+    private static void broadcastTerminal(MinecraftServer server, BackupManifest manifest, BackupStatus status) {
+        boolean completed = status == null || status.completed;
+        int files = manifest.includedFiles == null ? 0 : manifest.includedFiles.size();
+        long bytes = archiveBytes(server, manifest);
+        BackupProgressBroadcaster.broadcast(server, new BackupProgress(
+                manifest.id,
+                manifest.type,
+                manifest.reason,
+                BackupProgressPhase.WRITING,
+                bytes,
+                bytes,
+                files,
+                files,
+                completed ? BackupProgressState.COMPLETED : BackupProgressState.FAILED
+        ));
+        if (!completed) {
+            WorldBackupMod.LOGGER.warn("Backup {} was published with broken files: {}",
+                    manifest.id, status.brokenFiles.size());
+        }
+    }
+
+    private static long archiveBytes(MinecraftServer server, BackupManifest manifest) {
+        try {
+            Path backupFile = BackupPaths.worldBackupDir(server).resolve(manifest.zipFileName);
+            if (backupFile != null && Files.isRegularFile(backupFile)) {
+                return Files.size(backupFile);
+            }
+        } catch (IOException exception) {
+            WorldBackupMod.LOGGER.debug("Unable to read published backup size for {}", manifest.id, exception);
+        }
+        return Math.max(0L, manifest.includedBytes);
+    }
+
+    private static void broadcastFailed(MinecraftServer server, BackupType type, String reason, AtomicReference<BackupProgress> lastProgress) {
+        BackupProgress last = lastProgress.get();
+        BackupProgress failed = new BackupProgress(
+                last == null ? "" : last.backupId(),
+                type,
+                reason,
+                last == null ? BackupProgressPhase.SCANNING : last.phase(),
+                last == null ? 0L : last.bytesWritten(),
+                last == null ? 0L : last.totalBytes(),
+                last == null ? 0 : last.filesWritten(),
+                last == null ? 0 : last.totalFiles(),
+                BackupProgressState.FAILED
+        );
+        BackupProgressBroadcaster.broadcast(server, failed);
     }
 
     public static List<BackupSummary> listBackupSummaries(MinecraftServer server) throws IOException {

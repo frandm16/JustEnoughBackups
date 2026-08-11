@@ -46,9 +46,9 @@ public record BackupProgressPayload(
     }
 
     private static void write(RegistryFriendlyByteBuf buffer, BackupProgressPayload payload) {
-        buffer.writeUtf(payload.backupId());
+        buffer.writeUtf(payload.backupId() == null ? "" : payload.backupId());
         buffer.writeEnum(payload.backupType());
-        buffer.writeUtf(payload.reason());
+        buffer.writeUtf(payload.reason() == null ? "" : payload.reason());
         buffer.writeEnum(payload.phase());
         buffer.writeLong(payload.bytesWritten());
         buffer.writeLong(payload.totalBytes());

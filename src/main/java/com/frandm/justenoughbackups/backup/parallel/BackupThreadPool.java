@@ -14,6 +14,13 @@ public final class BackupThreadPool {
     private BackupThreadPool() {
     }
 
+    public static void shutdownNow() {
+        ExecutorService existing = executor;
+        if (existing != null) {
+            existing.shutdownNow();
+        }
+    }
+
     public static synchronized ExecutorService getExecutor() {
         int targetThreads = Math.clamp(
                 BackupConfig.get().threadCount,

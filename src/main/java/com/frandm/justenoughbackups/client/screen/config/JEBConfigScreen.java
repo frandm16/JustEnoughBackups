@@ -1111,7 +1111,7 @@ public final class JEBConfigScreen extends Screen {
     }
 
     private void drawTooltipBox(GuiGraphicsExtractor graphics, String tooltip, int mouseX, int mouseY) {
-        String[] lines = tooltip.split("\\R");
+        String[] lines = tooltip.replace("\\n", "\n").split("\\R");
         int tooltipW = 0;
         for (String line : lines) {
             tooltipW = Math.max(tooltipW, font.width(line));

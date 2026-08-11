@@ -30,6 +30,7 @@ import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
@@ -42,16 +43,17 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.LongConsumer;
 
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -64,8 +66,26 @@ import org.apache.commons.compress.archivers.zip.ZipMethod;
 
 public final class BackupStorage {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final AtomicBoolean ABORTED = new AtomicBoolean(false);
+    private static final Set<ExecutorService> ACTIVE_PARALLEL_EXECUTORS = ConcurrentHashMap.newKeySet();
 
     private BackupStorage() {
+    }
+
+    public static boolean isBackupAborted() {
+        return ABORTED.get();
+    }
+
+    public static void resetAbortState() {
+        ABORTED.set(false);
+    }
+
+    public static void abortActiveBackup() {
+        ABORTED.set(true);
+        BackupThreadPool.shutdownNow();
+        for (ExecutorService executor : ACTIVE_PARALLEL_EXECUTORS) {
+            executor.shutdownNow();
+        }
     }
 
     public static BackupManifest createBackup(
@@ -89,13 +109,27 @@ public final class BackupStorage {
             String requestedName,
             BackupProgressListener progressListener
     ) throws IOException {
+        return createBackupWithManifests(worldPath, worldName, worldDirectoryName, config, type, reason, requestedName, progressListener)
+                .manifest();
+    }
+
+    public static BackupCreation createBackupWithManifests(
+            Path worldPath,
+            String worldName,
+            String worldDirectoryName,
+            BackupConfig config,
+            BackupType type,
+            String reason,
+            String requestedName,
+            BackupProgressListener progressListener
+    ) throws IOException {
         Path backupDir = config.resolveBackupRoot().resolve(worldDirectoryName);
         Files.createDirectories(backupDir);
 
         List<BackupManifest> manifests = readManifests(backupDir);
         Map<String, BackupManifest.FileState> snapshot = WorldSnapshotter.snapshot(worldPath, type, reason, progressListener);
         if (type != BackupType.FULL && hasNoFullBackup(manifests)) {
-            BackupManifest fullBase = writeBackup(
+            WriteResult fullBase = writeBackup(
                     worldPath,
                     backupDir,
                     worldName,
@@ -106,14 +140,37 @@ public final class BackupStorage {
                     reason + " base",
                     config,
                     "",
+                    manifests,
                     progressListener
             );
             manifests = new ArrayList<>(manifests);
-            manifests.add(fullBase);
+            manifests.add(fullBase.manifest());
         }
 
         BackupManifest base = findBaseManifest(manifests, type);
-        return writeBackup(worldPath, backupDir, worldName, worldDirectoryName, type, base, snapshot, reason, config, requestedName, progressListener);
+        WriteResult result = writeBackup(
+                worldPath,
+                backupDir,
+                worldName,
+                worldDirectoryName,
+                type,
+                base,
+                snapshot,
+                reason,
+                config,
+                requestedName,
+                manifests,
+                progressListener
+        );
+        manifests = new ArrayList<>(manifests);
+        manifests.add(result.manifest());
+        return new BackupCreation(result.manifest(), manifests, result.status());
+    }
+
+    public record BackupCreation(BackupManifest manifest, List<BackupManifest> manifests, BackupStatus status) {
+    }
+
+    private record WriteResult(BackupManifest manifest, BackupStatus status) {
     }
 
     public static BackupManifest writeBackup(
@@ -127,6 +184,36 @@ public final class BackupStorage {
             String reason,
             BackupConfig config,
             String requestedName,
+            BackupProgressListener progressListener
+    ) throws IOException {
+        return writeBackup(
+                worldPath,
+                backupDir,
+                worldName,
+                worldDirectoryName,
+                type,
+                base,
+                snapshot,
+                reason,
+                config,
+                requestedName,
+                readManifests(backupDir),
+                progressListener
+        ).manifest();
+    }
+
+    private static WriteResult writeBackup(
+            Path worldPath,
+            Path backupDir,
+            String worldName,
+            String worldDirectoryName,
+            BackupType type,
+            BackupManifest base,
+            Map<String, BackupManifest.FileState> snapshot,
+            String reason,
+            BackupConfig config,
+            String requestedName,
+            List<BackupManifest> manifests,
             BackupProgressListener progressListener
     ) throws IOException {
         List<String> includedFiles = includedFiles(type, snapshot, base);
@@ -150,10 +237,10 @@ public final class BackupStorage {
         manifest.includedFiles.addAll(includedFiles);
         manifest.snapshot.putAll(snapshot);
 
-        ensureSufficientDiskSpace(backupDir, snapshot, includedFiles, config);
-        writeBackupZipToTemp(worldPath, backupDir, tempBackupFile, backupFile, manifest, includedFiles, snapshot, config, progressListener);
+        ensureSufficientDiskSpace(backupDir, manifests, snapshot, includedFiles, config);
+        BackupStatus status = writeBackupZipToTemp(worldPath, backupDir, tempBackupFile, backupFile, manifest, includedFiles, snapshot, manifests, config, progressListener);
         WorldBackupMod.LOGGER.info("{} backup {} created for reason: {}", type, id, reason);
-        return manifest;
+        return new WriteResult(manifest, status);
     }
 
     private static boolean hasNoFullBackup(List<BackupManifest> manifests) {
@@ -244,16 +331,7 @@ public final class BackupStorage {
     private record ReadResult(String relativeName, String sha256, long bytes, long lastModified) {
     }
 
-    private static final class FileFailure extends IOException {
-        private final String relativeName;
-
-        private FileFailure(String relativeName, IOException cause) {
-            super(cause);
-            this.relativeName = relativeName;
-        }
-    }
-
-    private static void writeBackupZip(
+    private static BackupStatus writeBackupZip(
             Path worldPath,
             Path backupFile,
             BackupManifest manifest,
@@ -274,7 +352,7 @@ public final class BackupStorage {
                 manifest.id,
                 manifest.type,
                 manifest.reason,
-                totalBytes(worldPath, includedFiles),
+                includedBytes(currentSnapshot, includedFiles),
                 includedFiles.size(),
                 progressListener
         );
@@ -283,29 +361,25 @@ public final class BackupStorage {
         List<String> orderedFiles = new ArrayList<>(includedFiles);
         Collections.sort(orderedFiles);
 
-        int threadCount = Math.clamp(BackupConfig.get().threadCount, 1, Math.max(1, Runtime.getRuntime().availableProcessors()));
-
-        Map<String, ReadResult> hashedFiles;
-        if (threadCount <= 1 || orderedFiles.size() <= 1) {
-            hashedFiles = hashFilesSerially(worldPath, orderedFiles, status, integrityMode, progress);
-        } else {
-            hashedFiles = hashFilesInParallel(worldPath, orderedFiles, status, integrityMode, progress);
-        }
-
         List<String> toWrite = new ArrayList<>();
         for (String relativeName : orderedFiles) {
-            if (hashedFiles.containsKey(relativeName)) {
+            Path file = worldPath.resolve(relativeName);
+            if (!Files.isRegularFile(file)) {
+                handleBrokenFile(status, relativeName, new IOException("Included file is missing: " + file), integrityMode);
+            } else {
                 toWrite.add(relativeName);
             }
         }
 
+        int threadCount = Math.clamp(BackupConfig.get().threadCount, 1, Math.max(1, Runtime.getRuntime().availableProcessors()));
+
         try (OutputStream fileOut = Files.newOutputStream(backupFile);
-             ZipArchiveOutputStream zipOut = new ZipArchiveOutputStream(fileOut)) {
+             ZipArchiveOutputStream zipOut = new ZipArchiveOutputStream(new ProgressCountingOutputStream(fileOut, progress::bytesWritten))) {
             zipOut.setUseZip64(Zip64Mode.AsNeeded);
             if (threadCount <= 1 || toWrite.size() <= 1) {
-                writeEntriesSerially(worldPath, zipOut, toWrite, hashedFiles, manifest, status, finalSnapshot, integrityMode, progress);
+                writeEntriesSerially(worldPath, zipOut, toWrite, manifest, status, finalSnapshot, integrityMode, progress);
             } else {
-                writeEntriesInParallel(worldPath, zipOut, toWrite, hashedFiles, manifest, status, finalSnapshot, progress);
+                writeEntriesInParallel(worldPath, zipOut, toWrite, manifest, status, finalSnapshot, progress);
             }
 
             manifest.snapshot.clear();
@@ -313,124 +387,18 @@ public final class BackupStorage {
             writeSummaryAndMetadata(zipOut, manifest, status, includeSummaryFile);
         }
 
-        progress.emit(status.completed ? BackupProgressState.COMPLETED : BackupProgressState.FAILED, true);
-    }
-
-    private static Map<String, ReadResult> hashFilesSerially(
-            Path worldPath,
-            List<String> orderedFiles,
-            BackupStatus status,
-            BackupIntegrityMode integrityMode,
-            ProgressTracker progress
-    ) throws IOException {
-        Map<String, ReadResult> hashedFiles = new LinkedHashMap<>();
-        for (String relativeName : orderedFiles) {
-            try {
-                ReadResult result = hashFile(worldPath, relativeName);
-                hashedFiles.put(relativeName, result);
-                progress.bytesWritten(result.bytes());
-            } catch (IOException exception) {
-                handleBrokenFile(status, relativeName, exception, integrityMode, progress);
-            }
-        }
-        return hashedFiles;
-    }
-
-    private static Map<String, ReadResult> hashFilesInParallel(
-            Path worldPath,
-            List<String> orderedFiles,
-            BackupStatus status,
-            BackupIntegrityMode integrityMode,
-            ProgressTracker progress
-    ) throws IOException {
-        ExecutorService executor = BackupThreadPool.getExecutor();
-        ExecutorCompletionService<ReadResult> completionService = new ExecutorCompletionService<>(executor);
-        Map<String, ReadResult> hashedFiles = new ConcurrentHashMap<>();
-
-        int total = orderedFiles.size();
-        int submitted = 0;
-        int inFlight = 0;
-        int maxInFlight = Math.max(2, BackupConfig.get().threadCount) * 2;
-
-        while (submitted < total || inFlight > 0) {
-            while (submitted < total && inFlight < maxInFlight) {
-                String relativeName = orderedFiles.get(submitted++);
-                completionService.submit(() -> {
-                    try {
-                        return hashFile(worldPath, relativeName);
-                    } catch (IOException exception) {
-                        throw new FileFailure(relativeName, exception);
-                    }
-                });
-                inFlight++;
-            }
-
-            Future<ReadResult> future;
-            try {
-                do {
-                    future = completionService.poll(200L, TimeUnit.MILLISECONDS);
-                    if (future == null) {
-                        progress.keepAlive();
-                    }
-                } while (future == null);
-            } catch (InterruptedException exception) {
-                Thread.currentThread().interrupt();
-                throw new IOException("Hash calculation interrupted", exception);
-            }
-            inFlight--;
-            try {
-                ReadResult result = future.get();
-                hashedFiles.put(result.relativeName(), result);
-                progress.bytesWritten(result.bytes());
-            } catch (InterruptedException exception) {
-                Thread.currentThread().interrupt();
-                throw new IOException("Hash calculation interrupted", exception);
-            } catch (ExecutionException exception) {
-                Throwable cause = exception.getCause();
-                if (cause instanceof FileFailure failure) {
-                    handleBrokenFile(status, failure.relativeName, (IOException) failure.getCause(), integrityMode, progress);
-                    continue;
-                }
-                if (cause instanceof IOException ioException) {
-                    throw new IOException("Failed during parallel hashing", ioException);
-                }
-                throw new IOException("Failed during parallel hashing", cause);
-            }
-        }
-        return hashedFiles;
-    }
-
-    private static ReadResult hashFile(Path worldPath, String relativeName) throws IOException {
-        Path file = worldPath.resolve(relativeName);
-        if (!Files.isRegularFile(file)) {
-            throw new IOException("Included file is missing: " + file);
-        }
-
-        long bytes = Files.size(file);
-        long lastModified = Files.getLastModifiedTime(file).toMillis();
-
-        MessageDigest digest = newDigest();
-        try (InputStream in = Files.newInputStream(file)) {
-            byte[] buffer = new byte[8192];
-            int read;
-            while ((read = in.read(buffer)) != -1) {
-                digest.update(buffer, 0, read);
-            }
-        }
-
-        return new ReadResult(relativeName, toHex(digest.digest()), bytes, lastModified);
+        progress.complete();
+        return status;
     }
 
     private static void handleBrokenFile(
             BackupStatus status,
             String relativeName,
             IOException exception,
-            BackupIntegrityMode integrityMode,
-            ProgressTracker progress
+            BackupIntegrityMode integrityMode
     ) throws IOException {
         status.completed = false;
         status.brokenFiles.add(new BackupStatus.BrokenFile(relativeName, rootMessage(exception)));
-        progress.emit(BackupProgressState.FAILED, true);
         if (integrityMode == BackupIntegrityMode.STRICT) {
             throw exception;
         }
@@ -441,7 +409,6 @@ public final class BackupStorage {
             Path worldPath,
             ZipArchiveOutputStream zipOut,
             List<String> files,
-            Map<String, ReadResult> hashedFiles,
             BackupManifest manifest,
             BackupStatus status,
             Map<String, BackupManifest.FileState> finalSnapshot,
@@ -449,11 +416,10 @@ public final class BackupStorage {
             ProgressTracker progress
     ) throws IOException {
         for (String relativeName : files) {
-            ReadResult result = hashedFiles.get(relativeName);
             try {
-                writeSingleEntry(worldPath, zipOut, result, manifest, status, finalSnapshot, progress);
+                writeSingleEntry(worldPath, zipOut, relativeName, manifest, status, finalSnapshot, progress);
             } catch (IOException exception) {
-                handleBrokenFile(status, relativeName, exception, integrityMode, progress);
+                handleBrokenFile(status, relativeName, exception, integrityMode);
             }
         }
     }
@@ -462,30 +428,42 @@ public final class BackupStorage {
             Path worldPath,
             ZipArchiveOutputStream zipOut,
             List<String> files,
-            Map<String, ReadResult> hashedFiles,
             BackupManifest manifest,
             BackupStatus status,
             Map<String, BackupManifest.FileState> finalSnapshot,
             ProgressTracker progress
     ) throws IOException {
         int threads = Math.clamp(BackupConfig.get().threadCount, 1, Math.max(1, Runtime.getRuntime().availableProcessors()));
-        ExecutorService executor = newCompressExecutor(threads);
+        ExecutorService compressExecutor = newCompressExecutor(threads);
+        ExecutorService writeExecutor = newSingleWriteExecutor();
+        ACTIVE_PARALLEL_EXECUTORS.add(compressExecutor);
+        ACTIVE_PARALLEL_EXECUTORS.add(writeExecutor);
+        Map<String, ReadResult> results = new ConcurrentHashMap<>();
         try {
-            ParallelScatterZipCreator creator = new ParallelScatterZipCreator(executor);
+            ParallelScatterZipCreator creator = new ParallelScatterZipCreator(compressExecutor);
             for (String relativeName : files) {
-                Path file = worldPath.resolve(relativeName);
+                BackupManifest.FileState state = finalSnapshot.get(relativeName);
+                long size = state == null ? 0L : state.size;
+                long lastModified = state == null ? 0L : state.modifiedTime;
                 ZipArchiveEntry entry = new ZipArchiveEntry(relativeName.replace('\\', '/'));
                 entry.setMethod(ZipMethod.DEFLATED.getCode());
                 creator.addArchiveEntry(entry, () -> {
                     try {
-                        return Files.newInputStream(file);
+                        return new HashingCountingInputStream(
+                                worldPath.resolve(relativeName),
+                                relativeName,
+                                size,
+                                lastModified,
+                                progress::bytesRead,
+                                results
+                        );
                     } catch (IOException exception) {
                         throw new UncheckedIOException(exception);
                     }
                 });
             }
             try {
-                Future<?> compression = executor.submit(() -> {
+                Future<?> compression = writeExecutor.submit(() -> {
                     creator.writeTo(zipOut);
                     return null;
                 });
@@ -504,10 +482,16 @@ public final class BackupStorage {
                 throw new IOException("Failed during parallel compression", exception.getCause());
             }
             for (String relativeName : files) {
-                recordWrittenFile(manifest, status, finalSnapshot, progress, hashedFiles.get(relativeName));
+                ReadResult result = results.get(relativeName);
+                if (result != null) {
+                    recordWrittenFile(manifest, status, finalSnapshot, progress, result);
+                }
             }
         } finally {
-            executor.shutdown();
+            ACTIVE_PARALLEL_EXECUTORS.remove(compressExecutor);
+            ACTIVE_PARALLEL_EXECUTORS.remove(writeExecutor);
+            writeExecutor.shutdownNow();
+            compressExecutor.shutdownNow();
         }
     }
 
@@ -525,28 +509,50 @@ public final class BackupStorage {
         });
     }
 
+    private static ExecutorService newSingleWriteExecutor() {
+        return Executors.newSingleThreadExecutor(new ThreadFactory() {
+            private final AtomicInteger counter = new AtomicInteger(1);
+
+            @Override
+            public Thread newThread(Runnable runnable) {
+                Thread thread = new Thread(runnable, "JEB-ZipWrite-" + counter.getAndIncrement());
+                thread.setDaemon(true);
+                thread.setPriority(Math.max(Thread.MIN_PRIORITY, Thread.NORM_PRIORITY - 1));
+                return thread;
+            }
+        });
+    }
+
     private static void writeSingleEntry(
             Path worldPath,
             ZipArchiveOutputStream zipOut,
-            ReadResult result,
+            String relativeName,
             BackupManifest manifest,
             BackupStatus status,
             Map<String, BackupManifest.FileState> finalSnapshot,
             ProgressTracker progress
     ) throws IOException {
-        Path file = worldPath.resolve(result.relativeName());
+        Path file = worldPath.resolve(relativeName);
         if (!Files.isRegularFile(file)) {
             throw new IOException("Included file is missing: " + file);
         }
+        BackupManifest.FileState state = finalSnapshot.get(relativeName);
+        long size = state == null ? Files.size(file) : state.size;
+        long lastModified = state == null ? Files.getLastModifiedTime(file).toMillis() : state.modifiedTime;
 
-        ZipArchiveEntry entry = new ZipArchiveEntry(result.relativeName().replace('\\', '/'));
+        ZipArchiveEntry entry = new ZipArchiveEntry(relativeName.replace('\\', '/'));
         zipOut.putArchiveEntry(entry);
-        try (InputStream in = Files.newInputStream(file)) {
+        HashingCountingInputStream in = new HashingCountingInputStream(file, relativeName, size, lastModified, progress::bytesRead, null);
+        try {
             in.transferTo(zipOut);
         } finally {
             zipOut.closeArchiveEntry();
+            in.close();
         }
-        recordWrittenFile(manifest, status, finalSnapshot, progress, result);
+        ReadResult result = in.result();
+        if (result != null) {
+            recordWrittenFile(manifest, status, finalSnapshot, progress, result);
+        }
     }
 
     private static void recordWrittenFile(
@@ -582,7 +588,7 @@ public final class BackupStorage {
         zipOut.closeArchiveEntry();
     }
 
-    private static void writeBackupZipToTemp(
+    private static BackupStatus writeBackupZipToTemp(
             Path worldPath,
             Path backupDir,
             Path tempBackupFile,
@@ -590,25 +596,36 @@ public final class BackupStorage {
             BackupManifest manifest,
             List<String> includedFiles,
             Map<String, BackupManifest.FileState> currentSnapshot,
+            List<BackupManifest> manifests,
             BackupConfig config,
             BackupProgressListener progressListener
     ) throws IOException {
         Files.deleteIfExists(tempBackupFile);
         try {
-            writeBackupZip(worldPath, tempBackupFile, manifest, includedFiles, currentSnapshot, config.integrityMode, config.includeSummaryFile, progressListener);
-            enforceSpaceLimitBeforePublish(backupDir, tempBackupFile, manifest, config);
+            BackupStatus status = writeBackupZip(
+                    worldPath,
+                    tempBackupFile,
+                    manifest,
+                    includedFiles,
+                    currentSnapshot,
+                    config.integrityMode,
+                    config.includeSummaryFile,
+                    progressListener
+            );
+            enforceSpaceLimitBeforePublish(backupDir, manifests, tempBackupFile, manifest, config);
             moveCompletedBackup(tempBackupFile, backupFile);
-        } catch (IOException exception) {
+            return status;
+        } catch (IOException | RuntimeException exception) {
             Files.deleteIfExists(tempBackupFile);
             throw exception;
         }
     }
 
-    private static void enforceSpaceLimitBeforePublish(Path backupDir, Path tempBackupFile, BackupManifest pendingManifest, BackupConfig config) throws IOException {
+    private static void enforceSpaceLimitBeforePublish(Path backupDir, List<BackupManifest> manifests, Path tempBackupFile, BackupManifest pendingManifest, BackupConfig config) throws IOException {
         long pendingBytes = Files.exists(tempBackupFile) ? Files.size(tempBackupFile) : 0L;
         RetentionPolicy.RetentionDecision decision = RetentionPolicy.planWithPending(
                 backupDir,
-                readManifests(backupDir),
+                manifests,
                 config,
                 pendingManifest,
                 pendingBytes
@@ -668,12 +685,13 @@ public final class BackupStorage {
 
     private static void ensureSufficientDiskSpace(
             Path backupDir,
+            List<BackupManifest> manifests,
             Map<String, BackupManifest.FileState> snapshot,
             List<String> includedFiles,
             BackupConfig config
     ) throws IOException {
         long includedBytes = includedBytes(snapshot, includedFiles);
-        double compressionRatio = lastFullCompressionRatio(backupDir);
+        double compressionRatio = lastFullCompressionRatio(backupDir, manifests);
         long estimatedZipBytes = (long) Math.ceil(includedBytes * compressionRatio);
         long reserveBytes = Math.max(0L, config.minimumFreeSpaceReserveMb) * 1024L * 1024L;
         long requiredBytes = safeAdd(safeMultiply(estimatedZipBytes, 2L), reserveBytes);
@@ -701,9 +719,9 @@ public final class BackupStorage {
         return total;
     }
 
-    private static double lastFullCompressionRatio(Path backupDir) {
+    private static double lastFullCompressionRatio(Path backupDir, List<BackupManifest> manifests) {
         try {
-            BackupManifest lastFull = readManifests(backupDir).stream()
+            BackupManifest lastFull = manifests.stream()
                     .filter(manifest -> manifest.type == BackupType.FULL)
                     .filter(manifest -> manifest.createdAt != null)
                     .filter(manifest -> manifest.zipFileName != null)
@@ -857,20 +875,6 @@ public final class BackupStorage {
         return Objects.requireNonNullElse(message, current.getClass().getSimpleName());
     }
 
-    private static long totalBytes(Path worldPath, List<String> includedFiles) {
-        long total = 0L;
-        for (String relativeName : includedFiles) {
-            Path file = worldPath.resolve(relativeName);
-            if (Files.isRegularFile(file)) {
-                try {
-                    total += Files.size(file);
-                } catch (IOException ignored) {
-                }
-            }
-        }
-        return total;
-    }
-
     private static long safeMultiply(long value, long multiplier) {
         if (value <= 0L || multiplier <= 0L) {
             return 0L;
@@ -918,38 +922,151 @@ public final class BackupStorage {
                 .toList();
     }
 
+    private static final class HashingCountingInputStream extends InputStream {
+        private final String relativeName;
+        private final DigestInputStream digestStream;
+        private final long size;
+        private final long lastModified;
+        private final LongConsumer onBytesRead;
+        private final Map<String, ReadResult> results;
+        private ReadResult result;
+        private boolean completed;
+
+        private HashingCountingInputStream(
+                Path file,
+                String relativeName,
+                long size,
+                long lastModified,
+                LongConsumer onBytesRead,
+                Map<String, ReadResult> results
+        ) throws IOException {
+            this.relativeName = relativeName;
+            this.digestStream = new DigestInputStream(Files.newInputStream(file), newDigest());
+            this.size = size;
+            this.lastModified = lastModified;
+            this.onBytesRead = onBytesRead;
+            this.results = results;
+        }
+
+        @Override
+        public int read() throws IOException {
+            int value = digestStream.read();
+            if (value >= 0) {
+                onBytesRead.accept(1L);
+            } else {
+                completed = true;
+            }
+            return value;
+        }
+
+        @Override
+        public int read(byte[] buffer, int offset, int length) throws IOException {
+            int read = digestStream.read(buffer, offset, length);
+            if (read > 0) {
+                onBytesRead.accept(read);
+            } else if (read == -1) {
+                completed = true;
+            }
+            return read;
+        }
+
+        @Override
+        public void close() throws IOException {
+            try {
+                if (completed && result == null) {
+                    result = new ReadResult(
+                            relativeName,
+                            toHex(digestStream.getMessageDigest().digest()),
+                            size,
+                            lastModified
+                    );
+                    if (results != null) {
+                        results.put(relativeName, result);
+                    }
+                }
+            } finally {
+                digestStream.close();
+            }
+        }
+
+        private ReadResult result() {
+            return result;
+        }
+    }
+
+    private static final class ProgressCountingOutputStream extends OutputStream {
+        private final OutputStream delegate;
+        private final LongConsumer onBytesWritten;
+
+        private ProgressCountingOutputStream(OutputStream delegate, LongConsumer onBytesWritten) {
+            this.delegate = delegate;
+            this.onBytesWritten = onBytesWritten;
+        }
+
+        @Override
+        public void write(int value) throws IOException {
+            delegate.write(value);
+            onBytesWritten.accept(1L);
+        }
+
+        @Override
+        public void write(byte[] buffer, int offset, int length) throws IOException {
+            delegate.write(buffer, offset, length);
+            if (length > 0) {
+                onBytesWritten.accept(length);
+            }
+        }
+
+        @Override
+        public void flush() throws IOException {
+            delegate.flush();
+        }
+
+        @Override
+        public void close() throws IOException {
+            delegate.close();
+        }
+    }
+
     private static final class ProgressTracker {
         private static final long MIN_UPDATE_INTERVAL_MILLIS = 500L;
 
         private final String backupId;
         private final BackupType type;
         private final String reason;
-        private final long totalBytes;
+        private final long totalInputBytes;
         private final int totalFiles;
         private final BackupProgressListener listener;
-        private long bytesWritten;
-        private int filesWritten;
-        private long lastUpdateMillis;
-        private int lastPercent = -1;
+        private final java.util.concurrent.atomic.AtomicLong bytesRead = new java.util.concurrent.atomic.AtomicLong();
+        private final java.util.concurrent.atomic.AtomicLong bytesWritten = new java.util.concurrent.atomic.AtomicLong();
+        private volatile int filesWritten;
+        private final java.util.concurrent.atomic.AtomicLong lastUpdateMillis = new java.util.concurrent.atomic.AtomicLong();
+        private volatile int lastPercent = -1;
+        private volatile BackupProgressPhase lastPhase = BackupProgressPhase.COPYING;
 
         private ProgressTracker(
                 String backupId,
                 BackupType type,
                 String reason,
-                long totalBytes,
+                long totalInputBytes,
                 int totalFiles,
                 BackupProgressListener listener
         ) {
             this.backupId = backupId;
             this.type = type;
             this.reason = reason;
-            this.totalBytes = totalBytes;
+            this.totalInputBytes = totalInputBytes;
             this.totalFiles = totalFiles;
             this.listener = listener;
         }
 
+        private void bytesRead(long bytes) {
+            bytesRead.addAndGet(bytes);
+            emit(BackupProgressState.RUNNING, false);
+        }
+
         private void bytesWritten(long bytes) {
-            bytesWritten += bytes;
+            bytesWritten.addAndGet(bytes);
             emit(BackupProgressState.RUNNING, false);
         }
 
@@ -962,22 +1079,53 @@ public final class BackupStorage {
             emit(BackupProgressState.RUNNING, false);
         }
 
-        private void emit(BackupProgressState state, boolean force) {
-            long now = System.currentTimeMillis();
-            int percent = totalBytes <= 0L ? 100 : (int) Math.min(100L, (bytesWritten * 100L) / totalBytes);
-            if (!force && now - lastUpdateMillis < MIN_UPDATE_INTERVAL_MILLIS && percent == lastPercent) {
-                return;
-            }
-
-            lastUpdateMillis = now;
-            lastPercent = percent;
+        private void complete() {
+            long written = bytesWritten.get();
             listener.onProgress(new BackupProgress(
                     backupId,
                     type,
                     reason,
-                    BackupProgressPhase.COPYING,
-                    bytesWritten,
-                    totalBytes,
+                    BackupProgressPhase.WRITING,
+                    written,
+                    written,
+                    filesWritten,
+                    totalFiles,
+                    BackupProgressState.RUNNING
+            ));
+        }
+
+        private void emit(BackupProgressState state, boolean force) {
+            long now = System.currentTimeMillis();
+            long read = bytesRead.get();
+            BackupProgressPhase phase;
+            long written;
+            long total;
+            if (read < totalInputBytes) {
+                phase = BackupProgressPhase.COPYING;
+                written = read;
+                total = totalInputBytes;
+            } else {
+                phase = BackupProgressPhase.WRITING;
+                written = bytesWritten.get();
+                total = written;
+            }
+
+            int percent = total <= 0L ? 0 : (int) Math.min(100L, (written * 100L) / total);
+            if (!force && now - lastUpdateMillis.get() < MIN_UPDATE_INTERVAL_MILLIS
+                    && percent == lastPercent && phase == lastPhase) {
+                return;
+            }
+
+            lastUpdateMillis.set(now);
+            lastPercent = percent;
+            lastPhase = phase;
+            listener.onProgress(new BackupProgress(
+                    backupId,
+                    type,
+                    reason,
+                    phase,
+                    written,
+                    total,
                     filesWritten,
                     totalFiles,
                     state

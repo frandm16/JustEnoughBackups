@@ -1,13 +1,12 @@
 package com.frandm.justenoughbackups.client.ui.popup;
 
+import com.frandm.justenoughbackups.backup.progress.BackupProgressFormat;
 import com.frandm.justenoughbackups.backup.progress.BackupProgressPayload;
 import com.frandm.justenoughbackups.backup.progress.BackupProgressState;
 import com.frandm.justenoughbackups.backup.progress.BackupProgressPhase;
 import com.frandm.justenoughbackups.config.BackupConfig;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-
-import java.util.Locale;
 
 public final class BackupPopupRenderer {
     private BackupPopupRenderer() {
@@ -43,21 +42,6 @@ public final class BackupPopupRenderer {
         drawText(graphics, font, popup, progressLine, x, textY + 11, dimensions.width(), popup.textColorArgb());
     }
 
-    public static String formatBytes(long bytes) {
-        if (bytes < 1024L) {
-            return bytes + " B";
-        }
-
-        double value = bytes;
-        String[] units = {"KB", "MB", "GB", "TB"};
-        int unit = -1;
-        while (value >= 1024.0D && unit < units.length - 1) {
-            value /= 1024.0D;
-            unit++;
-        }
-        return String.format(Locale.ROOT, "%.1f %s", value, units[unit]);
-    }
-
     private static String detail(BackupProgressPayload progress, BackupConfig.Popup popup) {
         String template = switch (progress.state()) {
             case STARTED, RUNNING -> progress.phase() == BackupProgressPhase.SCANNING ? popup.scanningText : popup.runningText;
@@ -72,14 +56,26 @@ public final class BackupPopupRenderer {
             return "Backup failed";
         }
         if (progress.state() == BackupProgressState.COMPLETED) {
-            return "100% - " + formatBytes(progress.totalBytes()) + " copied";
+            return "100% - " + BackupProgressFormat.formatBytes(progress.bytesWritten()) + " copied";
+        }
+        if (progress.phase() == BackupProgressPhase.WRITING) {
+            return BackupProgressFormat.formatBytes(progress.bytesWritten()) + " written";
         }
 
-        String action = progress.phase() == BackupProgressPhase.SCANNING ? " scanned" : " copied";
-        return percent(progress) + "% - "
-                + formatBytes(progress.bytesWritten())
+        String action = switch (progress.phase()) {
+            case SCANNING -> " scanned";
+            case COPYING -> " copied";
+            case COMPRESSING -> " copied";
+            case WRITING -> " written";
+        };
+        String written = BackupProgressFormat.formatBytes(progress.bytesWritten());
+        if (progress.totalBytes() <= 0L) {
+            return BackupProgressFormat.percent(progress.bytesWritten(), progress.totalBytes()) + "% - " + written + action;
+        }
+        return BackupProgressFormat.percent(progress.bytesWritten(), progress.totalBytes()) + "% - "
+                + written
                 + " / "
-                + formatBytes(progress.totalBytes())
+                + BackupProgressFormat.formatBytes(progress.totalBytes())
                 + action;
     }
 
@@ -100,21 +96,15 @@ public final class BackupPopupRenderer {
         return template
                 .replace("{reason}", reason(progress))
                 .replace("{type}", progress.backupType().toString())
-                .replace("{percent}", String.valueOf(percent(progress)))
-                .replace("{bytesWritten}", formatBytes(progress.bytesWritten()))
-                .replace("{totalBytes}", formatBytes(progress.totalBytes()));
+                .replace("{percent}", String.valueOf(BackupProgressFormat.percent(progress.bytesWritten(), progress.totalBytes())))
+                .replace("{bytesWritten}", BackupProgressFormat.formatBytes(progress.bytesWritten()))
+                .replace("{totalBytes}", BackupProgressFormat.formatBytes(progress.totalBytes()));
     }
 
     private static String reason(BackupProgressPayload progress) {
         return progress.reason() == null || progress.reason().isBlank()
                 ? "backup"
                 : progress.reason().replace('_', ' ');
-    }
-
-    private static int percent(BackupProgressPayload progress) {
-        return progress.totalBytes() <= 0L
-                ? 100
-                : (int) Math.min(100L, (progress.bytesWritten() * 100L) / progress.totalBytes());
     }
 
     public record Dimensions(int width, int height) {
