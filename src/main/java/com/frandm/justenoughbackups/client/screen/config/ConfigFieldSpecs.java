@@ -6,6 +6,7 @@ final class ConfigFieldSpecs {
     private static final List<ConfigFieldSpec> ALL = List.of(
             //Backups tab
             ConfigFieldSpec.of(ConfigFieldId.BACKUP_MODE),
+            ConfigFieldSpec.intField(ConfigFieldId.THREAD_COUNT, 1, Math.max(1, Runtime.getRuntime().availableProcessors())),
             ConfigFieldSpec.of(ConfigFieldId.AUTOMATIC_BACKUPS_HEADER),
             ConfigFieldSpec.of(ConfigFieldId.AUTOMATIC_FULL_ENABLED),
             ConfigFieldSpec.intField(ConfigFieldId.AUTOMATIC_FULL_INTERVAL_MINUTES, 1, Integer.MAX_VALUE),
@@ -24,7 +25,6 @@ final class ConfigFieldSpecs {
             ConfigFieldSpec.textField(ConfigFieldId.EXCLUDED_PATHS, 512),
             ConfigFieldSpec.intField(ConfigFieldId.MAX_TOTAL_SIZE_MB, 0, Integer.MAX_VALUE),
             ConfigFieldSpec.intField(ConfigFieldId.MINIMUM_FREE_SPACE_RESERVE_MB, 0, Integer.MAX_VALUE),
-            ConfigFieldSpec.intField(ConfigFieldId.THREAD_COUNT, 1, Math.max(1, Runtime.getRuntime().availableProcessors())),
             ConfigFieldSpec.intField(ConfigFieldId.PERMISSION_LEVEL, 0, 4),
             ConfigFieldSpec.of(ConfigFieldId.MESSAGE_CHANNEL),
             ConfigFieldSpec.of(ConfigFieldId.INTEGRITY_MODE),

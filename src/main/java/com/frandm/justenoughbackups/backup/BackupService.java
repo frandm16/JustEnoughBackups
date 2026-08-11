@@ -282,6 +282,7 @@ public final class BackupService {
                 .handle((restore, error) -> {
                     if (error != null) {
                         BACKUP_RUNNING.set(false);
+                        prepared.thenAccept(RestoreService::cancelPreparedRestore);
                         Throwable cause = error.getCause() != null ? error.getCause() : error;
                         BackupMessages.broadcastRestoreFailed(server, rootMessage(cause));
                         throw new CompletionException(cause);

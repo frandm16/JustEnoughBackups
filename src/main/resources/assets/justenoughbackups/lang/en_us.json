@@ -149,7 +149,7 @@
   "screen.justenoughbackups.config.keep_differential.tooltip": "Maximum number of differential backups to keep. Required full backups are protected.",
   "screen.justenoughbackups.config.max_total_size_mb.tooltip": "Maximum total size in MB for this world's backup folder. 0 disables the size limit. \nCount-based retention and dependency protection still apply.",
   "screen.justenoughbackups.config.minimum_free_space_reserve_mb.tooltip": "Extra disk space in MB that must remain free before a backup starts. \nThe pre-check requires world size x2 plus this reserve.",
-  "screen.justenoughbackups.config.thread_count.tooltip": "Number of parallel threads used for file hashing, ZIP extraction, and restore operations.\nHigher values speed up large worlds but increase CPU usage. Defaults to CPU cores minus two.",
+  "screen.justenoughbackups.config.thread_count.tooltip": "Number of parallel threads used for file hashing, ZIP extraction, and restore operations.\nHigher values speed up large worlds but increase CPU usage. Defaults to CPU cores minus two.\nCaution: Excessive values may impact overall system performance.",
   "screen.justenoughbackups.config.excluded_paths.tooltip": "Files or folders to skip during backup. Use world-relative paths and manage them with the + and - buttons.",
   "screen.justenoughbackups.config.show_popup.tooltip": "Shows the backup progress HUD on clients with the mod installed.",
   "screen.justenoughbackups.config.show_title.tooltip": "Shows or hides the title line at the top of the backup popup.",

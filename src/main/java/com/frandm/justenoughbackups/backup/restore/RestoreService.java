@@ -3,13 +3,13 @@ package com.frandm.justenoughbackups.backup.restore;
 import com.frandm.justenoughbackups.WorldBackupMod;
 import com.frandm.justenoughbackups.backup.BackupConstants;
 import com.frandm.justenoughbackups.backup.BackupPaths;
-import com.frandm.justenoughbackups.backup.model.BackupManifest;
 import com.frandm.justenoughbackups.backup.model.BackupIntegrityMode;
+import com.frandm.justenoughbackups.backup.model.BackupManifest;
 import com.frandm.justenoughbackups.backup.model.BackupStatus;
 import com.frandm.justenoughbackups.backup.model.BackupType;
 import com.frandm.justenoughbackups.backup.model.PendingRestore;
+import com.frandm.justenoughbackups.backup.model.RestoreIntent;
 import com.frandm.justenoughbackups.backup.progress.BackupProgressListener;
-import com.frandm.justenoughbackups.backup.progress.RestoreProgressTracker;
 import com.frandm.justenoughbackups.backup.storage.BackupStorage;
 import com.frandm.justenoughbackups.backup.storage.WorldSnapshotter;
 import com.frandm.justenoughbackups.config.BackupConfig;
@@ -20,47 +20,27 @@ import net.minecraft.world.level.storage.LevelResource;
 import java.io.IOException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.DosFileAttributeView;
 import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 public final class RestoreService {
-    private static final String RESTORE_PREFIX = ".restore-";
-    private static final String STAGING_PREFIX = ".justenoughbackups-staging-";
-
-    private static volatile PendingRestore pendingRestore;
-
     private RestoreService() {
     }
 
     public static void registerRestoreHandler() {
-        ServerLifecycleEvents.SERVER_STARTED.register(RestoreService::cleanupOrphanedRestoreArtifacts);
-        ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
-            PendingRestore restore = pendingRestore;
-            if (restore == null) {
-                return;
-            }
-
-            pendingRestore = null;
-            try {
-                applyPreparedRestore(restore);
-                WorldBackupMod.LOGGER.warn(
-                        "World restore {} applied. Previous world was saved as a normal Old_World backup.",
-                        restore.backupId()
-                );
-            } catch (IOException exception) {
-                WorldBackupMod.LOGGER.error("Prepared restore failed while server was stopping.", exception);
-            }
-        });
+        ServerLifecycleEvents.SERVER_STOPPED.register(RestoreService::applyPendingRestore);
+        ServerLifecycleEvents.SERVER_STARTING.register(RestoreService::recoverPendingRestore);
+        ServerLifecycleEvents.SERVER_STARTED.register(RestoreService::cleanupRestoreArtifacts);
     }
 
     public static PendingRestore prepareRestore(
@@ -73,40 +53,68 @@ public final class RestoreService {
         List<BackupManifest> chain = resolveRestoreChain(backupDir, targetManifest);
         String backupId = targetManifest.id;
         String reason = "Restore " + backupId;
-        Path tempRestore = backupDir.resolve(RESTORE_PREFIX + backupId);
         BackupManifest target = chain.getLast();
+        Path normalizedWorld = worldPath.toAbsolutePath().normalize();
+        Path worldParent = normalizedWorld.getParent();
+        if (worldParent == null) {
+            throw new IOException("Unable to resolve the parent directory of the world: " + normalizedWorld);
+        }
+        Path staging = worldParent.resolve(BackupConstants.RESTORE_STAGING_PREFIX + backupId);
+        Path oldWorld = worldParent.resolve(BackupConstants.RESTORE_OLD_PREFIX + backupId);
 
-        deleteIfExists(tempRestore);
-        Files.createDirectories(tempRestore);
+        deleteRecursively(staging);
+        deleteRecursively(oldWorld);
+        Files.createDirectories(staging);
         for (BackupManifest manifest : chain) {
-            BackupStorage.extractBackup(backupDir.resolve(manifest.zipFileName), tempRestore, backupId, reason, progressListener);
+            BackupStorage.extractBackup(backupDir.resolve(manifest.zipFileName), staging, backupId, reason, progressListener);
         }
         Path targetBackupFile = backupDir.resolve(target.zipFileName);
         if (!BackupStorage.hasSummaryFile(targetBackupFile)) {
-            Files.deleteIfExists(tempRestore.resolve(BackupConstants.SUMMARY_ENTRY));
+            Files.deleteIfExists(staging.resolve(BackupConstants.SUMMARY_ENTRY));
         }
-        pruneToSnapshot(tempRestore, chain.getLast().snapshot);
+        pruneToSnapshot(staging, target.snapshot);
 
-        PendingRestore restore = new PendingRestore(
+        BackupIntegrityMode integrityMode = target.integrityMode == null ? BackupConfig.get().integrityMode : target.integrityMode;
+        boolean strict = hasStatusForChain(backupDir, chain);
+        Map<String, BackupManifest.FileState> snapshot = Map.copyOf(target.snapshot);
+
+        verifyRestoreSnapshot(staging, integrityMode, strict, snapshot);
+
+        RestoreJournal.write(new RestoreIntent(
+                RestoreIntent.CURRENT_VERSION,
+                backupId,
+                normalizedWorld,
+                staging,
+                worldParent.resolve(BackupConstants.RESTORE_OLD_PREFIX + backupId),
+                RestoreIntent.RestoreState.PREPARED,
+                integrityMode,
+                strict,
+                snapshot
+        ));
+        WorldBackupMod.LOGGER.warn("Restore {} prepared from request {}. It will be applied when the server stops.", backupId, requestedName);
+        return new PendingRestore(
                 backupId,
                 backupDir,
-                worldPath,
-                tempRestore,
+                normalizedWorld,
+                staging,
                 target.worldName == null ? backupDir.getFileName().toString() : target.worldName,
                 target.worldDirectoryName == null ? backupDir.getFileName().toString() : target.worldDirectoryName,
-                target.integrityMode == null ? BackupConfig.get().integrityMode : target.integrityMode,
-                hasStatusForChain(backupDir, chain),
-                Map.copyOf(chain.getLast().snapshot)
+                integrityMode,
+                strict,
+                snapshot
         );
+    }
 
-        Path stagingWorld = stagingWorldPath(restore);
-        deleteIfExists(stagingWorld);
-        copyDirectory(tempRestore, stagingWorld, backupId, reason, progressListener);
-        verifyRestoreSnapshot(stagingWorld, restore);
-
-        pendingRestore = restore;
-        WorldBackupMod.LOGGER.warn("Restore {} prepared from request {}. It will be applied when the server stops.", backupId, requestedName);
-        return restore;
+    public static void cancelPreparedRestore(PendingRestore restore) {
+        try {
+            if (restore.stagingPath() != null) {
+                deleteRecursively(restore.stagingPath());
+            }
+            RestoreJournal.delete(restore.worldPath().getParent(), restore.worldPath());
+            WorldBackupMod.LOGGER.warn("Cancelled pending restore {}.", restore.backupId());
+        } catch (IOException exception) {
+            WorldBackupMod.LOGGER.warn("Failed to cancel pending restore {}.", restore.backupId(), exception);
+        }
     }
 
     private static List<BackupManifest> resolveRestoreChain(Path backupDir, BackupManifest target) throws IOException {
@@ -144,188 +152,235 @@ public final class RestoreService {
         return List.copyOf(chain);
     }
 
-    private static void applyPreparedRestore(PendingRestore restore) throws IOException {
-        if (!Files.isDirectory(restore.tempRestore())) {
-            throw new IOException("Prepared restore directory is missing: " + restore.tempRestore());
+    private static void applyPendingRestore(MinecraftServer server) {
+        Path worldPath = server.getWorldPath(LevelResource.ROOT).toAbsolutePath().normalize();
+        Path worldParent = worldPath.getParent();
+        if (worldParent == null) {
+            return;
         }
-
-        Path stagingWorld = stagingWorldPath(restore);
-        if (!Files.isDirectory(stagingWorld)) {
-            throw new IOException("Prepared restore staging directory is missing: " + stagingWorld);
+        try {
+            Optional<RestoreIntent> intent = RestoreJournal.read(worldParent, worldPath);
+            if (intent.isPresent() && isPendingState(intent.get().state())) {
+                applySwap(intent.get());
+            }
+        } catch (IOException exception) {
+            WorldBackupMod.LOGGER.error("Prepared restore failed while the server was stopping.", exception);
         }
-
-        if (Files.exists(restore.worldPath())) {
-            clearDirectoryContents(restore.worldPath(), restore.backupDir());
-        } else {
-            Files.createDirectories(restore.worldPath());
-        }
-
-        copyDirectory(stagingWorld, restore.worldPath(), restore.backupId(), "Restore " + restore.backupId(), BackupProgressListener.noop());
-        verifyRestoreSnapshot(restore.worldPath(), restore);
-        deleteIfExists(stagingWorld);
-        deleteIfExists(restore.tempRestore());
     }
 
-    private static void cleanupOrphanedRestoreArtifacts(MinecraftServer server) {
+    private static void recoverPendingRestore(MinecraftServer server) {
+        Path worldPath = server.getWorldPath(LevelResource.ROOT).toAbsolutePath().normalize();
+        Path worldParent = worldPath.getParent();
+        if (worldParent == null) {
+            return;
+        }
         try {
-            Path worldPath = server.getWorldPath(LevelResource.ROOT).toAbsolutePath().normalize();
-            Path worldParent = worldPath.getParent();
-            if (worldParent != null && Files.isDirectory(worldParent)) {
-                try (var stream = Files.list(worldParent)) {
-                    for (Path candidate : stream
-                            .filter(path -> path.getFileName().toString().startsWith(STAGING_PREFIX))
-                            .toList()) {
-                        deleteIfExists(candidate);
-                        WorldBackupMod.LOGGER.info("Removed orphaned restore staging directory: {}", candidate);
-                    }
-                }
+            Optional<RestoreIntent> intent = RestoreJournal.read(worldParent, worldPath);
+            if (intent.isEmpty()) {
+                return;
             }
-
-            Path backupDir = BackupPaths.worldBackupDir(server).toAbsolutePath().normalize();
-            if (Files.isDirectory(backupDir)) {
-                try (var stream = Files.list(backupDir)) {
-                    for (Path candidate : stream
-                            .filter(path -> path.getFileName().toString().startsWith(RESTORE_PREFIX))
-                            .toList()) {
-                        deleteIfExists(candidate);
-                        WorldBackupMod.LOGGER.info("Removed orphaned restore temporary directory: {}", candidate);
-                    }
+            RestoreIntent restore = intent.get();
+            if (isPendingState(restore.state())) {
+                WorldBackupMod.LOGGER.warn("Resuming pending restore {} (state {}).", restore.backupId(), restore.state());
+                applySwap(restore);
+                return;
+            }
+            switch (restore.state()) {
+                case FAILED -> {
+                    restorePreviousWorldIfPossible(restore);
+                    RestoreJournal.delete(worldParent, worldPath);
+                }
+                case APPLIED -> {
+                    // Cleanup runs on SERVER_STARTED.
+                }
+                default -> {
                 }
             }
         } catch (IOException exception) {
-            WorldBackupMod.LOGGER.warn("Failed to clean up orphaned restore artifacts on server start.", exception);
+            WorldBackupMod.LOGGER.error("Failed to recover a pending restore.", exception);
         }
     }
 
-    private static Path stagingWorldPath(PendingRestore restore) {
-        Path normalizedWorld = restore.worldPath().toAbsolutePath().normalize();
-        Path parent = normalizedWorld.getParent();
-        if (parent == null) {
-            parent = normalizedWorld;
-        }
-        return parent.resolve(STAGING_PREFIX + restore.backupId());
+    private static boolean isPendingState(RestoreIntent.RestoreState state) {
+        return state == RestoreIntent.RestoreState.PREPARED
+                || state == RestoreIntent.RestoreState.OLD_MOVED
+                || state == RestoreIntent.RestoreState.STAGING_INSTALLED;
     }
 
-    private static void copyDirectory(
-            Path source,
-            Path target,
-            String backupId,
-            String reason,
-            BackupProgressListener progressListener,
-            Path... skippedRoots
-    ) throws IOException {
-        Path normalizedSource = source.toAbsolutePath().normalize();
-        Path normalizedTarget = target.toAbsolutePath().normalize();
-        List<Path> normalizedSkippedRoots = normalizeSkippedRoots(skippedRoots);
+    /**
+     * Applies a prepared restore by swapping the staging directory into place.
+     * Every step is idempotent and persisted to the journal, so an interrupted
+     * apply can be resumed or rolled back on the next server start.
+     */
+    private static void applySwap(RestoreIntent intent) throws IOException {
+        Path world = intent.worldPath();
+        Path staging = intent.stagingPath();
+        Path old = intent.oldWorldPath();
 
-        record FileEntry(Path path, long size) {
+        if (intent.state() == RestoreIntent.RestoreState.PREPARED
+                && Files.isDirectory(world, LinkOption.NOFOLLOW_LINKS)
+                && Files.exists(old, LinkOption.NOFOLLOW_LINKS)) {
+            deleteRecursively(old);
         }
 
-        List<FileEntry> filesToCopy = new ArrayList<>();
-        long[] totalBytes = {0L};
+        if (Files.isDirectory(world, LinkOption.NOFOLLOW_LINKS) && !Files.exists(old, LinkOption.NOFOLLOW_LINKS)) {
+            Files.move(world, old);
+            persist(intent, RestoreIntent.RestoreState.OLD_MOVED);
+        }
+        if (Files.isDirectory(staging, LinkOption.NOFOLLOW_LINKS) && !Files.exists(world, LinkOption.NOFOLLOW_LINKS)) {
+            Files.move(staging, world);
+            persist(intent, RestoreIntent.RestoreState.STAGING_INSTALLED);
+        }
 
-        Files.walkFileTree(normalizedSource, new SimpleFileVisitor<>() {
-            @Override
-            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
-                Path normalizedDir = dir.toAbsolutePath().normalize();
-                if (!normalizedDir.equals(normalizedSource) && isInsideAny(normalizedDir, normalizedSkippedRoots)) {
-                    return FileVisitResult.SKIP_SUBTREE;
-                }
+        boolean worldInPlace = Files.isDirectory(world, LinkOption.NOFOLLOW_LINKS);
+        boolean oldInPlace = Files.isDirectory(old, LinkOption.NOFOLLOW_LINKS);
+        boolean stagingInPlace = Files.isDirectory(staging, LinkOption.NOFOLLOW_LINKS);
 
-                Path relative = normalizedSource.relativize(dir);
-                Files.createDirectories(normalizedTarget.resolve(relative));
-                return FileVisitResult.CONTINUE;
+        if (!worldInPlace) {
+            if (oldInPlace) {
+                Files.move(old, world);
+                WorldBackupMod.LOGGER.error("Restore {} aborted; the previous world was restored because the new world is missing.", intent.backupId());
+            } else {
+                WorldBackupMod.LOGGER.error("Restore {} failed and no previous world was available to restore.", intent.backupId());
             }
+            if (stagingInPlace) {
+                deleteRecursively(staging);
+            }
+            persist(intent, RestoreIntent.RestoreState.FAILED);
+            throw new IOException("Restore could not be applied: world directory is missing.");
+        }
 
-            @Override
-            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
-                Path normalizedFile = file.toAbsolutePath().normalize();
-                if (isInsideAny(normalizedFile, normalizedSkippedRoots)) {
-                    return FileVisitResult.CONTINUE;
+        if (stagingInPlace && oldInPlace) {
+            deleteRecursively(world);
+            Files.move(old, world);
+            persist(intent, RestoreIntent.RestoreState.FAILED);
+            throw new IOException("Restore could not be applied: conflicting restore directories were found.");
+        }
+
+        try {
+            verifySnapshotFileList(world, intent.snapshot());
+        } catch (IOException failure) {
+            if (intent.integrityMode() == BackupIntegrityMode.VERY_PERMISSIVE) {
+                WorldBackupMod.LOGGER.warn(
+                        "Restore {} failed verification, but VERY_PERMISSIVE mode allows keeping the restored world.",
+                        intent.backupId(), failure
+                );
+            } else {
+                if (oldInPlace) {
+                    deleteRecursively(world);
+                    Files.move(old, world);
+                    WorldBackupMod.LOGGER.error("Restore {} failed verification; the previous world was restored.", intent.backupId(), failure);
+                } else {
+                    WorldBackupMod.LOGGER.error("Restore {} failed verification and no previous world was available.", intent.backupId(), failure);
                 }
+                if (stagingInPlace) {
+                    deleteRecursively(staging);
+                }
+                persist(intent, RestoreIntent.RestoreState.FAILED);
+                throw new IOException("Restore verification failed for " + intent.backupId(), failure);
+            }
+        }
 
-                filesToCopy.add(new FileEntry(file, attrs.size()));
-                totalBytes[0] += attrs.size();
-                return FileVisitResult.CONTINUE;
+        persist(intent, RestoreIntent.RestoreState.APPLIED);
+        WorldBackupMod.LOGGER.info("Restore {} applied to world {}.", intent.backupId(), world);
+    }
+
+    private static void restorePreviousWorldIfPossible(RestoreIntent intent) throws IOException {
+        Path world = intent.worldPath();
+        Path old = intent.oldWorldPath();
+        Path staging = intent.stagingPath();
+        if (old != null && !Files.isDirectory(world, LinkOption.NOFOLLOW_LINKS) && Files.isDirectory(old, LinkOption.NOFOLLOW_LINKS)) {
+            Files.move(old, world);
+            WorldBackupMod.LOGGER.info("Restored the previous world after failed restore {}.", intent.backupId());
+        }
+        if (staging != null && Files.isDirectory(staging, LinkOption.NOFOLLOW_LINKS)) {
+            deleteRecursively(staging);
+        }
+    }
+
+    private static void persist(RestoreIntent intent, RestoreIntent.RestoreState state) throws IOException {
+        RestoreJournal.write(intent.withState(state));
+    }
+
+    private static void cleanupRestoreArtifacts(MinecraftServer server) {
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                cleanupRestoreArtifactsSync(server);
+            } catch (IOException exception) {
+                WorldBackupMod.LOGGER.warn("Failed to clean up restore artifacts.", exception);
             }
         });
+    }
 
-        RestoreProgressTracker tracker = new RestoreProgressTracker(
-                backupId, BackupType.FULL, reason, totalBytes[0], filesToCopy.size(), progressListener);
-        tracker.start();
+    private static void cleanupRestoreArtifactsSync(MinecraftServer server) throws IOException {
+        Path worldPath = server.getWorldPath(LevelResource.ROOT).toAbsolutePath().normalize();
+        Path worldParent = worldPath.getParent();
+        if (worldParent == null) {
+            return;
+        }
 
-        int threadCount = Math.clamp(BackupConfig.get().threadCount, 1, Math.max(1, Runtime.getRuntime().availableProcessors()));
-        if (threadCount <= 1 || filesToCopy.size() <= 1) {
-            for (FileEntry entry : filesToCopy) {
-                Path relative = normalizedSource.relativize(entry.path());
-                Files.copy(entry.path(), normalizedTarget.resolve(relative), StandardCopyOption.REPLACE_EXISTING);
-                tracker.fileCompleted();
-                tracker.advance(entry.size());
-            }
-        } else {
-            java.util.concurrent.ExecutorService executor = com.frandm.justenoughbackups.backup.parallel.BackupThreadPool.getExecutor();
-            List<java.util.concurrent.Callable<Void>> tasks = new ArrayList<>(filesToCopy.size());
-            for (FileEntry entry : filesToCopy) {
-                tasks.add(() -> {
-                    Path relative = normalizedSource.relativize(entry.path());
-                    Files.copy(entry.path(), normalizedTarget.resolve(relative), StandardCopyOption.REPLACE_EXISTING);
-                    tracker.fileCompleted();
-                    tracker.advance(entry.size());
-                    return null;
-                });
-            }
-            try {
-                var futures = executor.invokeAll(tasks);
-                for (var future : futures) {
-                    future.get();
+        Set<Path> activeArtifacts = new HashSet<>();
+        for (RestoreIntent intent : RestoreJournal.readAll(worldParent)) {
+            switch (intent.state()) {
+                case APPLIED -> {
+                    if (intent.oldWorldPath() != null) {
+                        deleteRecursively(intent.oldWorldPath());
+                    }
+                    RestoreJournal.delete(worldParent, intent.worldPath());
+                    WorldBackupMod.LOGGER.info("Cleaned up the old world after restore {}.", intent.backupId());
                 }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new IOException("Directory copy interrupted", e);
-            } catch (java.util.concurrent.ExecutionException e) {
-                if (e.getCause() instanceof IOException ioEx) {
-                    throw ioEx;
+                case PREPARED, OLD_MOVED, STAGING_INSTALLED -> {
+                    if (intent.stagingPath() != null) {
+                        activeArtifacts.add(intent.stagingPath());
+                    }
+                    if (intent.oldWorldPath() != null) {
+                        activeArtifacts.add(intent.oldWorldPath());
+                    }
                 }
-                throw new IOException("Failed during parallel directory copy", e.getCause());
+                case FAILED -> {
+                    restorePreviousWorldIfPossible(intent);
+                    RestoreJournal.delete(worldParent, intent.worldPath());
+                }
             }
         }
 
-        tracker.complete();
-    }
-
-    private static List<Path> normalizeSkippedRoots(Path... skippedRoots) {
-        List<Path> normalized = new ArrayList<>();
-        for (Path skippedRoot : skippedRoots) {
-            if (skippedRoot != null) {
-                normalized.add(skippedRoot.toAbsolutePath().normalize());
+        try (var stream = Files.list(worldParent)) {
+            for (Path candidate : stream
+                    .filter(Files::isDirectory)
+                    .filter(path -> {
+                        String name = path.getFileName().toString();
+                        return (name.startsWith(BackupConstants.RESTORE_STAGING_PREFIX)
+                                || name.startsWith(BackupConstants.RESTORE_OLD_PREFIX))
+                                && !activeArtifacts.contains(path.toAbsolutePath().normalize());
+                    })
+                    .toList()) {
+                deleteRecursively(candidate);
+                WorldBackupMod.LOGGER.info("Removed orphaned restore artifact: {}", candidate);
             }
         }
-        return normalized;
-    }
 
-    private static boolean isInsideAny(Path path, List<Path> roots) {
-        return roots.stream().anyMatch(path::startsWith);
-    }
-
-    private static void clearDirectoryContents(Path target, Path backupRootToPreserve) throws IOException {
-        Path normalizedTarget = target.toAbsolutePath().normalize();
-        Path normalizedBackupRoot = backupRootToPreserve.toAbsolutePath().normalize();
-
-        Files.walkFileTree(normalizedTarget, new SimpleFileVisitor<>() {
-            @Override
-            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
-                Path normalizedDir = dir.toAbsolutePath().normalize();
-                if (!normalizedDir.equals(normalizedTarget) && normalizedDir.startsWith(normalizedBackupRoot)) {
-                    return FileVisitResult.SKIP_SUBTREE;
+        Path backupDir = BackupPaths.worldBackupDir(server).toAbsolutePath().normalize();
+        if (Files.isDirectory(backupDir)) {
+            try (var stream = Files.list(backupDir)) {
+                for (Path candidate : stream
+                        .filter(path -> path.getFileName().toString().startsWith(".restore-"))
+                        .toList()) {
+                    deleteRecursively(candidate);
+                    WorldBackupMod.LOGGER.info("Removed orphaned restore temporary directory: {}", candidate);
                 }
-                return FileVisitResult.CONTINUE;
             }
+        }
+    }
 
+    private static void pruneToSnapshot(Path targetDir, Map<String, BackupManifest.FileState> snapshot) throws IOException {
+        Set<String> expectedFiles = snapshot.keySet();
+        Files.walkFileTree(targetDir, new SimpleFileVisitor<>() {
             @Override
             public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-                Path normalizedFile = file.toAbsolutePath().normalize();
-                if (!normalizedFile.startsWith(normalizedBackupRoot)) {
-                    Files.deleteIfExists(file);
+                String relativeName = targetDir.relativize(file).toString().replace('\\', '/');
+                if (!expectedFiles.contains(relativeName) && !BackupConstants.SUMMARY_ENTRY.equals(relativeName)) {
+                    makeDeletable(file);
+                    deleteWithRetry(file);
                 }
                 return FileVisitResult.CONTINUE;
             }
@@ -335,26 +390,39 @@ public final class RestoreService {
                 if (exception != null) {
                     throw exception;
                 }
-
-                Path normalizedDir = dir.toAbsolutePath().normalize();
-                if (!normalizedDir.equals(normalizedTarget) && !normalizedDir.startsWith(normalizedBackupRoot)) {
-                    Files.deleteIfExists(dir);
+                if (!dir.equals(targetDir) && isEmptyDirectory(dir)) {
+                    makeDeletable(dir);
+                    deleteWithRetry(dir);
                 }
                 return FileVisitResult.CONTINUE;
             }
         });
     }
 
-    private static void verifyRestoreSnapshot(Path dir, PendingRestore restore) throws IOException {
+    private static boolean isEmptyDirectory(Path dir) throws IOException {
+        try (var stream = Files.list(dir)) {
+            return stream.findAny().isEmpty();
+        }
+    }
+
+    private static void verifyRestoreSnapshot(
+            Path dir,
+            BackupIntegrityMode integrityMode,
+            boolean strict,
+            Map<String, BackupManifest.FileState> snapshot
+    ) throws IOException {
         try {
-            if (restore.strictSnapshotVerification()) {
-                verifySnapshotContent(dir, restore.snapshot());
+            if (strict) {
+                verifySnapshotContent(dir, snapshot);
             } else {
-                verifySnapshotFileList(dir, restore.snapshot());
+                verifySnapshotFileList(dir, snapshot);
             }
         } catch (IOException exception) {
-            if (restore.integrityMode() == BackupIntegrityMode.VERY_PERMISSIVE) {
-                WorldBackupMod.LOGGER.warn("Restore integrity verification failed, but VERY_PERMISSIVE mode allows continuing.", exception);
+            if (integrityMode == BackupIntegrityMode.VERY_PERMISSIVE) {
+                WorldBackupMod.LOGGER.warn(
+                        "Restore integrity verification failed, but VERY_PERMISSIVE mode allows continuing.",
+                        exception
+                );
                 return;
             }
             throw exception;
@@ -362,7 +430,8 @@ public final class RestoreService {
     }
 
     private static void verifySnapshotFileList(Path dir, Map<String, BackupManifest.FileState> expectedSnapshot) throws IOException {
-        Map<String, BackupManifest.FileState> actualSnapshot = WorldSnapshotter.snapshot(dir);
+        Map<String, BackupManifest.FileState> actualSnapshot = WorldSnapshotter.snapshot(
+                dir, BackupType.FULL, "Restore verify", BackupProgressListener.noop());
         Set<String> missingFiles = new HashSet<>(expectedSnapshot.keySet());
         missingFiles.removeAll(actualSnapshot.keySet());
         if (!missingFiles.isEmpty()) {
@@ -405,15 +474,15 @@ public final class RestoreService {
         return true;
     }
 
-    private static void pruneToSnapshot(Path targetDir, Map<String, BackupManifest.FileState> snapshot) throws IOException {
-        Set<String> expectedFiles = snapshot.keySet();
-        Files.walkFileTree(targetDir, new SimpleFileVisitor<>() {
+    private static void deleteRecursively(Path path) throws IOException {
+        if (path == null || !Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
+            return;
+        }
+        Files.walkFileTree(path, new SimpleFileVisitor<>() {
             @Override
             public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-                String relativeName = targetDir.relativize(file).toString().replace('\\', '/');
-                if (!expectedFiles.contains(relativeName) && !BackupConstants.SUMMARY_ENTRY.equals(relativeName)) {
-                    Files.deleteIfExists(file);
-                }
+                makeDeletable(file);
+                deleteWithRetry(file);
                 return FileVisitResult.CONTINUE;
             }
 
@@ -422,30 +491,43 @@ public final class RestoreService {
                 if (exception != null) {
                     throw exception;
                 }
-                if (!dir.equals(targetDir) && isEmptyDirectory(dir)) {
-                    Files.deleteIfExists(dir);
-                }
+                makeDeletable(dir);
+                deleteWithRetry(dir);
                 return FileVisitResult.CONTINUE;
             }
         });
     }
 
-    private static boolean isEmptyDirectory(Path dir) throws IOException {
-        try (var stream = Files.list(dir)) {
-            return stream.findAny().isEmpty();
+    private static void makeDeletable(Path path) {
+        try {
+            DosFileAttributeView view = Files.getFileAttributeView(path, DosFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+            if (view != null && view.readAttributes().isReadOnly()) {
+                view.setReadOnly(false);
+            }
+        } catch (IOException | RuntimeException ignored) {
         }
     }
 
-    private static void deleteIfExists(Path path) throws IOException {
-        if (!Files.exists(path)) {
-            return;
-        }
-
-        try (var stream = Files.walk(path)) {
-            List<Path> paths = stream.sorted(Comparator.reverseOrder()).toList();
-            for (Path item : paths) {
-                Files.deleteIfExists(item);
+    private static void deleteWithRetry(Path path) throws IOException {
+        int attempts = 3;
+        long delayMillis = 150L;
+        IOException lastFailure = null;
+        for (int attempt = 0; attempt < attempts; attempt++) {
+            try {
+                Files.deleteIfExists(path);
+                return;
+            } catch (IOException exception) {
+                lastFailure = exception;
+                if (attempt < attempts - 1) {
+                    try {
+                        Thread.sleep(delayMillis);
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        throw exception;
+                    }
+                }
             }
         }
+        throw lastFailure;
     }
 }

@@ -7,7 +7,7 @@ public record PendingRestore(
         String backupId,
         Path backupDir,
         Path worldPath,
-        Path tempRestore,
+        Path stagingPath,
         String worldName,
         String worldDirectoryName,
         BackupIntegrityMode integrityMode,
