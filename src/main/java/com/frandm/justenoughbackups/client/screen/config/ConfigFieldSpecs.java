@@ -30,6 +30,7 @@ final class ConfigFieldSpecs {
             ConfigFieldSpec.of(ConfigFieldId.INTEGRITY_MODE),
             ConfigFieldSpec.of(ConfigFieldId.INCLUDE_SUMMARY_FILE),
             ConfigFieldSpec.textField(ConfigFieldId.BACKUP_DIRECTORY, 256),
+            ConfigFieldSpec.textField(ConfigFieldId.TEMP_DIRECTORY, 256),
 
             // HUD tab
             ConfigFieldSpec.textField(ConfigFieldId.POPUP_TITLE, 256),

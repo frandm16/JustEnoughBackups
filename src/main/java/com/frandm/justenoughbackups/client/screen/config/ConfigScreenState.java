@@ -43,6 +43,7 @@ final class ConfigScreenState {
                 working.integrityMode = defaults.integrityMode;
                 working.includeSummaryFile = defaults.includeSummaryFile;
                 working.backupDirectory = defaults.backupDirectory;
+                working.tempBackupDirectory = defaults.tempBackupDirectory;
                 working.excludedPaths = new ArrayList<>(defaults.excludedPaths);
                 working.retention.full = defaults.retention.full;
                 working.retention.incremental = defaults.retention.incremental;

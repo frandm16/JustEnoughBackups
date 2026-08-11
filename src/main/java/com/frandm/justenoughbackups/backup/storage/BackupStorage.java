@@ -222,7 +222,9 @@ public final class BackupStorage {
         String id = type.commandName() + "-" + timestamp;
         String zipFileName = resolveBackupFileName(backupDir, requestedName, id + ".zip");
         Path backupFile = backupDir.resolve(zipFileName);
-        Path tempBackupFile = backupDir.resolve(zipFileName + ".tmp");
+        Path tempDir = config.resolveTempRoot().resolve(worldDirectoryName);
+        Files.createDirectories(tempDir);
+        Path tempBackupFile = tempDir.resolve(zipFileName + ".tmp");
 
         BackupManifest manifest = new BackupManifest();
         manifest.id = id;
@@ -237,7 +239,7 @@ public final class BackupStorage {
         manifest.includedFiles.addAll(includedFiles);
         manifest.snapshot.putAll(snapshot);
 
-        ensureSufficientDiskSpace(backupDir, manifests, snapshot, includedFiles, config);
+        ensureSufficientDiskSpace(backupDir, tempBackupFile, manifests, snapshot, includedFiles, config);
         BackupStatus status = writeBackupZipToTemp(worldPath, backupDir, tempBackupFile, backupFile, manifest, includedFiles, snapshot, manifests, config, progressListener);
         WorldBackupMod.LOGGER.info("{} backup {} created for reason: {}", type, id, reason);
         return new WriteResult(manifest, status);
@@ -643,8 +645,19 @@ public final class BackupStorage {
                     StandardCopyOption.ATOMIC_MOVE,
                     StandardCopyOption.REPLACE_EXISTING
             );
+            return;
         } catch (AtomicMoveNotSupportedException exception) {
+            // fall through to plain move
+        } catch (IOException exception) {
+            // e.g. ATOMIC_MOVE across volumes or to a network share is not supported;
+            // fall back to a non-atomic move which may copy and delete across file systems.
+        }
+
+        try {
             Files.move(tempBackupFile, backupFile, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException exception) {
+            Files.copy(tempBackupFile, backupFile, StandardCopyOption.REPLACE_EXISTING);
+            Files.deleteIfExists(tempBackupFile);
         }
     }
 
@@ -685,6 +698,7 @@ public final class BackupStorage {
 
     private static void ensureSufficientDiskSpace(
             Path backupDir,
+            Path tempBackupFile,
             List<BackupManifest> manifests,
             Map<String, BackupManifest.FileState> snapshot,
             List<String> includedFiles,
@@ -694,8 +708,27 @@ public final class BackupStorage {
         double compressionRatio = lastFullCompressionRatio(backupDir, manifests);
         long estimatedZipBytes = (long) Math.ceil(includedBytes * compressionRatio);
         long reserveBytes = Math.max(0L, config.minimumFreeSpaceReserveMb) * 1024L * 1024L;
-        long requiredBytes = safeAdd(safeMultiply(estimatedZipBytes, 2L), reserveBytes);
-        FileStore fileStore = Files.getFileStore(backupDir);
+
+        Path tempDir = tempBackupFile.getParent();
+        if (tempDir == null || isSameFileStore(backupDir, tempDir)) {
+            long requiredBytes = safeAdd(safeMultiply(estimatedZipBytes, 2L), reserveBytes);
+            ensureFreeSpace(backupDir, requiredBytes, "destination");
+        } else {
+            long requiredBytes = safeAdd(estimatedZipBytes, reserveBytes);
+            ensureFreeSpace(backupDir, requiredBytes, "destination");
+            ensureFreeSpace(tempDir, requiredBytes, "temporary directory");
+        }
+    }
+
+    private static boolean isSameFileStore(Path first, Path second) throws IOException {
+        if (first.equals(second)) {
+            return true;
+        }
+        return Files.getFileStore(first).equals(Files.getFileStore(second));
+    }
+
+    private static void ensureFreeSpace(Path dir, long requiredBytes, String location) throws IOException {
+        FileStore fileStore = Files.getFileStore(dir);
         long availableBytes = Math.max(0L, fileStore.getUsableSpace());
 
         if (availableBytes < requiredBytes) {
@@ -703,8 +736,8 @@ public final class BackupStorage {
                     + BackupSizeFormatter.formatBytes(requiredBytes)
                     + ", available "
                     + BackupSizeFormatter.formatBytes(availableBytes)
-                    + ", destination "
-                    + backupDir.toAbsolutePath().normalize());
+                    + ", " + location + " "
+                    + dir.toAbsolutePath().normalize());
         }
     }
 

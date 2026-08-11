@@ -96,6 +96,68 @@ public class BackupBenchmarkTest {
         assertSpeedup(results);
     }
 
+    @Test
+    void writesTempZipInConfiguredTempDirectoryAndPublishesToBackupDir() throws IOException {
+        Path tempRoot = tempWorkingDir.resolve("scratch");
+        Path backupRoot = tempWorkingDir.resolve("backup-destination");
+        Files.createDirectories(tempRoot);
+        Files.createDirectories(backupRoot);
+
+        BackupConfig config = new BackupConfig();
+        config.backupDirectory = backupRoot.toAbsolutePath().toString();
+        config.tempBackupDirectory = tempRoot.toAbsolutePath().toString();
+        config.threadCount = 1;
+        config.minimumFreeSpaceReserveMb = 0;
+        config.includeSummaryFile = false;
+        BackupConfig.setCurrent(config);
+
+        String worldName = "TempWorld";
+        String worldDirName = "TempWorld";
+        Path backupDir = config.resolveBackupRoot().resolve(worldDirName);
+        Files.createDirectories(backupDir);
+
+        try {
+            Map<String, BackupManifest.FileState> snapshot = WorldSnapshotter.snapshot(
+                    testWorldPath,
+                    BackupType.FULL,
+                    "Temp Test",
+                    BackupProgressListener.noop()
+            );
+            BackupManifest manifest = BackupStorage.writeBackup(
+                    testWorldPath,
+                    backupDir,
+                    worldName,
+                    worldDirName,
+                    BackupType.FULL,
+                    null,
+                    snapshot,
+                    "Temp Test",
+                    config,
+                    "",
+                    BackupProgressListener.noop()
+            );
+
+            Path published = backupDir.resolve(manifest.zipFileName);
+            assertTrue(Files.isRegularFile(published), "Published backup should exist in backup directory");
+
+            Path tempDir = config.resolveTempRoot().resolve(worldDirName);
+            assertTrue(Files.isDirectory(tempDir), "Temporary directory should be created");
+            try (var stream = Files.list(tempDir)) {
+                assertFalse(stream.anyMatch(file -> file.getFileName().toString().endsWith(".tmp")),
+                        "No leftover .tmp file should remain after publishing");
+            }
+            try (var stream = Files.list(backupDir)) {
+                assertFalse(stream.anyMatch(file -> file.getFileName().toString().endsWith(".tmp")),
+                        "No .tmp file should remain in the backup directory");
+            }
+            verifyBackupIntegrity(published, manifest.snapshot);
+        } finally {
+            if (Files.exists(backupDir)) {
+                deleteRecursively(backupDir);
+            }
+        }
+    }
+
     private RunResult runBenchmark(BackupConfig config, int threads) throws IOException {
         String worldName = "BenchmarkWorld";
         String worldDirName = "BenchmarkWorld";

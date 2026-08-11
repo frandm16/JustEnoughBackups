@@ -40,6 +40,7 @@ public final class BackupConfig {
     public Retention retention = new Retention();
     public Popup popup = new Popup();
     public String backupDirectory = BackupConstants.DEFAULT_BACKUP_DIRECTORY;
+    public String tempBackupDirectory = "";
     public List<String> excludedPaths = new ArrayList<>();
 
     public static BackupConfig get() {
@@ -103,6 +104,7 @@ public final class BackupConfig {
         copy.minimumFreeSpaceReserveMb = minimumFreeSpaceReserveMb;
         copy.threadCount = threadCount;
         copy.backupDirectory = backupDirectory;
+        copy.tempBackupDirectory = tempBackupDirectory;
         copy.retention = retention.copy();
         copy.popup = popup.copy();
         copy.excludedPaths = new ArrayList<>(excludedPaths);
@@ -115,6 +117,25 @@ public final class BackupConfig {
 
     public Path resolveBackupRoot() {
         Path configured = Path.of(backupDirectory);
+        if (configured.isAbsolute()) {
+            return configured.normalize();
+        }
+
+        try {
+            if (FabricLoader.getInstance() != null && FabricLoader.getInstance().getGameDir() != null) {
+                return FabricLoader.getInstance().getGameDir().resolve(configured).normalize();
+            }
+        } catch (Throwable ignored) {
+        }
+        return configured.toAbsolutePath().normalize();
+    }
+
+    public Path resolveTempRoot() {
+        if (tempBackupDirectory == null || tempBackupDirectory.isBlank()) {
+            return resolveBackupRoot();
+        }
+
+        Path configured = Path.of(tempBackupDirectory);
         if (configured.isAbsolute()) {
             return configured.normalize();
         }
@@ -183,6 +204,9 @@ public final class BackupConfig {
         }
         if (backupDirectory == null || backupDirectory.isBlank()) {
             backupDirectory = BackupConstants.DEFAULT_BACKUP_DIRECTORY;
+        }
+        if (tempBackupDirectory == null) {
+            tempBackupDirectory = "";
         }
         minimumFreeSpaceReserveMb = Math.max(0, minimumFreeSpaceReserveMb);
         threadCount = Math.clamp(threadCount, 1, Math.max(1, Runtime.getRuntime().availableProcessors()));

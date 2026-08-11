@@ -180,6 +180,7 @@ Main config areas:
 - `minimumFreeSpaceReserveMb`
 - `threadCount`
 - `backupDirectory`
+- `tempBackupDirectory`
 - `excludedPaths`
 - `retention`
   - `full`
@@ -189,6 +190,8 @@ Main config areas:
 - `popup`
 
 `backupDirectory` may be relative to the game directory or an absolute path.
+
+`tempBackupDirectory` controls where the backup ZIP is compressed before being moved into `backupDirectory`. It may be relative to the game directory or an absolute path. Leave it empty to compress inside the backup directory (default). Pointing it at a local drive is recommended when backups are stored on a slow or networked drive, since only the finished ZIP is then transferred to the backup location.
 
 `excludedPaths` uses paths relative to the world root. A folder entry excludes that full subtree, while a file entry excludes only that specific file.
 

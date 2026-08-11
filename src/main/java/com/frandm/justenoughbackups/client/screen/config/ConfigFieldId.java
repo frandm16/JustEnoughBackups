@@ -29,6 +29,7 @@ public enum ConfigFieldId {
     INTEGRITY_MODE("screen.justenoughbackups.config.integrity_mode", ConfigTab.BACKUPS, ConfigControlType.ENUM),
     INCLUDE_SUMMARY_FILE("screen.justenoughbackups.config.include_summary_file", ConfigTab.BACKUPS, ConfigControlType.BOOLEAN),
     BACKUP_DIRECTORY("screen.justenoughbackups.config.backup_directory", ConfigTab.BACKUPS, ConfigControlType.TEXT),
+    TEMP_DIRECTORY("screen.justenoughbackups.config.temp_directory", ConfigTab.BACKUPS, ConfigControlType.TEXT),
     EXCLUDED_PATHS("screen.justenoughbackups.config.excluded_paths", ConfigTab.BACKUPS, ConfigControlType.ACTION),
     POPUP_TITLE("screen.justenoughbackups.config.popup_title", ConfigTab.HUD, ConfigControlType.TEXT),
     POPUP_RUNNING_TEXT("screen.justenoughbackups.config.running_text", ConfigTab.HUD, ConfigControlType.TEXT),

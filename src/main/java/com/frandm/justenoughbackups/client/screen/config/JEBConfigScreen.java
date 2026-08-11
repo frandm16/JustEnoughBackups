@@ -185,6 +185,7 @@ public final class JEBConfigScreen extends Screen {
     private Supplier<String> textGetter(ConfigFieldId fieldId) {
         return switch (fieldId) {
             case BACKUP_DIRECTORY -> () -> state.working.backupDirectory;
+            case TEMP_DIRECTORY -> () -> state.working.tempBackupDirectory;
             case POPUP_TITLE -> () -> state.working.popup.title;
             case POPUP_RUNNING_TEXT -> () -> state.working.popup.runningText;
             case POPUP_SCANNING_TEXT -> () -> state.working.popup.scanningText;
@@ -197,6 +198,7 @@ public final class JEBConfigScreen extends Screen {
     private Consumer<String> textSetter(ConfigFieldId fieldId) {
         return switch (fieldId) {
             case BACKUP_DIRECTORY -> value -> state.working.backupDirectory = value;
+            case TEMP_DIRECTORY -> value -> state.working.tempBackupDirectory = value;
             case POPUP_TITLE -> value -> state.working.popup.title = value;
             case POPUP_RUNNING_TEXT -> value -> state.working.popup.runningText = value;
             case POPUP_SCANNING_TEXT -> value -> state.working.popup.scanningText = value;
@@ -829,6 +831,7 @@ public final class JEBConfigScreen extends Screen {
             case THREAD_COUNT -> parseInt(input).ifPresent(value -> state.working.threadCount = value);
             case PERMISSION_LEVEL -> parseInt(input).ifPresent(value -> state.working.commandPermissionLevel = value);
             case BACKUP_DIRECTORY -> state.working.backupDirectory = input;
+            case TEMP_DIRECTORY -> state.working.tempBackupDirectory = input;
             case POPUP_TITLE -> state.working.popup.title = input;
             case POPUP_RUNNING_TEXT -> state.working.popup.runningText = input;
             case POPUP_SCANNING_TEXT -> state.working.popup.scanningText = input;
