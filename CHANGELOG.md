@@ -29,12 +29,6 @@ All notable changes to this project are documented in this file.
 - A `RuntimeException` during backup UI failure handling can no longer escape to the server thread.
 - Removed a dead `WRITING` branch in the popup progress renderer.
 
-### Changed
-
-- Updated Apache Commons Compress to 1.28.0.
-- Removed the "Requirements" section from the README.
-- Version bumped to 1.2.0.3+26.2.
-
 ## 1.2.0.2+26.2 - 01/08/2026
 
 ### Added
