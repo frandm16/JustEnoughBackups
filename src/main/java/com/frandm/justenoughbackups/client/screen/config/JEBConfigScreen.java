@@ -158,6 +158,7 @@ public final class JEBConfigScreen extends Screen {
             case KEEP_DIFFERENTIAL -> () -> state.working.retention.differential;
             case MAX_TOTAL_SIZE_MB -> () -> state.working.retention.maxTotalSizeMb;
             case MINIMUM_FREE_SPACE_RESERVE_MB -> () -> state.working.minimumFreeSpaceReserveMb;
+            case THREAD_COUNT -> () -> state.working.threadCount;
             case PERMISSION_LEVEL -> () -> state.working.commandPermissionLevel;
             default -> throw new IllegalArgumentException("Not an int field: " + fieldId);
         };
@@ -175,6 +176,7 @@ public final class JEBConfigScreen extends Screen {
             case KEEP_DIFFERENTIAL -> value -> state.working.retention.differential = value;
             case MAX_TOTAL_SIZE_MB -> value -> state.working.retention.maxTotalSizeMb = value;
             case MINIMUM_FREE_SPACE_RESERVE_MB -> value -> state.working.minimumFreeSpaceReserveMb = value;
+            case THREAD_COUNT -> value -> state.working.threadCount = value;
             case PERMISSION_LEVEL -> value -> state.working.commandPermissionLevel = value;
             default -> throw new IllegalArgumentException("Not an int field: " + fieldId);
         };
@@ -824,6 +826,7 @@ public final class JEBConfigScreen extends Screen {
             case KEEP_DIFFERENTIAL -> parseInt(input).ifPresent(value -> state.working.retention.differential = value);
             case MAX_TOTAL_SIZE_MB -> parseInt(input).ifPresent(value -> state.working.retention.maxTotalSizeMb = value);
             case MINIMUM_FREE_SPACE_RESERVE_MB -> parseInt(input).ifPresent(value -> state.working.minimumFreeSpaceReserveMb = value);
+            case THREAD_COUNT -> parseInt(input).ifPresent(value -> state.working.threadCount = value);
             case PERMISSION_LEVEL -> parseInt(input).ifPresent(value -> state.working.commandPermissionLevel = value);
             case BACKUP_DIRECTORY -> state.working.backupDirectory = input;
             case POPUP_TITLE -> state.working.popup.title = input;

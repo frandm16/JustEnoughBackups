@@ -168,6 +168,8 @@ public final class RestoreService {
         Path normalizedTarget = target.toAbsolutePath().normalize();
         List<Path> normalizedSkippedRoots = normalizeSkippedRoots(skippedRoots);
 
+        List<Path> filesToCopy = new ArrayList<>();
+
         Files.walkFileTree(normalizedSource, new SimpleFileVisitor<>() {
             @Override
             public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
@@ -182,17 +184,48 @@ public final class RestoreService {
             }
 
             @Override
-            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
                 Path normalizedFile = file.toAbsolutePath().normalize();
                 if (isInsideAny(normalizedFile, normalizedSkippedRoots)) {
                     return FileVisitResult.CONTINUE;
                 }
 
-                Path relative = normalizedSource.relativize(file);
-                Files.copy(file, normalizedTarget.resolve(relative), StandardCopyOption.REPLACE_EXISTING);
+                filesToCopy.add(file);
                 return FileVisitResult.CONTINUE;
             }
         });
+
+        int threadCount = Math.clamp(BackupConfig.get().threadCount, 1, Math.max(1, Runtime.getRuntime().availableProcessors()));
+        if (threadCount <= 1 || filesToCopy.size() <= 1) {
+            for (Path file : filesToCopy) {
+                Path relative = normalizedSource.relativize(file);
+                Files.copy(file, normalizedTarget.resolve(relative), StandardCopyOption.REPLACE_EXISTING);
+            }
+        } else {
+            java.util.concurrent.ExecutorService executor = com.frandm.justenoughbackups.backup.parallel.BackupThreadPool.getExecutor();
+            List<java.util.concurrent.Callable<Void>> tasks = new ArrayList<>(filesToCopy.size());
+            for (Path file : filesToCopy) {
+                tasks.add(() -> {
+                    Path relative = normalizedSource.relativize(file);
+                    Files.copy(file, normalizedTarget.resolve(relative), StandardCopyOption.REPLACE_EXISTING);
+                    return null;
+                });
+            }
+            try {
+                var futures = executor.invokeAll(tasks);
+                for (var future : futures) {
+                    future.get();
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IOException("Directory copy interrupted", e);
+            } catch (java.util.concurrent.ExecutionException e) {
+                if (e.getCause() instanceof IOException ioEx) {
+                    throw ioEx;
+                }
+                throw new IOException("Failed during parallel directory copy", e.getCause());
+            }
+        }
     }
 
     private static List<Path> normalizeSkippedRoots(Path... skippedRoots) {

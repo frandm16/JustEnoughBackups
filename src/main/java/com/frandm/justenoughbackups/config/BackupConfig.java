@@ -36,6 +36,7 @@ public final class BackupConfig {
     public BackupIntegrityMode integrityMode = BackupIntegrityMode.STRICT;
     public boolean includeSummaryFile = false;
     public int minimumFreeSpaceReserveMb = 512;
+    public int threadCount = Math.max(1, Runtime.getRuntime().availableProcessors() - 2);
     public Retention retention = new Retention();
     public Popup popup = new Popup();
     public String backupDirectory = BackupConstants.DEFAULT_BACKUP_DIRECTORY;
@@ -100,6 +101,7 @@ public final class BackupConfig {
         copy.integrityMode = integrityMode;
         copy.includeSummaryFile = includeSummaryFile;
         copy.minimumFreeSpaceReserveMb = minimumFreeSpaceReserveMb;
+        copy.threadCount = threadCount;
         copy.backupDirectory = backupDirectory;
         copy.retention = retention.copy();
         copy.popup = popup.copy();
@@ -183,6 +185,7 @@ public final class BackupConfig {
             backupDirectory = BackupConstants.DEFAULT_BACKUP_DIRECTORY;
         }
         minimumFreeSpaceReserveMb = Math.max(0, minimumFreeSpaceReserveMb);
+        threadCount = Math.clamp(threadCount, 1, Math.max(1, Runtime.getRuntime().availableProcessors()));
         if (retention == null) {
             retention = new Retention();
         }

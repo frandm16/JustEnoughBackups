@@ -35,6 +35,9 @@ dependencies {
     implementation "net.fabricmc.fabric-api:fabric-api:${fabric_api_version}"
     compileOnly "maven.modrinth:modmenu:${modmenu_version}"
 
+    implementation "org.apache.commons:commons-compress:1.24.0"
+    include "org.apache.commons:commons-compress:1.24.0"
+
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }

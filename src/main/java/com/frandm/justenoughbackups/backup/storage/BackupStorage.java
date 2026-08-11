@@ -14,13 +14,16 @@ import com.frandm.justenoughbackups.backup.progress.BackupProgressPhase;
 import com.frandm.justenoughbackups.backup.progress.BackupProgressState;
 import com.frandm.justenoughbackups.backup.retention.RetentionPolicy;
 import com.frandm.justenoughbackups.config.BackupConfig;
+import com.frandm.justenoughbackups.backup.parallel.BackupThreadPool;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.Reader;
+import java.io.UncheckedIOException;
 import java.nio.file.FileStore;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
@@ -32,15 +35,31 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorCompletionService;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicInteger;
+
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
-import java.util.zip.ZipOutputStream;
+
+import org.apache.commons.compress.archivers.zip.ParallelScatterZipCreator;
+import org.apache.commons.compress.archivers.zip.Zip64Mode;
+import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
+import org.apache.commons.compress.archivers.zip.ZipArchiveOutputStream;
+import org.apache.commons.compress.archivers.zip.ZipMethod;
 
 public final class BackupStorage {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -130,7 +149,7 @@ public final class BackupStorage {
         manifest.includedFiles.addAll(includedFiles);
         manifest.snapshot.putAll(snapshot);
 
-        ensureSufficientDiskSpace(backupDir, snapshot, config);
+        ensureSufficientDiskSpace(backupDir, snapshot, includedFiles, config);
         writeBackupZipToTemp(worldPath, backupDir, tempBackupFile, backupFile, manifest, includedFiles, snapshot, config, progressListener);
         WorldBackupMod.LOGGER.info("{} backup {} created for reason: {}", type, id, reason);
         return manifest;
@@ -162,6 +181,7 @@ public final class BackupStorage {
     public static void extractBackup(Path backupFile, Path targetDir) throws IOException {
         Path normalizedTarget = targetDir.toAbsolutePath().normalize();
         try (ZipFile zipFile = new ZipFile(backupFile.toFile())) {
+            List<ZipEntry> validEntries = new ArrayList<>();
             var entries = zipFile.entries();
             while (entries.hasMoreElements()) {
                 ZipEntry entry = entries.nextElement();
@@ -171,15 +191,64 @@ public final class BackupStorage {
                         || BackupConstants.STATUS_ENTRY.equals(entry.getName())) {
                     continue;
                 }
-
-                Path target = normalizedTarget.resolve(entry.getName()).normalize();
-                if (!target.startsWith(normalizedTarget)) {
-                    throw new IOException("Backup contains an unsafe path: " + entry.getName());
-                }
-
-                Files.createDirectories(target.getParent());
-                Files.copy(zipFile.getInputStream(entry), target, StandardCopyOption.REPLACE_EXISTING);
+                validEntries.add(entry);
             }
+
+            int threadCount = Math.clamp(BackupConfig.get().threadCount, 1, Math.max(1, Runtime.getRuntime().availableProcessors()));
+            if (threadCount <= 1 || validEntries.size() <= 1) {
+                for (ZipEntry entry : validEntries) {
+                    Path target = normalizedTarget.resolve(entry.getName()).normalize();
+                    if (!target.startsWith(normalizedTarget)) {
+                        throw new IOException("Backup contains an unsafe path: " + entry.getName());
+                    }
+                    Files.createDirectories(target.getParent());
+                    try (InputStream in = zipFile.getInputStream(entry)) {
+                        Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
+                    }
+                }
+            } else {
+                ExecutorService executor = BackupThreadPool.getExecutor();
+                List<Callable<Void>> tasks = new ArrayList<>(validEntries.size());
+                for (ZipEntry entry : validEntries) {
+                    tasks.add(() -> {
+                        Path target = normalizedTarget.resolve(entry.getName()).normalize();
+                        if (!target.startsWith(normalizedTarget)) {
+                            throw new IOException("Backup contains an unsafe path: " + entry.getName());
+                        }
+                        Files.createDirectories(target.getParent());
+                        try (InputStream in = zipFile.getInputStream(entry)) {
+                            Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
+                        }
+                        return null;
+                    });
+                }
+                try {
+                    var futures = executor.invokeAll(tasks);
+                    for (var future : futures) {
+                        future.get();
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException("Extraction interrupted", e);
+                } catch (ExecutionException e) {
+                    if (e.getCause() instanceof IOException ioEx) {
+                        throw ioEx;
+                    }
+                    throw new IOException("Failed during parallel extraction", e.getCause());
+                }
+            }
+        }
+    }
+
+    private record ReadResult(String relativeName, String sha256, long bytes, long lastModified) {
+    }
+
+    private static final class FileFailure extends IOException {
+        private final String relativeName;
+
+        private FileFailure(String relativeName, IOException cause) {
+            super(cause);
+            this.relativeName = relativeName;
         }
     }
 
@@ -209,47 +278,291 @@ public final class BackupStorage {
                 progressListener
         );
         progress.emit(BackupProgressState.STARTED, true);
+
+        List<String> orderedFiles = new ArrayList<>(includedFiles);
+        Collections.sort(orderedFiles);
+
+        int threadCount = Math.clamp(BackupConfig.get().threadCount, 1, Math.max(1, Runtime.getRuntime().availableProcessors()));
+
+        Map<String, ReadResult> hashedFiles;
+        if (threadCount <= 1 || orderedFiles.size() <= 1) {
+            hashedFiles = hashFilesSerially(worldPath, orderedFiles, status, integrityMode, progress);
+        } else {
+            hashedFiles = hashFilesInParallel(worldPath, orderedFiles, status, integrityMode, progress);
+        }
+
+        List<String> toWrite = new ArrayList<>();
+        for (String relativeName : orderedFiles) {
+            if (hashedFiles.containsKey(relativeName)) {
+                toWrite.add(relativeName);
+            }
+        }
+
         try (OutputStream fileOut = Files.newOutputStream(backupFile);
-             ZipOutputStream zipOut = new ZipOutputStream(fileOut)) {
-            for (String relativeName : includedFiles) {
-                Path file = worldPath.resolve(relativeName);
-                try {
-                    if (!Files.isRegularFile(file)) {
-                        throw new IOException("Included file is missing: " + file);
-                    }
-                    BackupManifest.FileState writtenState = writeFileEntry(file, relativeName, zipOut, progress);
-                    manifest.includedBytes += writtenState.size;
-                    status.totalBytes += writtenState.size;
-                    status.files.add(new BackupStatus.FileEntry(relativeName, writtenState.size, writtenState.sha256));
-                    finalSnapshot.put(relativeName, writtenState);
-                    progress.fileCompleted();
-                } catch (IOException exception) {
-                    status.completed = false;
-                    status.brokenFiles.add(new BackupStatus.BrokenFile(relativeName, rootMessage(exception)));
-                    progress.emit(BackupProgressState.FAILED, true);
-                    if (integrityMode == BackupIntegrityMode.STRICT) {
-                        throw exception;
-                    }
-                    WorldBackupMod.LOGGER.warn("Keeping partial backup after failing to write {}", relativeName, exception);
-                }
+             ZipArchiveOutputStream zipOut = new ZipArchiveOutputStream(fileOut)) {
+            zipOut.setUseZip64(Zip64Mode.AsNeeded);
+            if (threadCount <= 1 || toWrite.size() <= 1) {
+                writeEntriesSerially(worldPath, zipOut, toWrite, hashedFiles, manifest, status, finalSnapshot, integrityMode, progress);
+            } else {
+                writeEntriesInParallel(worldPath, zipOut, toWrite, hashedFiles, manifest, status, finalSnapshot, progress);
             }
 
             manifest.snapshot.clear();
             manifest.snapshot.putAll(finalSnapshot);
+            writeSummaryAndMetadata(zipOut, manifest, status, includeSummaryFile);
+        }
 
-            if (includeSummaryFile) {
-                ZipEntry summaryEntry = new ZipEntry(BackupConstants.SUMMARY_ENTRY);
-                zipOut.putNextEntry(summaryEntry);
-                zipOut.write(BackupSummaryFile.build(manifest).getBytes(StandardCharsets.UTF_8));
-                zipOut.closeEntry();
+        progress.emit(status.completed ? BackupProgressState.COMPLETED : BackupProgressState.FAILED, true);
+    }
+
+    private static Map<String, ReadResult> hashFilesSerially(
+            Path worldPath,
+            List<String> orderedFiles,
+            BackupStatus status,
+            BackupIntegrityMode integrityMode,
+            ProgressTracker progress
+    ) throws IOException {
+        Map<String, ReadResult> hashedFiles = new LinkedHashMap<>();
+        for (String relativeName : orderedFiles) {
+            try {
+                hashedFiles.put(relativeName, hashFile(worldPath, relativeName));
+            } catch (IOException exception) {
+                handleBrokenFile(status, relativeName, exception, integrityMode, progress);
+            }
+        }
+        return hashedFiles;
+    }
+
+    private static Map<String, ReadResult> hashFilesInParallel(
+            Path worldPath,
+            List<String> orderedFiles,
+            BackupStatus status,
+            BackupIntegrityMode integrityMode,
+            ProgressTracker progress
+    ) throws IOException {
+        ExecutorService executor = BackupThreadPool.getExecutor();
+        ExecutorCompletionService<ReadResult> completionService = new ExecutorCompletionService<>(executor);
+        Map<String, ReadResult> hashedFiles = new ConcurrentHashMap<>();
+
+        int total = orderedFiles.size();
+        int submitted = 0;
+        int inFlight = 0;
+        int maxInFlight = Math.max(2, BackupConfig.get().threadCount) * 2;
+
+        while (submitted < total || inFlight > 0) {
+            while (submitted < total && inFlight < maxInFlight) {
+                String relativeName = orderedFiles.get(submitted++);
+                completionService.submit(() -> {
+                    try {
+                        return hashFile(worldPath, relativeName);
+                    } catch (IOException exception) {
+                        throw new FileFailure(relativeName, exception);
+                    }
+                });
+                inFlight++;
             }
 
-            ZipEntry dataEntry = new ZipEntry(BackupConstants.DATA_ENTRY);
-            zipOut.putNextEntry(dataEntry);
-            zipOut.write(GSON.toJson(new BackupMetadata(manifest, status)).getBytes(StandardCharsets.UTF_8));
-            zipOut.closeEntry();
+            Future<ReadResult> future;
+            try {
+                future = completionService.take();
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new IOException("Hash calculation interrupted", exception);
+            }
+            inFlight--;
+            try {
+                ReadResult result = future.get();
+                hashedFiles.put(result.relativeName(), result);
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new IOException("Hash calculation interrupted", exception);
+            } catch (ExecutionException exception) {
+                Throwable cause = exception.getCause();
+                if (cause instanceof FileFailure failure) {
+                    handleBrokenFile(status, failure.relativeName, (IOException) failure.getCause(), integrityMode, progress);
+                    continue;
+                }
+                if (cause instanceof IOException ioException) {
+                    throw new IOException("Failed during parallel hashing", ioException);
+                }
+                throw new IOException("Failed during parallel hashing", cause);
+            }
         }
-        progress.emit(status.completed ? BackupProgressState.COMPLETED : BackupProgressState.FAILED, true);
+        return hashedFiles;
+    }
+
+    private static ReadResult hashFile(Path worldPath, String relativeName) throws IOException {
+        Path file = worldPath.resolve(relativeName);
+        if (!Files.isRegularFile(file)) {
+            throw new IOException("Included file is missing: " + file);
+        }
+
+        long bytes = Files.size(file);
+        long lastModified = Files.getLastModifiedTime(file).toMillis();
+
+        MessageDigest digest = newDigest();
+        try (InputStream in = Files.newInputStream(file)) {
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = in.read(buffer)) != -1) {
+                digest.update(buffer, 0, read);
+            }
+        }
+
+        return new ReadResult(relativeName, toHex(digest.digest()), bytes, lastModified);
+    }
+
+    private static void handleBrokenFile(
+            BackupStatus status,
+            String relativeName,
+            IOException exception,
+            BackupIntegrityMode integrityMode,
+            ProgressTracker progress
+    ) throws IOException {
+        status.completed = false;
+        status.brokenFiles.add(new BackupStatus.BrokenFile(relativeName, rootMessage(exception)));
+        progress.emit(BackupProgressState.FAILED, true);
+        if (integrityMode == BackupIntegrityMode.STRICT) {
+            throw exception;
+        }
+        WorldBackupMod.LOGGER.warn("Keeping partial backup after failing to write {}", relativeName, exception);
+    }
+
+    private static void writeEntriesSerially(
+            Path worldPath,
+            ZipArchiveOutputStream zipOut,
+            List<String> files,
+            Map<String, ReadResult> hashedFiles,
+            BackupManifest manifest,
+            BackupStatus status,
+            Map<String, BackupManifest.FileState> finalSnapshot,
+            BackupIntegrityMode integrityMode,
+            ProgressTracker progress
+    ) throws IOException {
+        for (String relativeName : files) {
+            ReadResult result = hashedFiles.get(relativeName);
+            try {
+                writeSingleEntry(worldPath, zipOut, result, manifest, status, finalSnapshot, progress);
+            } catch (IOException exception) {
+                handleBrokenFile(status, relativeName, exception, integrityMode, progress);
+            }
+        }
+    }
+
+    private static void writeEntriesInParallel(
+            Path worldPath,
+            ZipArchiveOutputStream zipOut,
+            List<String> files,
+            Map<String, ReadResult> hashedFiles,
+            BackupManifest manifest,
+            BackupStatus status,
+            Map<String, BackupManifest.FileState> finalSnapshot,
+            ProgressTracker progress
+    ) throws IOException {
+        int threads = Math.clamp(BackupConfig.get().threadCount, 1, Math.max(1, Runtime.getRuntime().availableProcessors()));
+        ExecutorService executor = newCompressExecutor(threads);
+        try {
+            ParallelScatterZipCreator creator = new ParallelScatterZipCreator(executor);
+            for (String relativeName : files) {
+                Path file = worldPath.resolve(relativeName);
+                ZipArchiveEntry entry = new ZipArchiveEntry(relativeName.replace('\\', '/'));
+                entry.setMethod(ZipMethod.DEFLATED.getCode());
+                creator.addArchiveEntry(entry, () -> {
+                    try {
+                        return Files.newInputStream(file);
+                    } catch (IOException exception) {
+                        throw new UncheckedIOException(exception);
+                    }
+                });
+            }
+            try {
+                creator.writeTo(zipOut);
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new IOException("Compression interrupted", exception);
+            } catch (ExecutionException exception) {
+                if (exception.getCause() instanceof IOException ioException) {
+                    throw ioException;
+                }
+                throw new IOException("Failed during parallel compression", exception.getCause());
+            }
+            for (String relativeName : files) {
+                recordWrittenFile(manifest, status, finalSnapshot, progress, hashedFiles.get(relativeName));
+            }
+        } finally {
+            executor.shutdown();
+        }
+    }
+
+    private static ExecutorService newCompressExecutor(int threads) {
+        return Executors.newFixedThreadPool(threads, new ThreadFactory() {
+            private final AtomicInteger counter = new AtomicInteger(1);
+
+            @Override
+            public Thread newThread(Runnable runnable) {
+                Thread thread = new Thread(runnable, "JEB-Compress-" + counter.getAndIncrement());
+                thread.setDaemon(true);
+                thread.setPriority(Math.max(Thread.MIN_PRIORITY, Thread.NORM_PRIORITY - 1));
+                return thread;
+            }
+        });
+    }
+
+    private static void writeSingleEntry(
+            Path worldPath,
+            ZipArchiveOutputStream zipOut,
+            ReadResult result,
+            BackupManifest manifest,
+            BackupStatus status,
+            Map<String, BackupManifest.FileState> finalSnapshot,
+            ProgressTracker progress
+    ) throws IOException {
+        Path file = worldPath.resolve(result.relativeName());
+        if (!Files.isRegularFile(file)) {
+            throw new IOException("Included file is missing: " + file);
+        }
+
+        ZipArchiveEntry entry = new ZipArchiveEntry(result.relativeName().replace('\\', '/'));
+        zipOut.putArchiveEntry(entry);
+        try (InputStream in = Files.newInputStream(file)) {
+            in.transferTo(zipOut);
+        } finally {
+            zipOut.closeArchiveEntry();
+        }
+        recordWrittenFile(manifest, status, finalSnapshot, progress, result);
+    }
+
+    private static void recordWrittenFile(
+            BackupManifest manifest,
+            BackupStatus status,
+            Map<String, BackupManifest.FileState> finalSnapshot,
+            ProgressTracker progress,
+            ReadResult result
+    ) {
+        manifest.includedBytes += result.bytes();
+        status.totalBytes += result.bytes();
+        status.files.add(new BackupStatus.FileEntry(result.relativeName(), result.bytes(), result.sha256()));
+        finalSnapshot.put(result.relativeName(), new BackupManifest.FileState(result.bytes(), result.lastModified(), result.sha256()));
+        progress.fileCompleted();
+    }
+
+    private static void writeSummaryAndMetadata(
+            ZipArchiveOutputStream zipOut,
+            BackupManifest manifest,
+            BackupStatus status,
+            boolean includeSummaryFile
+    ) throws IOException {
+        if (includeSummaryFile) {
+            ZipArchiveEntry summaryEntry = new ZipArchiveEntry(BackupConstants.SUMMARY_ENTRY);
+            zipOut.putArchiveEntry(summaryEntry);
+            zipOut.write(BackupSummaryFile.build(manifest).getBytes(StandardCharsets.UTF_8));
+            zipOut.closeArchiveEntry();
+        }
+
+        ZipArchiveEntry dataEntry = new ZipArchiveEntry(BackupConstants.DATA_ENTRY);
+        zipOut.putArchiveEntry(dataEntry);
+        zipOut.write(GSON.toJson(new BackupMetadata(manifest, status)).getBytes(StandardCharsets.UTF_8));
+        zipOut.closeArchiveEntry();
     }
 
     private static void writeBackupZipToTemp(
@@ -336,12 +649,17 @@ public final class BackupStorage {
         }
     }
 
-    private static void ensureSufficientDiskSpace(Path backupDir, Map<String, BackupManifest.FileState> snapshot, BackupConfig config) throws IOException {
-        long worldBytes = snapshot.values().stream()
-                .mapToLong(fileState -> Math.max(0L, fileState.size))
-                .sum();
+    private static void ensureSufficientDiskSpace(
+            Path backupDir,
+            Map<String, BackupManifest.FileState> snapshot,
+            List<String> includedFiles,
+            BackupConfig config
+    ) throws IOException {
+        long includedBytes = includedBytes(snapshot, includedFiles);
+        double compressionRatio = lastFullCompressionRatio(backupDir);
+        long estimatedZipBytes = (long) Math.ceil(includedBytes * compressionRatio);
         long reserveBytes = Math.max(0L, config.minimumFreeSpaceReserveMb) * 1024L * 1024L;
-        long requiredBytes = safeAdd(safeMultiply(worldBytes, 2L), reserveBytes);
+        long requiredBytes = safeAdd(safeMultiply(estimatedZipBytes, 2L), reserveBytes);
         FileStore fileStore = Files.getFileStore(backupDir);
         long availableBytes = Math.max(0L, fileStore.getUsableSpace());
 
@@ -352,6 +670,42 @@ public final class BackupStorage {
                     + BackupSizeFormatter.formatBytes(availableBytes)
                     + ", destination "
                     + backupDir.toAbsolutePath().normalize());
+        }
+    }
+
+    private static long includedBytes(Map<String, BackupManifest.FileState> snapshot, List<String> includedFiles) {
+        long total = 0L;
+        for (String relativeName : includedFiles) {
+            BackupManifest.FileState state = snapshot.get(relativeName);
+            if (state != null) {
+                total = safeAdd(total, Math.max(0L, state.size));
+            }
+        }
+        return total;
+    }
+
+    private static double lastFullCompressionRatio(Path backupDir) {
+        try {
+            BackupManifest lastFull = readManifests(backupDir).stream()
+                    .filter(manifest -> manifest.type == BackupType.FULL)
+                    .filter(manifest -> manifest.createdAt != null)
+                    .filter(manifest -> manifest.zipFileName != null)
+                    .max(Comparator.comparing(manifest -> manifest.createdAt))
+                    .orElse(null);
+            if (lastFull == null || lastFull.includedBytes <= 0L) {
+                return 1.0;
+            }
+            Path zipFile = backupDir.resolve(lastFull.zipFileName);
+            if (!Files.isRegularFile(zipFile)) {
+                return 1.0;
+            }
+            double ratio = (double) Files.size(zipFile) / (double) lastFull.includedBytes;
+            if (!Double.isFinite(ratio) || ratio <= 0.0) {
+                return 1.0;
+            }
+            return ratio;
+        } catch (IOException exception) {
+            return 1.0;
         }
     }
 
@@ -461,32 +815,6 @@ public final class BackupStorage {
         return cleaned + ".zip";
     }
 
-    private static BackupManifest.FileState writeFileEntry(Path file, String relativeName, ZipOutputStream zipOut, ProgressTracker progress) throws IOException {
-        MessageDigest digest = newDigest();
-        long bytes = 0L;
-
-        ZipEntry entry = new ZipEntry(relativeName.replace('\\', '/'));
-        zipOut.putNextEntry(entry);
-        try (var input = Files.newInputStream(file)) {
-            byte[] buffer = new byte[8192];
-            int read;
-            while ((read = input.read(buffer)) != -1) {
-                zipOut.write(buffer, 0, read);
-                digest.update(buffer, 0, read);
-                bytes += read;
-                progress.bytesWritten(read);
-            }
-        } finally {
-            zipOut.closeEntry();
-        }
-
-        return new BackupManifest.FileState(
-                bytes,
-                Files.getLastModifiedTime(file).toMillis(),
-                toHex(digest.digest())
-        );
-    }
-
     private static MessageDigest newDigest() {
         try {
             return MessageDigest.getInstance("SHA-256");
@@ -520,7 +848,6 @@ public final class BackupStorage {
                 try {
                     total += Files.size(file);
                 } catch (IOException ignored) {
-                    // The write loop will report the concrete failure for this file.
                 }
             }
         }
@@ -602,11 +929,6 @@ public final class BackupStorage {
             this.totalBytes = totalBytes;
             this.totalFiles = totalFiles;
             this.listener = listener;
-        }
-
-        private void bytesWritten(long bytes) {
-            bytesWritten += bytes;
-            emit(BackupProgressState.RUNNING, false);
         }
 
         private void fileCompleted() {

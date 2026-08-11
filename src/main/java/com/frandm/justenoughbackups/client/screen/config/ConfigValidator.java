@@ -21,6 +21,7 @@ final class ConfigValidator {
         validateInt(errors, ConfigFieldId.KEEP_DIFFERENTIAL, state.working.retention.differential, 0, Integer.MAX_VALUE, "screen.justenoughbackups.config.error.differential_min");
         validateInt(errors, ConfigFieldId.MAX_TOTAL_SIZE_MB, state.working.retention.maxTotalSizeMb, 0, Integer.MAX_VALUE, "screen.justenoughbackups.config.error.max_total_size_mb_min");
         validateInt(errors, ConfigFieldId.MINIMUM_FREE_SPACE_RESERVE_MB, state.working.minimumFreeSpaceReserveMb, 0, Integer.MAX_VALUE, "screen.justenoughbackups.config.error.minimum_free_space_reserve_mb_min");
+        validateInt(errors, ConfigFieldId.THREAD_COUNT, state.working.threadCount, 1, Math.max(1, Runtime.getRuntime().availableProcessors()), "screen.justenoughbackups.config.error.thread_count_range");
 
         validateRawInt(errors, state, ConfigFieldId.INTERVAL_MINUTES, 1, Integer.MAX_VALUE);
         validateRawInt(errors, state, ConfigFieldId.AUTOMATIC_BACKUP_WARNING_MINUTES, 1, Integer.MAX_VALUE);
@@ -33,6 +34,7 @@ final class ConfigValidator {
         validateRawInt(errors, state, ConfigFieldId.KEEP_DIFFERENTIAL, 0, Integer.MAX_VALUE);
         validateRawInt(errors, state, ConfigFieldId.MAX_TOTAL_SIZE_MB, 0, Integer.MAX_VALUE);
         validateRawInt(errors, state, ConfigFieldId.MINIMUM_FREE_SPACE_RESERVE_MB, 0, Integer.MAX_VALUE);
+        validateRawInt(errors, state, ConfigFieldId.THREAD_COUNT, 1, Math.max(1, Runtime.getRuntime().availableProcessors()));
 
         if (state.rawInputs.getOrDefault(ConfigFieldId.BACKUP_DIRECTORY, value(state.working.backupDirectory)).isBlank()) {
             errors.add(new ValidationError(ConfigFieldId.BACKUP_DIRECTORY, Component.translatable("screen.justenoughbackups.config.error.backup_directory_empty")));
