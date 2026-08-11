@@ -132,13 +132,20 @@ public final class BackupCommand {
 
     private static int reloadConfig(CommandSourceStack source) {
         BackupConfig config = BackupService.reloadConfig();
+        BackupConfig.AutomaticSchedule schedule = config.automaticSchedule;
+        String scheduleSummary = "full=" + describe(schedule.full)
+                + ", differential=" + describe(schedule.differential)
+                + ", partial=" + describe(schedule.partial);
         sendLocal(source, BackupMessages.withTitle(ServerTranslations.component("message.justenoughbackups.config_reloaded",
                 String.valueOf(config.backupMode),
-                String.valueOf(config.automaticBackupsEnabled),
-                String.valueOf(config.automaticIntervalMinutes),
                 String.valueOf(config.commandPermissionLevel),
-                String.valueOf(config.messageChannel))));
+                String.valueOf(config.messageChannel),
+                scheduleSummary)));
         return 1;
+    }
+
+    private static String describe(BackupConfig.ScheduledBackup schedule) {
+        return (schedule.enabled ? "on" : "off") + "/" + schedule.intervalMinutes + "m";
     }
 
     private static Component formatBackup(BackupManifest manifest) {
