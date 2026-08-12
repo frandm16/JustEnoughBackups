@@ -7,13 +7,10 @@ All notable changes to this project are documented in this file.
 ### Added
 
 - Restore progress popup: the HUD popup now shows real-time progress while extracting the backup chain, staging the world, and creating the safety "Old_World restore" backup.
-
 - Parallel (multi-threaded) world scanning, ZIP compression, and restore extraction, with a new configurable `threadCount` option (1 to max CPU threads).
 - New `tempBackupDirectory` config to compress the backup ZIP to a temporary folder and then move it to the backup destination, so only the finished ZIP is transferred when backups are stored on a slow or network drive.
-- Backup watchdog that detects a stalled backup, dumps all threads for diagnosis, and aborts after a timeout.
 - New progress phases (`COMPRESSING`, `WRITING`) and accurate bytes/percent progress reporting.
 - Config screen notice for dedicated servers: only the HUD and Preview settings are editable from the client; server settings are edited on the server's config file.
-- Backup benchmark test (1 vs N threads) and test coverage for the custom temporary directory and its overlap validation.
 
 ### Fixed
 
@@ -22,18 +19,11 @@ All notable changes to this project are documented in this file.
 - Backup manifests now record the actual bytes written to the ZIP, so a file that changes between the scan and the compression (e.g. player data) no longer invalidates the manifest or blocks a later restore.
 - Orphaned restore staging and temporary directories (`.justenoughbackups-staging-*` and `.restore-*`) left behind by interrupted restores are now cleaned up automatically on server start.
 - Popup progress now shows the real bytes/percent while running and on completion; fixed the related tooltip error.
-- Popup progress no longer breaks when compression runs multi-threaded.
 - Retention is now applied with the full fresh manifest list after creating a backup, avoiding a stale read.
 - `/jeb next` is properly localized and lists each enabled automatic backup type with its remaining time.
-- An invalid or unreadable `justenoughbackups.json` is no longer overwritten with defaults on load.
-- Backup/restore no longer leave the "a backup is already running" lock stuck when the initial server setup fails.
 - The backup management search box keeps focus and caret position while typing.
 - Removed the misleading "Starting backup..." message when a backup creation already failed.
 - `/jeb config reload` now reports the per-type automatic schedules instead of the legacy interval setting.
-- The config screen is no longer misdetected as a "dedicated server" when opened from the main menu (Mod Menu entry point).
-- A `tempBackupDirectory` that overlaps the world directory is rejected with a clear error.
-- A `RuntimeException` during backup UI failure handling can no longer escape to the server thread.
-- Removed a dead `WRITING` branch in the popup progress renderer.
 
 ## 1.2.0.2+26.2 - 01/08/2026
 
