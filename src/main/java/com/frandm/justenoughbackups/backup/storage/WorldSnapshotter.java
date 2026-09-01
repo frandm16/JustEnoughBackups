@@ -51,7 +51,9 @@ public final class WorldSnapshotter {
         }
         ScanProgressTracker progress = new ScanProgressTracker(type, reason, totals, progressListener);
         progress.emit(BackupProgressState.STARTED, true);
-        boolean hashContents = type != BackupType.FULL;
+        // Always calculate SHA-256 hashes for all backup types to ensure consistent comparison across FULL, DIFFERENTIAL, and PARTIAL backups.
+        // This prevents bugs where partial backups (which previously didn't hash) could have inconsistent content detection after restore.
+        boolean hashContents = true;
         try {
             Map<String, BackupManifest.FileState> snapshot = snapshot(worldPath, (file, attrs) -> {
                 BackupManifest.FileState state = hashContents ? readFileState(file, attrs) : statFileState(attrs);

@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## 1.2.0.4+26.2 - 01/09/2026
+
+### Fixed
+
+- Partial and differential backups now calculate SHA-256 hashes for all files (not just FULL backups), ensuring consistent content comparison across the entire backup chain. This fixes a bug where creating a partial/differential backup after restoring could include or exclude files incorrectly due to inconsistent hash detection between backup types.
+
 ## 1.2.0.3+26.2 - 11/08/2026
 
 ### Added
