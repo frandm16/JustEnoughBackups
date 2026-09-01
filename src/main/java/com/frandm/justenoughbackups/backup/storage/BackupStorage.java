@@ -941,10 +941,25 @@ public final class BackupStorage {
             return null;
         }
 
-        return manifests.stream()
-                .filter(manifest -> type == BackupType.PARTIAL || manifest.type == BackupType.FULL)
-                .max(Comparator.comparing(manifest -> manifest.createdAt))
-                .orElse(null);
+        boolean hasIncremental = manifests.stream()
+                .anyMatch(m -> m.type != BackupType.FULL);
+        
+        if (type == BackupType.PARTIAL) {
+            return manifests.stream()
+                    .max(Comparator.comparing(manifest -> manifest.createdAt))
+                    .orElse(null);
+        } else {
+            if (hasIncremental) {
+                return manifests.stream()
+                        .filter(m -> m.type != BackupType.FULL)
+                        .max(Comparator.comparing(manifest -> manifest.createdAt))
+                        .orElse(null);
+            }
+            return manifests.stream()
+                    .filter(m -> m.type == BackupType.FULL)
+                    .max(Comparator.comparing(manifest -> manifest.createdAt))
+                    .orElse(null);
+        }
     }
 
     private static List<String> includedFiles(
