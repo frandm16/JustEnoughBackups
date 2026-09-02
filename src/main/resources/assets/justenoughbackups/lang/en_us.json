@@ -139,7 +139,7 @@
   "screen.justenoughbackups.config.automatic_partial_interval_minutes.tooltip": "Minutes between automatic partial backups. Only applies if automatic partial backups are enabled.",
   "screen.justenoughbackups.config.automatic_backup_warning.tooltip": "Sends one public warning before an automatic backup starts. Uses the configured message channel.",
   "screen.justenoughbackups.config.automatic_backup_warning_minutes.tooltip": "How many minutes before an automatic backup the warning should be sent.",
-  "screen.justenoughbackups.config.exclude_safety_backups_from_incremental.tooltip": "When enabled, safety backups are excluded from the incremental chain count.\nThis prevents them from triggering premature full backups.",
+  "screen.justenoughbackups.config.exclude_safety_backups_from_incremental.tooltip": "When enabled, safety backups (\"Old_World restore\") are excluded from being used as base for incremental/differential backups.",
   "screen.justenoughbackups.config.backup_directory.tooltip": "Directory where backups are stored. Relative paths are resolved from the game directory.",
   "screen.justenoughbackups.config.temp_directory.tooltip": "Directory where the backup ZIP is compressed before being moved into the backup directory.\nRelative paths are resolved from the game directory.\nLeave empty to use the backup directory.",
   "screen.justenoughbackups.config.permission_level.tooltip": "Minimum Minecraft permission level required to use /jeb.\n0: anyone can use it.\n1: low-level permissions.\n2: operators/gamemasters. Default.\n3: admins.\n4: server owners/highest permission level.",
