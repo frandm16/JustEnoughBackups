@@ -144,6 +144,7 @@ public final class BackupStorage {
         List<BackupManifest> manifests = readManifests(backupDir);
         Map<String, BackupManifest.FileState> snapshot = WorldSnapshotter.snapshot(worldPath, type, reason, progressListener);
         if (type != BackupType.FULL && (hasNoFullBackup(manifests) || findBaseManifest(manifests, type, config) == null)) {
+            WorldBackupMod.LOGGER.info("No base backup found for {} backup. Falling back to FULL backup.", type);
             WriteResult fullBase = writeBackup(
                     worldPath,
                     backupDir,
@@ -152,15 +153,16 @@ public final class BackupStorage {
                     BackupType.FULL,
                     null,
                     snapshot,
-                    reason + " base",
+                    reason,
                     config,
-                    "",
+                    requestedName,
                     manifests,
-                    false,
+                    isSafetyBackup,
                     progressListener
             );
             manifests = new ArrayList<>(manifests);
             manifests.add(fullBase.manifest());
+            return new BackupCreation(fullBase.manifest(), manifests, fullBase.status());
         }
 
         BackupManifest base = findBaseManifest(manifests, type, config);
