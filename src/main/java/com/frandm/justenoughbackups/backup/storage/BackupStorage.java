@@ -129,7 +129,7 @@ public final class BackupStorage {
 
         List<BackupManifest> manifests = readManifests(backupDir);
         Map<String, BackupManifest.FileState> snapshot = WorldSnapshotter.snapshot(worldPath, type, reason, progressListener);
-        if (type != BackupType.FULL && hasNoFullBackup(manifests)) {
+        if (type != BackupType.FULL && (hasNoFullBackup(manifests) || findBaseManifest(manifests, type, config) == null)) {
             WriteResult fullBase = writeBackup(
                     worldPath,
                     backupDir,
@@ -148,7 +148,7 @@ public final class BackupStorage {
             manifests.add(fullBase.manifest());
         }
 
-        BackupManifest base = findBaseManifest(manifests, type);
+        BackupManifest base = findBaseManifest(manifests, type, config);
         WriteResult result = writeBackup(
                 worldPath,
                 backupDir,
@@ -657,11 +657,7 @@ public final class BackupStorage {
                     StandardCopyOption.REPLACE_EXISTING
             );
             return;
-        } catch (AtomicMoveNotSupportedException exception) {
-            // fall through to plain move
-        } catch (IOException exception) {
-            // e.g. ATOMIC_MOVE across volumes or to a network share is not supported;
-            // fall back to a non-atomic move which may copy and delete across file systems.
+        } catch (IOException _) {
         }
 
         try {
@@ -936,26 +932,35 @@ public final class BackupStorage {
         return left + right;
     }
 
-    private static BackupManifest findBaseManifest(List<BackupManifest> manifests, BackupType type) {
+    private static BackupManifest findBaseManifest(List<BackupManifest> manifests, BackupType type, BackupConfig config) {
         if (type == BackupType.FULL || manifests.isEmpty()) {
             return null;
         }
 
-        boolean hasIncremental = manifests.stream()
+        List<BackupManifest> candidates = manifests;
+        if (config != null && config.excludeSafetyBackupsFromIncremental) {
+            candidates = manifests.stream()
+                    .filter(m -> !m.isSafetyBackup)
+                    .toList();
+            if (candidates.isEmpty()) {
+                return null;
+            }
+        }
+
+        boolean hasIncremental = candidates.stream()
                 .anyMatch(m -> m.type != BackupType.FULL);
-        
         if (type == BackupType.PARTIAL) {
-            return manifests.stream()
+            return candidates.stream()
                     .max(Comparator.comparing(manifest -> manifest.createdAt))
                     .orElse(null);
         } else {
             if (hasIncremental) {
-                return manifests.stream()
+                return candidates.stream()
                         .filter(m -> m.type != BackupType.FULL)
                         .max(Comparator.comparing(manifest -> manifest.createdAt))
                         .orElse(null);
             }
-            return manifests.stream()
+            return candidates.stream()
                     .filter(m -> m.type == BackupType.FULL)
                     .max(Comparator.comparing(manifest -> manifest.createdAt))
                     .orElse(null);

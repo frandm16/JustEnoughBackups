@@ -48,10 +48,11 @@ final class ConfigScreenState {
                 working.retention.full = defaults.retention.full;
                 working.retention.incremental = defaults.retention.incremental;
                 working.retention.differential = defaults.retention.differential;
-                working.retention.maxTotalSizeMb = defaults.retention.maxTotalSizeMb;
-                working.minimumFreeSpaceReserveMb = defaults.minimumFreeSpaceReserveMb;
+working.retention.maxTotalSizeMb = defaults.retention.maxTotalSizeMb;
+            working.minimumFreeSpaceReserveMb = defaults.minimumFreeSpaceReserveMb;
+            working.excludeSafetyBackupsFromIncremental = defaults.excludeSafetyBackupsFromIncremental;
 
-                BackupConfig.AutomaticSchedule defaultSchedule = new BackupConfig.AutomaticSchedule();
+            BackupConfig.AutomaticSchedule defaultSchedule = new BackupConfig.AutomaticSchedule();
                 defaultSchedule.normalize();
                 working.automaticSchedule = defaultSchedule;
             }

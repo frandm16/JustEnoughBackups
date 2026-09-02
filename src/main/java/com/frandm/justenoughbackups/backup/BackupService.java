@@ -302,6 +302,7 @@ public final class BackupService {
                             if (error != null) {
                                 backup.completeExceptionally(error);
                             } else {
+                                manifest.isSafetyBackup = true;
                                 backup.complete(manifest);
                             }
                         });

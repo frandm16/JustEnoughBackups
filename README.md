@@ -184,6 +184,7 @@ Main config areas:
 - `backupDirectory`
 - `tempBackupDirectory`
 - `excludedPaths`
+- `excludeSafetyBackupsFromIncremental`
 - `retention`
   - `full`
   - `incremental`
@@ -196,6 +197,8 @@ Main config areas:
 `tempBackupDirectory` controls where the backup ZIP is compressed before being moved into `backupDirectory`. It may be relative to the game directory or an absolute path. Leave it empty to compress inside the backup directory (default). Pointing it at a local drive is recommended when backups are stored on a slow or networked drive, since only the finished ZIP is then transferred to the backup location.
 
 `excludedPaths` uses paths relative to the world root. A folder entry excludes that full subtree, while a file entry excludes only that specific file.
+
+`excludeSafetyBackupsFromIncremental` prevents "Old_World restore" safety backups from being used as base for incremental/differential backups.
 
 `threadCount` controls parallel scanning, compression, and restore extraction, and is clamped between `1` and the number of CPU threads.
 

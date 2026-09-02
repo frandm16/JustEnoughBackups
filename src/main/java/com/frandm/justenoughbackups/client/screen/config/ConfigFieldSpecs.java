@@ -14,6 +14,7 @@ final class ConfigFieldSpecs {
             ConfigFieldSpec.intField(ConfigFieldId.AUTOMATIC_DIFFERENTIAL_INTERVAL_MINUTES, 1, Integer.MAX_VALUE),
             ConfigFieldSpec.of(ConfigFieldId.AUTOMATIC_PARTIAL_ENABLED),
             ConfigFieldSpec.intField(ConfigFieldId.AUTOMATIC_PARTIAL_INTERVAL_MINUTES, 1, Integer.MAX_VALUE),
+            ConfigFieldSpec.of(ConfigFieldId.EXCLUDE_SAFETY_BACKUPS_FROM_INCREMENTAL),
             ConfigFieldSpec.of(ConfigFieldId.PAUSE_WITHOUT_PLAYERS),
             ConfigFieldSpec.of(ConfigFieldId.BACKUP_ON_START),
             ConfigFieldSpec.of(ConfigFieldId.BACKUP_ON_STOP),

@@ -14,6 +14,7 @@ public final class BackupManifest {
     public String worldName;
     public String worldDirectoryName;
     public String baseBackupId;
+    public boolean isSafetyBackup = false;
     public String zipFileName;
     public String reason;
     public BackupIntegrityMode integrityMode;

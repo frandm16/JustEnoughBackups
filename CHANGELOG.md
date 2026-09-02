@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 
 ## 1.2.0.4+26.2 - 01/09/2026
 
+### Added
+
+- New config option `excludeSafetyBackupsFromIncremental` (default: false) to exclude "Old_World restore" safety backups from being used as base for incremental/differential backups.
+
 ### Fixed
 
 - Partial backups now correctly calculate file changes after a restore: removed `modifiedTime` from content comparison.
