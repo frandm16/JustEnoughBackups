@@ -209,11 +209,6 @@ public final class RestoreService {
                 || state == RestoreIntent.RestoreState.STAGING_INSTALLED;
     }
 
-    /**
-     * Applies a prepared restore by swapping the staging directory into place.
-     * Every step is idempotent and persisted to the journal, so an interrupted
-     * apply can be resumed or rolled back on the next server start.
-     */
     private static void applySwap(RestoreIntent intent) throws IOException {
         Path world = intent.worldPath();
         Path staging = intent.stagingPath();
