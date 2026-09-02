@@ -17,7 +17,6 @@ public enum ConfigFieldId {
     THREAD_COUNT("screen.justenoughbackups.config.thread_count", ConfigTab.BACKUPS, ConfigControlType.INT),
     PERMISSION_LEVEL("screen.justenoughbackups.config.permission_level", ConfigTab.BACKUPS, ConfigControlType.INT),
     MESSAGE_CHANNEL("screen.justenoughbackups.config.message_channel", ConfigTab.BACKUPS, ConfigControlType.ENUM),
-
     EXCLUDE_SAFETY_BACKUPS_FROM_INCREMENTAL("screen.justenoughbackups.config.exclude_safety_backups_from_incremental", ConfigTab.BACKUPS, ConfigControlType.BOOLEAN),
 
     AUTOMATIC_BACKUPS_HEADER("screen.justenoughbackups.config.automatic_backups_header", ConfigTab.BACKUPS, ConfigControlType.SECTION_HEADER),

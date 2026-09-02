@@ -124,6 +124,20 @@ public final class BackupStorage {
             String requestedName,
             BackupProgressListener progressListener
     ) throws IOException {
+        return createBackupWithManifests(worldPath, worldName, worldDirectoryName, config, type, reason, requestedName, false, progressListener);
+    }
+
+    public static BackupCreation createBackupWithManifests(
+            Path worldPath,
+            String worldName,
+            String worldDirectoryName,
+            BackupConfig config,
+            BackupType type,
+            String reason,
+            String requestedName,
+            boolean isSafetyBackup,
+            BackupProgressListener progressListener
+    ) throws IOException {
         Path backupDir = config.resolveBackupRoot().resolve(worldDirectoryName);
         Files.createDirectories(backupDir);
 
@@ -142,6 +156,7 @@ public final class BackupStorage {
                     config,
                     "",
                     manifests,
+                    false,
                     progressListener
             );
             manifests = new ArrayList<>(manifests);
@@ -161,6 +176,7 @@ public final class BackupStorage {
                 config,
                 requestedName,
                 manifests,
+                isSafetyBackup,
                 progressListener
         );
         manifests = new ArrayList<>(manifests);
@@ -198,7 +214,38 @@ public final class BackupStorage {
                 reason,
                 config,
                 requestedName,
+                false,
+                progressListener
+        );
+    }
+
+    public static BackupManifest writeBackup(
+            Path worldPath,
+            Path backupDir,
+            String worldName,
+            String worldDirectoryName,
+            BackupType type,
+            BackupManifest base,
+            Map<String, BackupManifest.FileState> snapshot,
+            String reason,
+            BackupConfig config,
+            String requestedName,
+            boolean isSafetyBackup,
+            BackupProgressListener progressListener
+    ) throws IOException {
+        return writeBackup(
+                worldPath,
+                backupDir,
+                worldName,
+                worldDirectoryName,
+                type,
+                base,
+                snapshot,
+                reason,
+                config,
+                requestedName,
                 readManifests(backupDir),
+                isSafetyBackup,
                 progressListener
         ).manifest();
     }
@@ -215,6 +262,7 @@ public final class BackupStorage {
             BackupConfig config,
             String requestedName,
             List<BackupManifest> manifests,
+            boolean isSafetyBackup,
             BackupProgressListener progressListener
     ) throws IOException {
         List<String> includedFiles = includedFiles(type, snapshot, base);
@@ -241,6 +289,7 @@ public final class BackupStorage {
         manifest.baseBackupId = base == null ? null : base.id;
         manifest.zipFileName = zipFileName;
         manifest.reason = reason;
+        manifest.isSafetyBackup = isSafetyBackup;
         manifest.integrityMode = config.integrityMode;
         manifest.includedFiles.addAll(includedFiles);
         manifest.snapshot.putAll(snapshot);

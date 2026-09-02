@@ -58,10 +58,10 @@ public final class BackupService {
             return CompletableFuture.failedFuture(exception);
         }
 
-        return performBackup(server, type, reason, requestedName, true);
+        return performBackup(server, type, reason, requestedName, true, false);
     }
 
-    private static CompletableFuture<BackupManifest> performBackup(MinecraftServer server, BackupType type, String reason, String requestedName, boolean resetLock) {
+    private static CompletableFuture<BackupManifest> performBackup(MinecraftServer server, BackupType type, String reason, String requestedName, boolean resetLock, boolean isSafetyBackup) {
         BackupMessages.broadcastBackupStarted(server, type, reason);
         Path worldPath;
         String worldName;
@@ -108,6 +108,7 @@ public final class BackupService {
                         type,
                         reason,
                         requestedName,
+                        isSafetyBackup,
                         watchdog.listener()
                 );
                 BackupManifest manifest = creation.manifest();
@@ -297,12 +298,11 @@ public final class BackupService {
         CompletableFuture<BackupManifest> backup = new CompletableFuture<>();
         server.execute(() -> {
             try {
-                performBackup(server, BackupType.FULL, "Old_World restore " + restore.backupId(), "", false)
+                performBackup(server, BackupType.FULL, "Old_World restore " + restore.backupId(), "", false, true)
                         .whenComplete((manifest, error) -> {
                             if (error != null) {
                                 backup.completeExceptionally(error);
                             } else {
-                                manifest.isSafetyBackup = true;
                                 backup.complete(manifest);
                             }
                         });

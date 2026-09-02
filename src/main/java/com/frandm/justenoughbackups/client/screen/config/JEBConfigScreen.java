@@ -125,6 +125,7 @@ public final class JEBConfigScreen extends Screen {
             case AUTOMATIC_PARTIAL_ENABLED -> () -> state.working.automaticSchedule.partial.enabled;
             case AUTOMATIC_DIFFERENTIAL_ENABLED -> () -> state.working.automaticSchedule.differential.enabled;
             case INCLUDE_SUMMARY_FILE -> () -> state.working.includeSummaryFile;
+            case EXCLUDE_SAFETY_BACKUPS_FROM_INCREMENTAL -> () -> state.working.excludeSafetyBackupsFromIncremental;
             case POPUP_ENABLED -> () -> state.working.popup.enabled;
             case POPUP_SHOW_TITLE -> () -> state.working.popup.showTitle;
             case POPUP_CENTER_TEXT -> () -> state.working.popup.centerText;
@@ -143,6 +144,7 @@ public final class JEBConfigScreen extends Screen {
             case AUTOMATIC_PARTIAL_ENABLED -> value -> state.working.automaticSchedule.partial.enabled = value;
             case AUTOMATIC_DIFFERENTIAL_ENABLED -> value -> state.working.automaticSchedule.differential.enabled = value;
             case INCLUDE_SUMMARY_FILE -> value -> state.working.includeSummaryFile = value;
+            case EXCLUDE_SAFETY_BACKUPS_FROM_INCREMENTAL ->  value -> state.working.excludeSafetyBackupsFromIncremental = value;
             case POPUP_ENABLED -> value -> state.working.popup.enabled = value;
             case POPUP_SHOW_TITLE -> value -> state.working.popup.showTitle = value;
             case POPUP_CENTER_TEXT -> value -> state.working.popup.centerText = value;
