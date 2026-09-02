@@ -38,7 +38,6 @@ public final class BackupManifest {
         public boolean sameContent(FileState other) {
             return other != null
                     && size == other.size
-                    && modifiedTime == other.modifiedTime
                     && Objects.equals(sha256, other.sha256);
         }
     }

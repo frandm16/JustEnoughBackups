@@ -6,6 +6,7 @@ All notable changes to this project are documented in this file.
 
 ### Fixed
 
+- Partial backups now correctly calculate file changes after a restore: removed `modifiedTime` from content comparison.
 - Partial and differential backups now calculate SHA-256 hashes for all files (not just FULL backups), ensuring consistent content comparison across the entire backup chain. This fixes a bug where creating a partial/differential backup after restoring could include or exclude files incorrectly due to inconsistent hash detection between backup types.
 
 ## 1.2.0.3+26.2 - 11/08/2026
