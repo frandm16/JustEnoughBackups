@@ -1004,6 +1004,11 @@ public final class BackupStorage {
             return candidates.stream()
                     .max(Comparator.comparing(manifest -> manifest.createdAt))
                     .orElse(null);
+        } else if (type == BackupType.DIFFERENTIAL) {
+            return candidates.stream()
+                    .filter(m -> m.type == BackupType.FULL)
+                    .max(Comparator.comparing(manifest -> manifest.createdAt))
+                    .orElse(null);
         } else {
             if (hasIncremental) {
                 return candidates.stream()
