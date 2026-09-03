@@ -46,21 +46,26 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
     private static final int CARD_SELECTED_BG = 0xCC666666;
     private static final int CARD_SELECTED_BORDER = 0xFF8F8F8F;
 
-
+/*
     private static final int ACCENT_NORMAL_BG = 0x74E171F4;
     private static final int ACCENT_HOVER_BG = 0x74E480F6;
     private static final int ACCENT_OUTLINE_COLOR = 0xFFD54DED;
     public static final int ACCENT_BASEBACKUP_TEXT = 0xFFAE6DBA;
+    */
+    private static final int ACCENT_NORMAL_BG = 0x744A90E2;
+    private static final int ACCENT_HOVER_BG = 0x745AA0F2;
+    private static final int ACCENT_OUTLINE_COLOR = 0xFF2F80ED;
+    public static final int ACCENT_BASEBACKUP_TEXT = 0xFF4F8CC9;
     private static final int DELETE_NORMAL_BG = 0xCC6B2525;
     private static final int DELETE_HOVER_BG = 0xCC8B3333;
     private static final int DELETE_OUTLINE_COLOR = 0xFFB52A2A;
 
     private static final int FULL_BG = 0xFF24572D;
     private static final int FULL_TEXT = 0xFFB8E986;
-    private static final int DIFF_BG = 0xFF5A4418;
-    private static final int DIFF_TEXT = 0xFFFFD073;
-    private static final int PARTIAL_BG = 0xFF1F4863;
-    private static final int PARTIAL_TEXT = 0xFF90D0FF;
+    private static final int DIFF_BG = 0xFF5A3D18;
+    private static final int DIFF_TEXT = 0xFFFFD773;
+    private static final int PARTIAL_BG = 0xFF1F5B63;
+    private static final int PARTIAL_TEXT = 0xFF58D8EF;
 
     private static final int CARD_HEIGHT = 44;
     private static final int CARD_GAP = 4;
@@ -282,13 +287,7 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
 
     private void renderTopHeader(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
         int headerY = 10;
-        graphics.text(font, title, ScreenChrome.OUTER, headerY + 4, TEXT_COLOR, true);
-
-        String worldDesc = backups.isEmpty() ? "" : "(" + backups.get(0).worldName() + ")";
-        if (!worldDesc.isEmpty()) {
-            int titleW = font.width(title);
-            graphics.text(font, Component.literal(worldDesc), ScreenChrome.OUTER + titleW + 8, headerY + 4, TEXT_MUTED, true);
-        }
+        graphics.centeredText(font, title, width / 2, headerY + 4, ACCENT_OUTLINE_COLOR);
 
         drawSurfaceButton(graphics, refreshBtnRect(), Component.translatable("screen.justenoughbackups.backups.refresh"), mouseX, mouseY, true);
         drawSurfaceButton(graphics, configBtnRect(), Component.translatable("screen.justenoughbackups.backups.config"), mouseX, mouseY, true);
@@ -435,9 +434,6 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
         if (backups.isEmpty()) {
             graphics.centeredText(font, Component.translatable("screen.justenoughbackups.backups.empty_title"), x + w / 2, centerY, TEXT_COLOR);
             graphics.centeredText(font, Component.translatable("screen.justenoughbackups.backups.empty_desc"), x + w / 2, centerY + 16, TEXT_MUTED);
-
-            Rect cta = new Rect(x + w / 2 - 80, centerY + 40, 160, 24);
-            drawAccentButton(graphics, cta, Component.translatable("screen.justenoughbackups.backups.empty_action"), mouseX, mouseY, true, ACCENT_NORMAL_BG, ACCENT_HOVER_BG, ACCENT_OUTLINE_COLOR, ACCENT_OUTLINE_COLOR);
         } else {
             graphics.centeredText(font, Component.translatable("screen.justenoughbackups.backups.no_selection"), x + w / 2, centerY + 10, TEXT_MUTED);
             if (!filter.isEmpty() || filterType != BackupFilterType.ALL) {
@@ -611,7 +607,9 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
                 case DIFFERENTIAL -> Component.translatable("screen.justenoughbackups.backups.type.differential_desc");
                 case PARTIAL -> Component.translatable("screen.justenoughbackups.backups.type.partial_desc");
             };
-            graphics.text(font, Component.literal(trimToWidth(type.name() + ": " + desc.getString(), rect.w() - 20)), rect.x() + 10, rect.y() + 8, selected ? ScreenChrome.TITLE_COLOR : TEXT_MUTED, false);
+            int badgeW = 76;
+            drawTypeBadge(graphics, rect.x() + 5, rect.y() + 5, badgeW, 14, type);
+            graphics.text(font, Component.literal(trimToWidth(desc.getString(), rect.w() - 10 - badgeW)), rect.x() + 10 + badgeW, rect.y() + 8, selected ? ScreenChrome.TITLE_COLOR : TEXT_MUTED, false);
 
             cardY += cardH + 4;
         }
@@ -664,14 +662,14 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
         int y = (height - panelH) / 2;
 
         graphics.fill(x, y, x + panelW, y + panelH, 0xEE161616);
-        graphics.outline(x, y, panelW, panelH, DELETE_OUTLINE_COLOR);
+        graphics.outline(x, y, panelW, panelH, ACCENT_OUTLINE_COLOR);
 
-        graphics.centeredText(font, Component.translatable("screen.justenoughbackups.backups.restore_second_title"), width / 2, y + 10, DELETE_OUTLINE_COLOR);
+        graphics.centeredText(font, Component.translatable("screen.justenoughbackups.backups.restore_second_title"), width / 2, y + 10, ACCENT_OUTLINE_COLOR);
         graphics.centeredText(font, Component.translatable("screen.justenoughbackups.backups.restore_second_message"), width / 2, y + 36, TEXT_MUTED);
 
         Rect confirmRect = new Rect(x + 55, y + 74, 110, 22);
         Rect cancelRect = new Rect(x + 175, y + 74, 100, 22);
-        drawAccentButton(graphics, confirmRect, Component.translatable("screen.justenoughbackups.backups.restore"), mouseX, mouseY, true, DELETE_NORMAL_BG, DELETE_HOVER_BG, DELETE_OUTLINE_COLOR, DELETE_OUTLINE_COLOR);
+        drawAccentButton(graphics, confirmRect, Component.translatable("screen.justenoughbackups.backups.restore"), mouseX, mouseY, true, ACCENT_NORMAL_BG, ACCENT_HOVER_BG, ACCENT_OUTLINE_COLOR, ACCENT_OUTLINE_COLOR);
         drawSurfaceButton(graphics, cancelRect, Component.translatable("screen.justenoughbackups.common.cancel"), mouseX, mouseY, true);
     }
 
@@ -766,13 +764,7 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
 
         BackupListItem selectedItem = selectedBackupId != null ? itemsById.get(selectedBackupId) : null;
         if (selectedItem == null) {
-            if (backups.isEmpty()) {
-                Rect cta = new Rect(rightX + rightW / 2 - 80, top + (bottom - top) / 2 + 10, 160, 24);
-                if (cta.contains(mx, my)) {
-                    openCreateModal();
-                    return true;
-                }
-            } else if (!filter.isEmpty() || filterType != BackupFilterType.ALL) {
+            if (!filter.isEmpty() || filterType != BackupFilterType.ALL) {
                 Rect clearFilter = new Rect(rightX + rightW / 2 - 60, top + (bottom - top) / 2 + 4, 120, 20);
                 if (clearFilter.contains(mx, my)) {
                     filter = "";

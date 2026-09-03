@@ -234,7 +234,7 @@ public final class BackupService {
                 .findFirst()
                 .orElse(null);
         if (dependent != null) {
-            throw new IOException("Required by backup " + BackupStorage.displayName(dependent));
+            throw new IOException("Required by backup: " + BackupStorage.displayName(dependent));
         }
         BackupStorage.deleteBackup(BackupPaths.worldBackupDir(server), backupId);
     }
@@ -325,7 +325,7 @@ public final class BackupService {
                 .findFirst()
                 .orElse(null);
         boolean canDelete = dependent == null;
-        String deleteBlockedReason = dependent == null ? "" : "Required by backup " + displayNames.getOrDefault(dependent.id, dependent.id);
+        String deleteBlockedReason = dependent == null ? "" : "Required by backup: " + displayNames.getOrDefault(dependent.id, dependent.id);
         return new BackupSummary(
                 manifest.id,
                 BackupStorage.displayName(manifest),
