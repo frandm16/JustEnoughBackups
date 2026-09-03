@@ -797,11 +797,11 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
         }
 
         if (selectedItem.base() != null) {
-            int baseY = top + 10 - detailScroll + 24 + 34 * 2 + 6 + 12 + 8 + 16;
+            int baseY = top + 10 - detailScroll + 24 + 34 * 2 + 6 + 12 + 8 + 16 + 6 + 5;
             if (!backup.canDelete() && !value(backup.deleteBlockedReason()).isBlank()) {
                 baseY += 26 + 12;
             }
-            Rect jumpBase = jumpToBaseRect(rightX + rightW - 12 - 50, baseY + 4);
+            Rect jumpBase = jumpToBaseRect(rightX + rightW - 12 - 46, baseY + 3);
             if (jumpBase.contains(mx, my)) {
                 selectBackupAndScrollToIt(selectedItem.base().id());
                 return true;
@@ -814,7 +814,7 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
                 childrenStartY += 26 + 12;
             }
             if (selectedItem.base() != null) {
-                childrenStartY += 28 + 6;
+                childrenStartY += 28 + 12;
             }
             childrenStartY += 12;
 
