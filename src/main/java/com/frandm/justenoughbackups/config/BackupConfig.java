@@ -43,7 +43,6 @@ public final class BackupConfig {
     public String tempBackupDirectory = "";
     public List<String> excludedPaths = new ArrayList<>();
     public boolean excludeSafetyBackupsFromIncremental = false;
-    public int incrementalMaxChainLength = 20;
 
     public static BackupConfig get() {
         BackupConfig config = current;
@@ -115,12 +114,7 @@ public final class BackupConfig {
         copy.popup = popup.copy();
         copy.excludedPaths = new ArrayList<>(excludedPaths);
         copy.excludeSafetyBackupsFromIncremental = excludeSafetyBackupsFromIncremental;
-        copy.incrementalMaxChainLength = incrementalMaxChainLength;
         return copy;
-    }
-
-    public static void setCurrent(BackupConfig config) {
-        current = config;
     }
 
     public Path resolveBackupRoot() {
@@ -236,7 +230,6 @@ public final class BackupConfig {
                     .distinct()
                     .toList();
         }
-        incrementalMaxChainLength = Math.max(0, incrementalMaxChainLength);
     }
 
     private static String normalizeExcludedPath(String value) {
