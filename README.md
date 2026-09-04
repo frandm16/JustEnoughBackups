@@ -1,7 +1,5 @@
 <p align="center">
-  <img
-    src="assets/banner.png"
-    alt="Just Enough Backups">
+  <img src="assets/banner.png" alt="Just Enough Backups" />
 </p>
 
 <p align="center">
@@ -41,9 +39,9 @@ The mod is designed to keep the actual backup logic on the server side while exp
 
 ### Backup types
 
-- **Full**: stores a complete snapshot of the world.
-- **Partial**: stores changes relative to a base backup.
-- **Differential**: stores changes relative to a base backup, while keeping a separate retention bucket from partial backups.
+- **Full**: creates a complete snapshot of the entire world at the moment of backup. No base backup is required and it serves as the foundation for later incremental backups.
+- **Partial**: creates an incremental backup containing only the files that have changed since the most recent backup of *any* type (full, partial, or differential). It uses that most recent backup as its base.
+- **Differential**: creates an incremental backup containing only the files that have changed since the most recent **full** backup. Differential backups are stored in a separate retention bucket from partial backups, allowing independent retention policies.
 
 Dependencies between backups are tracked. Retention and delete operations respect those dependencies, so required base backups are preserved when newer partial or differential backups still depend on them.
 

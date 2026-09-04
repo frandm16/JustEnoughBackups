@@ -56,6 +56,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.LongConsumer;
 
+import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -993,34 +994,14 @@ public final class BackupStorage {
             candidates = manifests.stream()
                     .filter(m -> !m.isSafetyBackup)
                     .toList();
-            if (candidates.isEmpty()) {
-                return null;
-            }
         }
 
-        boolean hasIncremental = candidates.stream()
-                .anyMatch(m -> m.type != BackupType.FULL);
-        if (type == BackupType.PARTIAL) {
-            return candidates.stream()
-                    .max(Comparator.comparing(manifest -> manifest.createdAt))
-                    .orElse(null);
-        } else if (type == BackupType.DIFFERENTIAL) {
-            return candidates.stream()
-                    .filter(m -> m.type == BackupType.FULL)
-                    .max(Comparator.comparing(manifest -> manifest.createdAt))
-                    .orElse(null);
-        } else {
-            if (hasIncremental) {
-                return candidates.stream()
-                        .filter(m -> m.type != BackupType.FULL)
-                        .max(Comparator.comparing(manifest -> manifest.createdAt))
-                        .orElse(null);
-            }
-            return candidates.stream()
-                    .filter(m -> m.type == BackupType.FULL)
-                    .max(Comparator.comparing(manifest -> manifest.createdAt))
-                    .orElse(null);
+        Stream<BackupManifest> stream = candidates.stream();
+        if (type == BackupType.DIFFERENTIAL) {
+            stream = stream.filter(m -> m.type == BackupType.FULL);
         }
+
+        return stream.max(Comparator.comparing(m -> m.createdAt)).orElse(null);
     }
 
     private static List<String> includedFiles(
