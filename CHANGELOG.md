@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented in this file.
 
-## 1.2.0.5+26.2 - 03/09/2026
+## 1.2.0.6+26.2 - 10/09/2026
 
 ### Added
 
@@ -11,6 +11,13 @@ All notable changes to this project are documented in this file.
 ### Fixed
 
 - Differential backup base selection now always depend on the latest full backup.
+
+
+## 1.2.0.5+26.1 - 10/09/2026
+
+### Added
+
+- Updated support for 26.1.x
 
 ## 1.2.0.4+26.2 - 02/09/2026
 

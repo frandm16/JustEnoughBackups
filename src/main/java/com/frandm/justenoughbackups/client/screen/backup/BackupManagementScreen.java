@@ -334,6 +334,9 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
                         : "screen.justenoughbackups.backups.no_matches");
                 graphics.text(font, emptyMsg, leftX + 10, listTop + 16, TEXT_MUTED, true);
             } else {
+                boolean hasScrollbar = maxListScroll() > 0;
+                int cardWidth = hasScrollbar ? (leftW - 12) : (leftW - 8);
+
                 for (int i = 0; i < filteredItems.size(); i++) {
                     BackupListItem item = filteredItems.get(i);
                     int cardY = listTop + 4 + i * (CARD_HEIGHT + CARD_GAP) - listScroll;
@@ -342,7 +345,7 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
                         continue;
                     }
 
-                    renderBackupCard(graphics, item, leftX + 4, cardY, leftW - 8, mouseX, mouseY);
+                    renderBackupCard(graphics, item, leftX + 4, cardY, cardWidth, mouseX, mouseY);
                 }
             }
         } finally {
