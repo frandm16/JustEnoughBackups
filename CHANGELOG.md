@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## 1.2.0.7+26.3 - 15/09/2026
+
+### Fixed
+
+- Replaced all GLFW key and mouse constants with their `InputConstants` equivalents.
+
 ## 1.2.0.6+26.2 - 10/09/2026
 
 ### Added
