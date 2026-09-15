@@ -8,13 +8,13 @@ import com.frandm.justenoughbackups.client.ui.ScreenChrome;
 import com.frandm.justenoughbackups.config.BackupConfig;
 import com.frandm.justenoughbackups.network.BackupUiBackup;
 import com.frandm.justenoughbackups.network.BackupUiResponsePayload;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
-import org.lwjgl.glfw.GLFW;
 
 import java.time.Instant;
 import java.time.ZoneId;
@@ -697,7 +697,7 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        if (event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+        if (event.button() == InputConstants.MOUSE_BUTTON_LEFT) {
             double mx = event.x();
             double my = event.y();
 
@@ -1028,7 +1028,7 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
 
     @Override
     public boolean keyPressed(KeyEvent event) {
-        if (event.key() == GLFW.GLFW_KEY_ESCAPE) {
+        if (event.key() == InputConstants.KEY_SPACE) {
             if (activeModal != ActiveModal.NONE) {
                 closeModal();
                 return true;
@@ -1038,7 +1038,7 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
         }
 
         if (activeModal != ActiveModal.NONE) {
-            if (event.key() == GLFW.GLFW_KEY_ENTER) {
+            if (event.key() == InputConstants.KEY_RETURN) {
                 if (activeModal == ActiveModal.CREATE) {
                     String reqName = modalInputBox != null ? modalInputBox.getValue() : "";
                     closeModal();
@@ -1056,7 +1056,7 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
         }
 
         if ((searchBox == null || !searchBox.isFocused()) && !filteredItems.isEmpty()) {
-            if (event.key() == GLFW.GLFW_KEY_UP || event.key() == GLFW.GLFW_KEY_DOWN) {
+            if (event.key() == InputConstants.KEY_UP || event.key() == InputConstants.KEY_DOWN) {
                 int currentIndex = -1;
                 for (int i = 0; i < filteredItems.size(); i++) {
                     if (filteredItems.get(i).backup().id().equals(selectedBackupId)) {
@@ -1066,7 +1066,7 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
                 }
 
                 int newIndex;
-                if (event.key() == GLFW.GLFW_KEY_UP) {
+                if (event.key() == InputConstants.KEY_UP) {
                     newIndex = currentIndex > 0 ? currentIndex - 1 : filteredItems.size() - 1;
                 } else {
                     newIndex = currentIndex < filteredItems.size() - 1 ? currentIndex + 1 : 0;
