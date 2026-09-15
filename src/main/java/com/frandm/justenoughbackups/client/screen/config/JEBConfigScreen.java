@@ -14,7 +14,7 @@ import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
-import org.lwjgl.glfw.GLFW;
+import com.mojang.blaze3d.platform.InputConstants;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -608,7 +608,7 @@ public final class JEBConfigScreen extends Screen {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        if (event.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+        if (event.button() != InputConstants.MOUSE_BUTTON_LEFT) {
             return super.mouseClicked(event, doubleClick);
         }
         double mouseX = event.x();
@@ -718,43 +718,43 @@ public final class JEBConfigScreen extends Screen {
 
     @Override
     public boolean keyPressed(KeyEvent event) {
-        if (event.key() == GLFW.GLFW_KEY_ESCAPE) {
+        if (event.key() == InputConstants.KEY_ESCAPE) {
             onClose();
             return true;
         }
         if (state.focusedExcludedPathIndex != null) {
             String text = excludedPathValue(state.focusedExcludedPathIndex);
             switch (event.key()) {
-                case GLFW.GLFW_KEY_BACKSPACE -> {
+                case InputConstants.KEY_BACKSPACE -> {
                     if (state.cursor > 0 && !text.isEmpty()) {
                         updateExcludedPath(state.focusedExcludedPathIndex, text.substring(0, state.cursor - 1) + text.substring(state.cursor));
                         state.cursor--;
                     }
                     return true;
                 }
-                case GLFW.GLFW_KEY_DELETE -> {
+                case InputConstants.KEY_DELETE -> {
                     if (state.cursor < text.length()) {
                         updateExcludedPath(state.focusedExcludedPathIndex, text.substring(0, state.cursor) + text.substring(state.cursor + 1));
                     }
                     return true;
                 }
-                case GLFW.GLFW_KEY_LEFT -> {
+                case InputConstants.KEY_LEFT -> {
                     state.cursor = Math.max(0, state.cursor - 1);
                     return true;
                 }
-                case GLFW.GLFW_KEY_RIGHT -> {
+                case InputConstants.KEY_RIGHT -> {
                     state.cursor = Math.min(text.length(), state.cursor + 1);
                     return true;
                 }
-                case GLFW.GLFW_KEY_HOME -> {
+                case InputConstants.KEY_HOME -> {
                     state.cursor = 0;
                     return true;
                 }
-                case GLFW.GLFW_KEY_END -> {
+                case InputConstants.KEY_END -> {
                     state.cursor = text.length();
                     return true;
                 }
-                case GLFW.GLFW_KEY_ENTER -> {
+                case InputConstants.KEY_RETURN -> {
                     state.focusedExcludedPathIndex = null;
                     return true;
                 }
@@ -768,7 +768,7 @@ public final class JEBConfigScreen extends Screen {
         }
         String text = state.rawInputs.getOrDefault(state.focusedField, "");
         switch (event.key()) {
-            case GLFW.GLFW_KEY_BACKSPACE -> {
+            case InputConstants.KEY_BACKSPACE -> {
                 if (state.cursor > 0 && !text.isEmpty()) {
                     state.rawInputs.put(state.focusedField, text.substring(0, state.cursor - 1) + text.substring(state.cursor));
                     state.cursor--;
@@ -776,30 +776,30 @@ public final class JEBConfigScreen extends Screen {
                 }
                 return true;
             }
-            case GLFW.GLFW_KEY_DELETE -> {
+            case InputConstants.KEY_DELETE -> {
                 if (state.cursor < text.length()) {
                     state.rawInputs.put(state.focusedField, text.substring(0, state.cursor) + text.substring(state.cursor + 1));
                     applyFocusedField();
                 }
                 return true;
             }
-            case GLFW.GLFW_KEY_LEFT -> {
+            case InputConstants.KEY_LEFT -> {
                 state.cursor = Math.max(0, state.cursor - 1);
                 return true;
             }
-            case GLFW.GLFW_KEY_RIGHT -> {
+            case InputConstants.KEY_RIGHT -> {
                 state.cursor = Math.min(text.length(), state.cursor + 1);
                 return true;
             }
-            case GLFW.GLFW_KEY_HOME -> {
+            case InputConstants.KEY_HOME -> {
                 state.cursor = 0;
                 return true;
             }
-            case GLFW.GLFW_KEY_END -> {
+            case InputConstants.KEY_END -> {
                 state.cursor = text.length();
                 return true;
             }
-            case GLFW.GLFW_KEY_ENTER -> {
+            case InputConstants.KEY_RETURN -> {
                 state.focusedField = null;
                 return true;
             }

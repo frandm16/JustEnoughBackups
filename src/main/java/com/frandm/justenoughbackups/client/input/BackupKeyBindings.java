@@ -7,7 +7,6 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.resources.Identifier;
-import org.lwjgl.glfw.GLFW;
 
 public final class BackupKeyBindings {
     private static final KeyMapping.Category CATEGORY = KeyMapping.Category.register(Identifier.fromNamespaceAndPath("justenoughbackups", "just_enough_backups"));
@@ -20,14 +19,14 @@ public final class BackupKeyBindings {
     public static void register() {
         backupMenu = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.justenoughbackups.backup_menu",
-                InputConstants.Type.KEYSYM,
-                GLFW.GLFW_KEY_B,
+                InputConstants.Type.KEYBOARD,
+                InputConstants.KEY_B,
                 CATEGORY
         ));
         configMenu = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.justenoughbackups.config_menu",
-                InputConstants.Type.KEYSYM,
-                GLFW.GLFW_KEY_N,
+                InputConstants.Type.KEYBOARD,
+                InputConstants.KEY_N,
                 CATEGORY
         ));
 

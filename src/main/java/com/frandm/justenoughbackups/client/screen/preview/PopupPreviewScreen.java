@@ -5,12 +5,12 @@ import com.frandm.justenoughbackups.client.screen.config.JEBConfigScreen;
 import com.frandm.justenoughbackups.client.ui.popup.BackupPopupRenderer;
 import com.frandm.justenoughbackups.client.ui.popup.PopupPositioning;
 import com.frandm.justenoughbackups.config.BackupConfig;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
-import org.lwjgl.glfw.GLFW;
 
 public final class PopupPreviewScreen extends Screen {
     public static final int LINE_COLOR = 0x65BCBCBC;
@@ -53,7 +53,7 @@ public final class PopupPreviewScreen extends Screen {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        if (event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT && isInsidePreview(event.x(), event.y())) {
+        if (event.button() == InputConstants.MOUSE_BUTTON_LEFT && isInsidePreview(event.x(), event.y())) {
             draggingPreview = true;
             dragOffsetX = (int) event.x() - popup.x;
             dragOffsetY = (int) event.y() - popup.y;
@@ -83,30 +83,30 @@ public final class PopupPreviewScreen extends Screen {
 
     @Override
     public boolean keyPressed(KeyEvent event) {
-        if (event.key() == GLFW.GLFW_KEY_ESCAPE) {
+        if (event.key() == InputConstants.KEY_ESCAPE) {
             PopupPositioning.rememberRatios(font, popup, previewPayload, width, height);
             onClose();
             return true;
         }
 
-        int amount = (event.modifiers() & GLFW.GLFW_MOD_SHIFT) != 0 ? 10 : 1;
+        int amount = (event.modifiers() & InputConstants.MOD_SHIFT) != 0 ? 10 : 1;
         switch (event.key()) {
-            case GLFW.GLFW_KEY_LEFT -> {
+            case InputConstants.KEY_LEFT -> {
                 popup.x -= amount;
                 snapAndClamp();
                 return true;
             }
-            case GLFW.GLFW_KEY_RIGHT -> {
+            case InputConstants.KEY_RIGHT -> {
                 popup.x += amount;
                 snapAndClamp();
                 return true;
             }
-            case GLFW.GLFW_KEY_UP -> {
+            case InputConstants.KEY_UP -> {
                 popup.y -= amount;
                 snapAndClamp();
                 return true;
             }
-            case GLFW.GLFW_KEY_DOWN -> {
+            case InputConstants.KEY_DOWN -> {
                 popup.y += amount;
                 snapAndClamp();
                 return true;
