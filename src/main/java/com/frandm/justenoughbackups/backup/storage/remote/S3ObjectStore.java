@@ -1,5 +1,6 @@
 package com.frandm.justenoughbackups.backup.storage.remote;
 
+import com.frandm.justenoughbackups.WorldBackupMod;
 import com.frandm.justenoughbackups.config.BackupConfig;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
@@ -17,6 +18,7 @@ import software.amazon.awssdk.services.s3.model.S3Exception;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletionException;
@@ -42,10 +44,16 @@ final class S3ObjectStore implements RemoteObjectStore {
                 .region(Region.of(config.s3Region))
                 .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(accessKey, secretKey)))
                 .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
+                .overrideConfiguration(software.amazon.awssdk.core.client.config.ClientOverrideConfiguration.builder()
+                        .apiCallTimeout(Duration.ofHours(6)).build())
                 .multipartEnabled(true);
         if (!config.s3Endpoint.isBlank()) {
             try {
                 URI endpoint = URI.create(config.s3Endpoint.trim());
+                if (endpoint.getHost() == null || endpoint.getUserInfo() != null
+                        || endpoint.getQuery() != null || endpoint.getFragment() != null) {
+                    throw new IOException("S3 endpoint must be a URL without credentials, query, or fragment.");
+                }
                 if (!"https".equalsIgnoreCase(endpoint.getScheme())
                         && !("http".equalsIgnoreCase(endpoint.getScheme()) && isLoopback(endpoint.getHost()))) {
                     throw new IOException("S3 endpoint must use HTTPS (HTTP is allowed only for localhost). ");
@@ -109,7 +117,11 @@ final class S3ObjectStore implements RemoteObjectStore {
         try {
             client.copyObject(CopyObjectRequest.builder().sourceBucket(bucket).sourceKey(sourceKey)
                     .destinationBucket(bucket).destinationKey(targetKey).build()).join();
-            delete(sourceKey);
+            try {
+                delete(sourceKey);
+            } catch (IOException cleanupFailure) {
+                WorldBackupMod.LOGGER.warn("S3 object was copied but its source could not be removed; leaving an orphan at {}.", sourceKey);
+            }
         } catch (RuntimeException exception) {
             throw ioFailure("Unable to publish S3 object", exception);
         }
@@ -127,13 +139,15 @@ final class S3ObjectStore implements RemoteObjectStore {
     }
 
     private static boolean isLoopback(String host) {
-        return host != null && (host.equalsIgnoreCase("localhost") || host.equals("127.0.0.1") || host.equals("::1"));
+        String normalized = host == null ? "" : host.replace("[", "").replace("]", "");
+        return normalized.equalsIgnoreCase("localhost") || normalized.equals("127.0.0.1") || normalized.equals("::1");
     }
 
     private static IOException ioFailure(String action, Throwable throwable) {
         Throwable cause = throwable;
         while (cause.getCause() != null) cause = cause.getCause();
-        String detail = cause instanceof S3Exception s3 ? s3.awsErrorDetails().errorMessage() : cause.getMessage();
+        String detail = cause instanceof S3Exception s3 && s3.awsErrorDetails() != null
+                ? s3.awsErrorDetails().errorMessage() : cause.getMessage();
         return new IOException(action + (detail == null || detail.isBlank() ? "." : ": " + detail), cause);
     }
 }

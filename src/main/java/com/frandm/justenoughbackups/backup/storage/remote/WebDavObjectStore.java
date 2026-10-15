@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.time.Instant;
+import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import org.w3c.dom.Element;
@@ -25,11 +26,17 @@ final class WebDavObjectStore implements RemoteObjectStore {
     private final URI root;
     private final String authorization;
     private final int maxRetries;
-    private final HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
+    private final HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(20))
+            .followRedirects(HttpClient.Redirect.NEVER).build();
 
     WebDavObjectStore(BackupConfig.RemoteStorage config) throws IOException {
         try {
-            root = URI.create(config.webDavUrl.trim());
+            URI parsed = URI.create(config.webDavUrl.trim());
+            if (parsed.getUserInfo() != null || parsed.getQuery() != null || parsed.getFragment() != null)
+                throw new IOException("WebDAV URL must not include credentials, a query, or a fragment.");
+            String normalized = parsed.toString();
+            if (!normalized.endsWith("/")) normalized += "/";
+            root = URI.create(normalized);
         } catch (IllegalArgumentException exception) {
             throw new IOException("Invalid WebDAV URL.", exception);
         }
@@ -52,6 +59,10 @@ final class WebDavObjectStore implements RemoteObjectStore {
                 .header("Content-Type", "application/xml; charset=utf-8")
                 .method("PROPFIND", HttpRequest.BodyPublishers.ofString(PROPFIND_BODY))).build();
         HttpResponse<InputStream> response = sendRetryable(request, HttpResponse.BodyHandlers.ofInputStream());
+        if (response.statusCode() == 404) {
+            response.body().close();
+            return List.of();
+        }
         if (response.statusCode() != 207 && response.statusCode() != 200) {
             response.body().close();
             throw statusError("list WebDAV objects", response.statusCode());
@@ -146,6 +157,7 @@ final class WebDavObjectStore implements RemoteObjectStore {
 
     @Override
     public void move(String sourceKey, String targetKey) throws IOException {
+        ensureParentCollections(targetKey);
         HttpRequest request = authorized(HttpRequest.newBuilder(objectUri(sourceKey))
                 .header("Destination", objectUri(targetKey).toString())
                 .header("Overwrite", "T")
@@ -166,13 +178,14 @@ final class WebDavObjectStore implements RemoteObjectStore {
     }
 
     private String relativeKey(URI object) {
-        String basePath = root.getPath() == null ? "/" : root.getPath();
-        String path = object.getPath() == null ? "" : object.getPath();
+        String basePath = root.getRawPath() == null ? "/" : root.getRawPath();
+        String path = object.getRawPath() == null ? "" : object.getRawPath();
         if (!path.startsWith(basePath)) return "";
-        return java.net.URLDecoder.decode(path.substring(basePath.length()), StandardCharsets.UTF_8);
+        return java.net.URLDecoder.decode(path.substring(basePath.length()).replace("+", "%2B"), StandardCharsets.UTF_8);
     }
 
     private HttpRequest.Builder authorized(HttpRequest.Builder builder) {
+        builder.timeout(Duration.ofHours(6));
         return authorization.isBlank() ? builder : builder.header("Authorization", authorization);
     }
 
@@ -216,6 +229,7 @@ final class WebDavObjectStore implements RemoteObjectStore {
     }
 
     private static boolean isLoopback(String host) {
-        return host.equalsIgnoreCase("localhost") || host.equals("127.0.0.1") || host.equals("::1");
+        String normalized = host == null ? "" : host.replace("[", "").replace("]", "");
+        return normalized.equalsIgnoreCase("localhost") || normalized.equals("127.0.0.1") || normalized.equals("::1");
     }
 }

@@ -38,6 +38,13 @@ final class ConfigValidator {
                     : !blank(state.working.remoteStorage.webDavUrl);
             if (!valid) errors.add(new ValidationError(ConfigFieldId.REMOTE_STORAGE_ENABLED,
                     Component.translatable("screen.justenoughbackups.config.error.remote_incomplete")));
+            String endpoint = state.working.remoteStorage.provider == RemoteProviderType.S3
+                    ? state.working.remoteStorage.s3Endpoint : state.working.remoteStorage.webDavUrl;
+            if (!blank(endpoint) && !validRemoteUri(endpoint, state.working.remoteStorage.provider == RemoteProviderType.WEBDAV)) {
+                errors.add(new ValidationError(state.working.remoteStorage.provider == RemoteProviderType.S3
+                        ? ConfigFieldId.REMOTE_S3_ENDPOINT : ConfigFieldId.REMOTE_WEBDAV_URL,
+                        Component.translatable("screen.justenoughbackups.config.error.remote_url")));
+            }
         }
 
         validateRawInt(errors, state, ConfigFieldId.INTERVAL_MINUTES, 1, Integer.MAX_VALUE);
@@ -114,4 +121,19 @@ final class ConfigValidator {
     }
 
     private static boolean blank(String value) { return value == null || value.isBlank(); }
+
+    private static boolean validRemoteUri(String value, boolean webDav) {
+        try {
+            java.net.URI uri = java.net.URI.create(value.trim());
+            String scheme = uri.getScheme();
+            if (uri.getHost() == null) return false;
+            String host = uri.getHost().replace("[", "").replace("]", "");
+            boolean loopback = "localhost".equalsIgnoreCase(host) || "127.0.0.1".equals(host) || "::1".equals(host);
+            return uri.getHost() != null && uri.getUserInfo() == null && uri.getFragment() == null && uri.getQuery() == null
+                    && ("https".equalsIgnoreCase(scheme) || "http".equalsIgnoreCase(scheme) && loopback)
+                    && (!webDav || uri.getPath() != null);
+        } catch (IllegalArgumentException exception) {
+            return false;
+        }
+    }
 }

@@ -25,9 +25,13 @@ public final class RemoteBackupCatalog implements AutoCloseable {
     private final String worldPrefix;
 
     public RemoteBackupCatalog(BackupConfig.RemoteStorage config, String worldDirectoryName) throws IOException {
-        this.store = RemoteObjectStores.create(config);
+        this(config, worldDirectoryName, RemoteObjectStores.create(config));
+    }
+
+    RemoteBackupCatalog(BackupConfig.RemoteStorage config, String worldDirectoryName, RemoteObjectStore store) throws IOException {
+        this.store = store;
         String configuredPrefix = config.provider == RemoteProviderType.S3 ? config.s3Prefix : config.webDavPrefix;
-        this.worldPrefix = cleanPrefix(configuredPrefix) + cleanSegment(worldDirectoryName) + "/";
+        this.worldPrefix = cleanPrefix(configuredPrefix) + cleanSegment(worldDirectoryName);
     }
 
     public List<CatalogEntry> list() throws IOException {
@@ -46,9 +50,14 @@ public final class RemoteBackupCatalog implements AutoCloseable {
             }
             if (envelope == null || envelope.metadata == null || envelope.metadata.manifest == null) continue;
             BackupManifest manifest = envelope.metadata.manifest;
-            String archiveKey = archiveKey(manifest.zipFileName);
+            if (manifest.id == null || manifest.id.isBlank() || manifest.createdAt == null
+                    || manifest.type == null || manifest.zipFileName == null || manifest.zipFileName.isBlank()) continue;
+            String archiveKey;
+            try { archiveKey = archiveKey(manifest.zipFileName); }
+            catch (IOException invalidName) { continue; }
             Long archiveSize = archives.get(archiveKey);
             if (archiveSize == null) continue;
+            manifest.archiveBytes = archiveSize;
             entries.add(new CatalogEntry(manifest, envelope.metadata.status, envelope.sha256, archiveSize));
         }
         entries.sort(Comparator.comparing(entry -> entry.manifest().createdAt));
@@ -80,6 +89,7 @@ public final class RemoteBackupCatalog implements AutoCloseable {
             UploadInfo published = verify(finalKey);
             if (!verified.sha256().equals(published.sha256()) || verified.bytes() != published.bytes())
                 throw new IOException("Remote archive changed while being published; checksum verification failed.");
+            manifest.archiveBytes = published.bytes();
             manifest.compressionMethod = manifest.compressionMethod == null ? "DEFLATED" : manifest.compressionMethod;
             CatalogEnvelope envelope = new CatalogEnvelope(new BackupMetadata(manifest, status), verified.sha256());
             byte[] bytes = GSON.toJson(envelope).getBytes(java.nio.charset.StandardCharsets.UTF_8);
@@ -159,9 +169,10 @@ public final class RemoteBackupCatalog implements AutoCloseable {
             delete(manifest.id, manifest.zipFileName);
         }
         if (config.retention.maxTotalSizeMb > 0) {
-            long total = list().stream().mapToLong(CatalogEntry::archiveBytes).sum();
+            long total = store.list(worldPrefix + "archives/").stream()
+                    .mapToLong(object -> Math.max(0L, object.size())).sum();
             long cap = config.retention.maxTotalSizeMb * 1024L * 1024L;
-            if (total > cap) throw new IOException("Remote backup size limit cannot be met while preserving required backup chains.");
+            if (total > cap) throw new IOException("Remote backup size limit cannot be met while preserving required chains or unreferenced remote archive objects.");
         }
     }
 
@@ -171,6 +182,26 @@ public final class RemoteBackupCatalog implements AutoCloseable {
         int removed = 0;
         for (RemoteObjectStore.ObjectInfo object : temporary) {
             if (object.key().endsWith(".uploading") && object.lastModified() != null
+                    && object.lastModified().isBefore(cutoff)) {
+                store.delete(object.key());
+                removed++;
+            }
+        }
+        java.util.Set<String> referencedArchives = new java.util.HashSet<>();
+        for (RemoteObjectStore.ObjectInfo object : store.list(worldPrefix + "catalog/")) {
+            if (!object.key().endsWith(".json")) continue;
+            CatalogEnvelope envelope;
+            try (InputStream in = store.get(object.key())) {
+                envelope = GSON.fromJson(new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8), CatalogEnvelope.class);
+            } catch (RuntimeException exception) {
+                throw new IOException("Cannot safely clean remote archives because a catalog sidecar is unreadable.", exception);
+            }
+            if (envelope == null || envelope.metadata == null || envelope.metadata.manifest == null)
+                throw new IOException("Cannot safely clean remote archives because a catalog sidecar is incomplete.");
+            referencedArchives.add(archiveKey(envelope.metadata.manifest.zipFileName));
+        }
+        for (RemoteObjectStore.ObjectInfo object : store.list(worldPrefix + "archives/")) {
+            if (!referencedArchives.contains(object.key()) && object.lastModified() != null
                     && object.lastModified().isBefore(cutoff)) {
                 store.delete(object.key());
                 removed++;

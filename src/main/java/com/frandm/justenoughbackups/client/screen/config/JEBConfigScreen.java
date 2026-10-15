@@ -207,6 +207,13 @@ public final class JEBConfigScreen extends Screen {
         return switch (fieldId) {
             case BACKUP_DIRECTORY -> () -> state.working.backupDirectory;
             case TEMP_DIRECTORY -> () -> state.working.tempBackupDirectory;
+            case REMOTE_S3_ENDPOINT -> () -> state.working.remoteStorage.s3Endpoint;
+            case REMOTE_S3_REGION -> () -> state.working.remoteStorage.s3Region;
+            case REMOTE_S3_BUCKET -> () -> state.working.remoteStorage.s3Bucket;
+            case REMOTE_S3_PREFIX -> () -> state.working.remoteStorage.s3Prefix;
+            case REMOTE_WEBDAV_URL -> () -> state.working.remoteStorage.webDavUrl;
+            case REMOTE_WEBDAV_PREFIX -> () -> state.working.remoteStorage.webDavPrefix;
+            case REMOTE_WEBDAV_USERNAME -> () -> state.working.remoteStorage.webDavUsername;
             case POPUP_TITLE -> () -> state.working.popup.title;
             case POPUP_RUNNING_TEXT -> () -> state.working.popup.runningText;
             case POPUP_SCANNING_TEXT -> () -> state.working.popup.scanningText;
@@ -220,6 +227,13 @@ public final class JEBConfigScreen extends Screen {
         return switch (fieldId) {
             case BACKUP_DIRECTORY -> value -> state.working.backupDirectory = value;
             case TEMP_DIRECTORY -> value -> state.working.tempBackupDirectory = value;
+            case REMOTE_S3_ENDPOINT -> value -> state.working.remoteStorage.s3Endpoint = value;
+            case REMOTE_S3_REGION -> value -> state.working.remoteStorage.s3Region = value;
+            case REMOTE_S3_BUCKET -> value -> state.working.remoteStorage.s3Bucket = value;
+            case REMOTE_S3_PREFIX -> value -> state.working.remoteStorage.s3Prefix = value;
+            case REMOTE_WEBDAV_URL -> value -> state.working.remoteStorage.webDavUrl = value;
+            case REMOTE_WEBDAV_PREFIX -> value -> state.working.remoteStorage.webDavPrefix = value;
+            case REMOTE_WEBDAV_USERNAME -> value -> state.working.remoteStorage.webDavUsername = value;
             case POPUP_TITLE -> value -> state.working.popup.title = value;
             case POPUP_RUNNING_TEXT -> value -> state.working.popup.runningText = value;
             case POPUP_SCANNING_TEXT -> value -> state.working.popup.scanningText = value;

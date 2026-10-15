@@ -28,7 +28,7 @@ The mod is designed to keep the actual backup logic on the server side while exp
 
 ## Remote storage
 
-Remote storage is disabled by default. Enable `remoteStorage.enabled` in `config/justenoughbackups.json`, then set `remoteStorage.provider` to `S3` or `WEBDAV` and fill the matching endpoint fields. For S3, `s3Bucket` and `s3Region` are required; `s3Endpoint` is optional for AWS and can point to an S3-compatible service. For WebDAV, set `webDavUrl` to the destination collection URL. The provider selector and enable switch are also available in the configuration screen; connection details remain in the server JSON config.
+Remote storage is disabled by default. The configuration screen has a provider selector, enable switch, and fields for the S3 endpoint/region/bucket/prefix and WebDAV URL/prefix/username. For S3, bucket and region are required; the endpoint is optional for AWS and can point to an S3-compatible service. For WebDAV, set the collection URL. Passwords and S3 secrets are intentionally kept out of the UI and should be set in `config/justenoughbackups.json` or the environment.
 
 Set credentials in the server config or use environment variables, which take precedence:
 

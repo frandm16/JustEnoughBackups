@@ -235,6 +235,17 @@ public final class BackupStorage {
         if (scratchAbs.startsWith(worldAbs) || worldAbs.startsWith(scratchAbs))
             throw new IOException("tempBackupDirectory must not overlap the world directory: " + scratchAbs);
         Files.createDirectories(scratch);
+        if (config.compressionMethod == BackupCompressionMethod.ZSTANDARD) {
+            long largestEntry = manifest.includedFiles.stream().mapToLong(name -> {
+                BackupManifest.FileState state = snapshot.get(name);
+                return state == null ? 0L : Math.max(0L, state.size);
+            }).max().orElse(0L);
+            long reserve = Math.max(0L, config.minimumFreeSpaceReserveMb) * 1024L * 1024L;
+            long required = safeAdd(largestEntry, reserve);
+            long usable = Files.getFileStore(scratch).getUsableSpace();
+            if (usable < required) throw new IOException("Remote Zstandard backup needs scratch space for its largest entry and configured reserve (required "
+                    + BackupSizeFormatter.formatBytes(required) + ", available " + BackupSizeFormatter.formatBytes(usable) + ").");
+        }
 
         java.io.PipedInputStream input = new java.io.PipedInputStream(1024 * 1024);
         java.io.PipedOutputStream output = new java.io.PipedOutputStream(input);
@@ -569,11 +580,10 @@ public final class BackupStorage {
         Files.createDirectories(backupFile.getParent());
         try (OutputStream fileOut = Files.newOutputStream(backupFile)) {
             return writeBackupZip(worldPath, backupFile.getParent(), fileOut, manifest, includedFiles,
-                    currentSnapshot, integrityMode, includeSummaryFile, config, progressListener);
+                    currentSnapshot, integrityMode, includeSummaryFile, config, progressListener, false);
         }
     }
 
-    /** Writes a complete archive to a caller-owned stream; no complete ZIP is staged locally. */
     public static BackupStatus writeBackupZipToStream(
             Path worldPath, Path scratchDirectory, OutputStream output, BackupManifest manifest,
             List<String> includedFiles, Map<String, BackupManifest.FileState> currentSnapshot,
@@ -581,7 +591,7 @@ public final class BackupStorage {
     ) throws IOException {
         Files.createDirectories(scratchDirectory);
         return writeBackupZip(worldPath, scratchDirectory, output, manifest, includedFiles,
-                currentSnapshot, config.integrityMode, config.includeSummaryFile, config, progressListener);
+                currentSnapshot, config.integrityMode, config.includeSummaryFile, config, progressListener, true);
     }
 
     private static BackupStatus writeBackupZip(
@@ -594,7 +604,8 @@ public final class BackupStorage {
             BackupIntegrityMode integrityMode,
             boolean includeSummaryFile,
             BackupConfig config,
-            BackupProgressListener progressListener
+            BackupProgressListener progressListener,
+            boolean streaming
     ) throws IOException {
         BackupStatus status = new BackupStatus();
         status.backupId = manifest.id;
@@ -632,7 +643,7 @@ public final class BackupStorage {
             zipOut.setUseZip64(Zip64Mode.AsNeeded);
             if (config.compressionMethod == BackupCompressionMethod.ZSTANDARD) {
                 writeEntriesZstandard(worldPath, scratchDirectory, zipOut, toWrite, manifest, status, finalSnapshot, config, progress);
-            } else if (threadCount <= 1 || toWrite.size() <= 1) {
+            } else if (streaming || threadCount <= 1 || toWrite.size() <= 1) {
                 writeEntriesSerially(worldPath, zipOut, toWrite, manifest, status, finalSnapshot, integrityMode, progress);
             } else {
                 writeEntriesInParallel(worldPath, zipOut, toWrite, manifest, status, finalSnapshot, progress);

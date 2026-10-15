@@ -21,6 +21,7 @@ public final class BackupManifest {
     public String reason;
     public BackupIntegrityMode integrityMode;
     public long includedBytes;
+    public long archiveBytes;
     public List<String> includedFiles = new ArrayList<>();
     public Map<String, FileState> snapshot = new LinkedHashMap<>();
 

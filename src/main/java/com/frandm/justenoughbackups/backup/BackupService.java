@@ -226,6 +226,10 @@ public final class BackupService {
     }
 
     private static long archiveBytes(MinecraftServer server, BackupManifest manifest) {
+        BackupConfig config = BackupConfig.get();
+        if (config.remoteStorage != null && config.remoteStorage.enabled && manifest.archiveBytes > 0L) {
+            return manifest.archiveBytes;
+        }
         try {
             Path backupFile = BackupPaths.worldBackupDir(server).resolve(manifest.zipFileName);
             if (backupFile != null && Files.isRegularFile(backupFile)) {
