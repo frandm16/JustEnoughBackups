@@ -66,8 +66,16 @@ afterEvaluate {
 
 test {
     useJUnitPlatform()
+    afterTest { descriptor, result ->
+        def marker = switch (result.resultType) {
+            case org.gradle.api.tasks.testing.TestResult.ResultType.SUCCESS -> "✅"
+            case org.gradle.api.tasks.testing.TestResult.ResultType.SKIPPED -> "⏭️"
+            default -> "❌"
+        }
+        logger.lifecycle("${marker} ${descriptor.className} > ${descriptor.displayName}")
+    }
     reports {
-        html.required = false
+        html.required = true
         junitXml.required = false
     }
 }
