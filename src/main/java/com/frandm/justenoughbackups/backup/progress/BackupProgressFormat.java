@@ -25,6 +25,25 @@ public final class BackupProgressFormat {
         if (totalBytes <= 0L) {
             return 0;
         }
-        return (int) Math.min(100L, (bytesWritten * 100L) / totalBytes);
+        if (bytesWritten <= 0L) {
+            return 0;
+        }
+        if (bytesWritten >= totalBytes) {
+            return 100;
+        }
+        long quotient = totalBytes / 100L;
+        long remainder = totalBytes % 100L;
+        int low = 0;
+        int high = 100;
+        while (low < high) {
+            int candidate = (low + high + 1) / 2;
+            long threshold = quotient * candidate + (remainder * candidate + 99L) / 100L;
+            if (bytesWritten >= threshold) {
+                low = candidate;
+            } else {
+                high = candidate - 1;
+            }
+        }
+        return low;
     }
 }

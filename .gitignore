@@ -4,6 +4,8 @@ target/
 !**/src/main/**/target/
 !**/src/test/**/target/
 .kotlin
+src/test/
+config/justenoughbackups.json
 
 ### IntelliJ IDEA ###
 .idea/modules.xml
@@ -43,3 +45,5 @@ build/
 
 run/
 logs/
+.claude/
+CLAUDE.md
