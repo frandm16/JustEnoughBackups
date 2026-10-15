@@ -16,6 +16,7 @@ import com.frandm.justenoughbackups.backup.restore.RestoreService;
 import com.frandm.justenoughbackups.backup.retention.RetentionPolicy;
 import com.frandm.justenoughbackups.backup.storage.BackupStorage;
 import com.frandm.justenoughbackups.backup.storage.remote.RemoteBackupCatalog;
+import com.frandm.justenoughbackups.backup.storage.remote.RemoteStorageException;
 import com.frandm.justenoughbackups.config.BackupConfig;
 import com.frandm.justenoughbackups.scheduler.BackupScheduler;
 import net.minecraft.server.MinecraftServer;
@@ -166,6 +167,7 @@ public final class BackupService {
                         reason, requestedName, isSafetyBackup, manifests, catalog, progress);
             } catch (IOException exception) {
                 lastFailure = exception;
+                if (!RemoteStorageException.isRetryable(exception)) throw exception;
                 if (attempt == retries) break;
                 WorldBackupMod.LOGGER.warn("Remote backup upload failed (attempt {} of {}). Retrying the streamed archive.",
                         attempt + 1, retries + 1);

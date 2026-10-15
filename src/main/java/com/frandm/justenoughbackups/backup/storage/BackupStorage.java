@@ -13,6 +13,7 @@ import com.frandm.justenoughbackups.backup.progress.BackupProgress;
 import com.frandm.justenoughbackups.backup.progress.BackupProgressListener;
 import com.frandm.justenoughbackups.backup.progress.BackupProgressPhase;
 import com.frandm.justenoughbackups.backup.progress.BackupProgressState;
+import com.frandm.justenoughbackups.backup.progress.RemoteUploadProgressListener;
 import com.frandm.justenoughbackups.backup.progress.RestoreProgressTracker;
 import com.frandm.justenoughbackups.backup.retention.RetentionPolicy;
 import com.frandm.justenoughbackups.config.BackupConfig;
@@ -249,8 +250,9 @@ public final class BackupStorage {
 
         java.io.PipedInputStream input = new java.io.PipedInputStream(1024 * 1024);
         java.io.PipedOutputStream output = new java.io.PipedOutputStream(input);
+        BackupProgressListener remoteProgress = new RemoteUploadProgressListener(listener);
         java.util.concurrent.CompletableFuture<BackupStatus> statusFuture = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
-            try { return writeBackupZipToStream(worldPath, scratch, output, manifest, manifest.includedFiles, snapshot, config, listener); }
+            try { return writeBackupZipToStream(worldPath, scratch, output, manifest, manifest.includedFiles, snapshot, config, remoteProgress); }
             catch (Throwable exception) {
                 try { output.close(); } catch (IOException ignored) { }
                 throw new java.util.concurrent.CompletionException(exception);
@@ -265,7 +267,7 @@ public final class BackupStorage {
                     long now = System.currentTimeMillis();
                     if (total >= 1024 * 1024 && now - lastUploadUpdate.get() < 500) return;
                     lastUploadUpdate.set(now);
-                    listener.onProgress(new BackupProgress(manifest.id, manifest.type, reason,
+                    remoteProgress.onProgress(new BackupProgress(manifest.id, manifest.type, reason,
                             BackupProgressPhase.UPLOADING, total, 0L, 0,
                             manifest.includedFiles.size(), BackupProgressState.RUNNING));
                 }
@@ -281,10 +283,11 @@ public final class BackupStorage {
                 }
             };
             var uploadInfo = catalog.uploadAndPublish(manifest, new BackupStatus(), uploadProgressStream, statusFuture);
-            listener.onProgress(new BackupProgress(manifest.id, manifest.type, reason, BackupProgressPhase.UPLOADING,
+            remoteProgress.onProgress(new BackupProgress(manifest.id, manifest.type, reason, BackupProgressPhase.UPLOADING,
                     uploadInfo.bytes(), uploadInfo.bytes(), manifest.includedFiles.size(), manifest.includedFiles.size(),
                     BackupProgressState.COMPLETED));
         } catch (IOException | RuntimeException exception) {
+            try { output.close(); } catch (IOException ignored) { }
             statusFuture.cancel(true);
             throw exception;
         }

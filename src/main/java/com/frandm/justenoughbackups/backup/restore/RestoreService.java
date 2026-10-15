@@ -145,7 +145,8 @@ public final class RestoreService {
             }
             java.util.concurrent.atomic.AtomicLong downloaded = new java.util.concurrent.atomic.AtomicLong();
             java.util.concurrent.atomic.AtomicLong lastUpdate = new java.util.concurrent.atomic.AtomicLong();
-            java.io.InputStream downloadProgress = new java.io.FilterInputStream(catalog.download(manifest.zipFileName)) {
+            boolean hasSummary;
+            try (java.io.InputStream downloadProgress = new java.io.FilterInputStream(catalog.download(manifest.zipFileName)) {
                 private void report(long count) {
                     long current = downloaded.addAndGet(count);
                     long now = System.currentTimeMillis();
@@ -165,9 +166,10 @@ public final class RestoreService {
                     if (count > 0) report(count);
                     return count;
                 }
-            };
-            boolean hasSummary = BackupStorage.extractBackup(downloadProgress, entry.sha256(),
-                    staging, manifest, progressListener);
+            }) {
+                hasSummary = BackupStorage.extractBackup(downloadProgress, entry.sha256(),
+                        staging, manifest, progressListener);
+            }
             progressListener.onProgress(new BackupProgress(manifest.id, manifest.type, reason,
                     BackupProgressPhase.VERIFYING, downloaded.get(), downloaded.get(),
                     manifest.includedFiles == null ? 0 : manifest.includedFiles.size(),

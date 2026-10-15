@@ -5,6 +5,11 @@ import com.frandm.justenoughbackups.config.BackupConfig;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.async.AsyncRequestBody;
+import software.amazon.awssdk.core.checksums.RequestChecksumCalculation;
+import software.amazon.awssdk.core.checksums.ResponseChecksumValidation;
+import software.amazon.awssdk.core.client.config.SdkAdvancedAsyncClientOption;
+import software.amazon.awssdk.http.nio.netty.NettyNioAsyncHttpClient;
+import software.amazon.awssdk.http.nio.netty.SdkEventLoopGroup;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3AsyncClient;
 import software.amazon.awssdk.services.s3.S3Configuration;
@@ -22,6 +27,7 @@ import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
+import software.amazon.awssdk.core.exception.SdkClientException;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -35,11 +41,16 @@ import java.util.concurrent.Executors;
 
 final class S3ObjectStore implements RemoteObjectStore {
     private static final long SINGLE_COPY_LIMIT_BYTES = 5_000_000_000L;
-    private static final long COPY_PART_SIZE_BYTES = 5_000_000_000L;
+    private static final long COPY_PART_SIZE_BYTES    =   512_000_000L; // 512 MB por parte (límite S3: 5 MB–5 GiB)
     private final String bucket;
     private final S3AsyncClient client;
     private final ExecutorService streamExecutor = Executors.newSingleThreadExecutor(runnable -> {
         Thread thread = new Thread(runnable, "JEB-S3-stream");
+        thread.setDaemon(true);
+        return thread;
+    });
+    private final ExecutorService completionExecutor = Executors.newFixedThreadPool(2, runnable -> {
+        Thread thread = new Thread(runnable, "JEB-S3-completion");
         thread.setDaemon(true);
         return thread;
     });
@@ -54,8 +65,22 @@ final class S3ObjectStore implements RemoteObjectStore {
                 .region(Region.of(config.s3Region))
                 .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(accessKey, secretKey)))
                 .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
+                .requestChecksumCalculation(config.s3Endpoint.isBlank()
+                        ? RequestChecksumCalculation.WHEN_SUPPORTED : RequestChecksumCalculation.WHEN_REQUIRED)
+                .responseChecksumValidation(config.s3Endpoint.isBlank()
+                        ? ResponseChecksumValidation.WHEN_SUPPORTED : ResponseChecksumValidation.WHEN_REQUIRED)
                 .overrideConfiguration(software.amazon.awssdk.core.client.config.ClientOverrideConfiguration.builder()
                         .apiCallTimeout(Duration.ofHours(6)).build())
+                .httpClientBuilder(NettyNioAsyncHttpClient.builder()
+                        .eventLoopGroupBuilder(SdkEventLoopGroup.builder().numberOfThreads(2))
+                        .maxConcurrency(16)
+                        .maxPendingConnectionAcquires(64)
+                        .connectionTimeout(Duration.ofSeconds(15))
+                        .connectionAcquisitionTimeout(Duration.ofSeconds(60))
+                        .readTimeout(Duration.ofSeconds(45))
+                        .writeTimeout(Duration.ofSeconds(45)))
+                .asyncConfiguration(configuration -> configuration.advancedOption(
+                        SdkAdvancedAsyncClientOption.FUTURE_COMPLETION_EXECUTOR, completionExecutor))
                 .multipartEnabled(true);
         if (!config.s3Endpoint.isBlank()) {
             try {
@@ -97,6 +122,7 @@ final class S3ObjectStore implements RemoteObjectStore {
     public void put(String key, InputStream input) throws IOException {
         try {
             AsyncRequestBody body = AsyncRequestBody.fromInputStream(input, null, streamExecutor);
+            // AWS SDK 2.31.x applies its default CRC32 request checksum when supported by the endpoint.
             client.putObject(PutObjectRequest.builder().bucket(bucket).key(key).build(), body).join();
         } catch (RuntimeException exception) {
             throw ioFailure("Unable to upload S3 object", exception);
@@ -188,8 +214,12 @@ final class S3ObjectStore implements RemoteObjectStore {
 
     @Override
     public void close() {
-        streamExecutor.shutdownNow();
-        client.close();
+        try {
+            client.close();
+        } finally {
+            streamExecutor.shutdownNow();
+            completionExecutor.shutdownNow();
+        }
     }
 
     private static String envOrConfig(String environmentKey, String configured) {
@@ -203,10 +233,32 @@ final class S3ObjectStore implements RemoteObjectStore {
     }
 
     private static IOException ioFailure(String action, Throwable throwable) {
-        Throwable cause = throwable;
-        while (cause.getCause() != null) cause = cause.getCause();
-        String detail = cause instanceof S3Exception s3 && s3.awsErrorDetails() != null
-                ? s3.awsErrorDetails().errorMessage() : cause.getMessage();
-        return new IOException(action + (detail == null || detail.isBlank() ? "." : ": " + detail), cause);
+        S3Exception serviceFailure = findCause(throwable, S3Exception.class);
+        Throwable detailCause = throwable;
+        while (detailCause.getCause() != null) detailCause = detailCause.getCause();
+        String detail = serviceFailure != null && serviceFailure.awsErrorDetails() != null
+                ? serviceFailure.awsErrorDetails().errorMessage() : detailCause.getMessage();
+        return new RemoteStorageException(action + (detail == null || detail.isBlank() ? "." : ": " + detail),
+                isTransient(throwable), throwable);
+    }
+
+    private static boolean isTransient(Throwable failure) {
+        S3Exception serviceFailure = findCause(failure, S3Exception.class);
+        if (serviceFailure != null) {
+            int status = serviceFailure.statusCode();
+            return status == 429 || status >= 500;
+        }
+        // Errores del cliente como pool de conexiones agotado son transitorios
+        if (findCause(failure, SdkClientException.class) != null) {
+            return true;
+        }
+        return RemoteStorageException.isTransientNetworkFailure(failure);
+    }
+
+    private static <T extends Throwable> T findCause(Throwable failure, Class<T> type) {
+        for (Throwable current = failure; current != null; current = current.getCause()) {
+            if (type.isInstance(current)) return type.cast(current);
+        }
+        return null;
     }
 }

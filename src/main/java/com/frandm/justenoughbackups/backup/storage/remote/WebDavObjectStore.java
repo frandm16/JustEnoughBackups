@@ -21,15 +21,23 @@ import java.time.format.DateTimeFormatter;
 import org.w3c.dom.Element;
 
 final class WebDavObjectStore implements RemoteObjectStore {
+    private static final Duration CONTROL_REQUEST_TIMEOUT = Duration.ofSeconds(45);
+    private static final Duration TRANSFER_REQUEST_TIMEOUT = Duration.ofHours(6);
     private static final String PROPFIND_BODY = "<?xml version=\"1.0\" encoding=\"utf-8\" ?>"
             + "<d:propfind xmlns:d=\"DAV:\"><d:prop><d:getcontentlength/><d:getlastmodified/><d:resourcetype/></d:prop></d:propfind>";
     private final URI root;
     private final String authorization;
     private final int maxRetries;
+    private final Duration controlRequestTimeout;
     private final HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(20))
             .followRedirects(HttpClient.Redirect.NEVER).build();
 
     WebDavObjectStore(BackupConfig.RemoteStorage config) throws IOException {
+        this(config, CONTROL_REQUEST_TIMEOUT);
+    }
+
+    WebDavObjectStore(BackupConfig.RemoteStorage config, Duration controlRequestTimeout) throws IOException {
+        this.controlRequestTimeout = controlRequestTimeout;
         try {
             URI parsed = URI.create(config.webDavUrl.trim());
             if (parsed.getUserInfo() != null || parsed.getQuery() != null || parsed.getFragment() != null)
@@ -57,7 +65,7 @@ final class WebDavObjectStore implements RemoteObjectStore {
         HttpRequest request = authorized(HttpRequest.newBuilder(uri)
                 .header("Depth", "1")
                 .header("Content-Type", "application/xml; charset=utf-8")
-                .method("PROPFIND", HttpRequest.BodyPublishers.ofString(PROPFIND_BODY))).build();
+                .method("PROPFIND", HttpRequest.BodyPublishers.ofString(PROPFIND_BODY)), controlRequestTimeout).build();
         HttpResponse<InputStream> response = sendRetryable(request, HttpResponse.BodyHandlers.ofInputStream());
         if (response.statusCode() == 404) {
             response.body().close();
@@ -114,7 +122,7 @@ final class WebDavObjectStore implements RemoteObjectStore {
         ensureParentCollections(key);
         HttpRequest request = authorized(HttpRequest.newBuilder(objectUri(key))
                 .header("Content-Type", "application/octet-stream")
-                .PUT(HttpRequest.BodyPublishers.ofInputStream(() -> input))).build();
+                .PUT(HttpRequest.BodyPublishers.ofInputStream(() -> input)), TRANSFER_REQUEST_TIMEOUT).build();
         HttpResponse<Void> response = send(request, HttpResponse.BodyHandlers.discarding());
         if (!success(response.statusCode())) throw statusError("upload WebDAV object", response.statusCode());
     }
@@ -127,7 +135,7 @@ final class WebDavObjectStore implements RemoteObjectStore {
             if (!path.isEmpty()) path.append('/');
             path.append(parts[i]);
             HttpRequest request = authorized(HttpRequest.newBuilder(objectUri(path + "/"))
-                    .method("MKCOL", HttpRequest.BodyPublishers.noBody())).build();
+                    .method("MKCOL", HttpRequest.BodyPublishers.noBody()), controlRequestTimeout).build();
             HttpResponse<Void> response = send(request, HttpResponse.BodyHandlers.discarding());
             if (!success(response.statusCode()) && response.statusCode() != 405 && response.statusCode() != 301) {
                 throw statusError("create WebDAV collection", response.statusCode());
@@ -137,7 +145,7 @@ final class WebDavObjectStore implements RemoteObjectStore {
 
     @Override
     public InputStream get(String key) throws IOException {
-        HttpResponse<InputStream> response = sendRetryable(authorized(HttpRequest.newBuilder(objectUri(key)).GET()).build(),
+        HttpResponse<InputStream> response = sendRetryable(authorized(HttpRequest.newBuilder(objectUri(key)).GET(), TRANSFER_REQUEST_TIMEOUT).build(),
                 HttpResponse.BodyHandlers.ofInputStream());
         if (!success(response.statusCode())) {
             response.body().close();
@@ -148,7 +156,7 @@ final class WebDavObjectStore implements RemoteObjectStore {
 
     @Override
     public void delete(String key) throws IOException {
-        HttpResponse<Void> response = sendRetryable(authorized(HttpRequest.newBuilder(objectUri(key)).DELETE()).build(),
+        HttpResponse<Void> response = sendRetryable(authorized(HttpRequest.newBuilder(objectUri(key)).DELETE(), controlRequestTimeout).build(),
                 HttpResponse.BodyHandlers.discarding());
         if (!success(response.statusCode()) && response.statusCode() != 404) {
             throw statusError("delete WebDAV object", response.statusCode());
@@ -161,7 +169,7 @@ final class WebDavObjectStore implements RemoteObjectStore {
         HttpRequest request = authorized(HttpRequest.newBuilder(objectUri(sourceKey))
                 .header("Destination", objectUri(targetKey).toString())
                 .header("Overwrite", "T")
-                .method("MOVE", HttpRequest.BodyPublishers.noBody())).build();
+                .method("MOVE", HttpRequest.BodyPublishers.noBody()), controlRequestTimeout).build();
         HttpResponse<Void> response = send(request, HttpResponse.BodyHandlers.discarding());
         if (!success(response.statusCode())) throw statusError("move WebDAV object", response.statusCode());
     }
@@ -184,8 +192,8 @@ final class WebDavObjectStore implements RemoteObjectStore {
         return java.net.URLDecoder.decode(path.substring(basePath.length()).replace("+", "%2B"), StandardCharsets.UTF_8);
     }
 
-    private HttpRequest.Builder authorized(HttpRequest.Builder builder) {
-        builder.timeout(Duration.ofHours(6));
+    private HttpRequest.Builder authorized(HttpRequest.Builder builder, Duration timeout) {
+        builder.timeout(timeout);
         return authorization.isBlank() ? builder : builder.header("Authorization", authorization);
     }
 
@@ -194,7 +202,10 @@ final class WebDavObjectStore implements RemoteObjectStore {
             return client.send(request, handler);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
-            throw new IOException("WebDAV request interrupted.", exception);
+            throw new RemoteStorageException("WebDAV request interrupted.", false, exception);
+        } catch (IOException exception) {
+            throw new RemoteStorageException("WebDAV request failed: " + exception.getMessage(),
+                    RemoteStorageException.isTransientNetworkFailure(exception), exception);
         }
     }
 
@@ -204,6 +215,7 @@ final class WebDavObjectStore implements RemoteObjectStore {
             try { return send(request, handler); }
             catch (IOException exception) {
                 last = exception;
+                if (!RemoteStorageException.isRetryable(exception)) break;
                 if (attempt == maxRetries) break;
                 try { Thread.sleep(Math.min(200L << attempt, 3000L)); }
                 catch (InterruptedException interrupted) {
@@ -212,11 +224,13 @@ final class WebDavObjectStore implements RemoteObjectStore {
                 }
             }
         }
-        throw new IOException("WebDAV request failed after " + (maxRetries + 1) + " attempts.", last);
+        if (last != null) throw last;
+        throw new IOException("WebDAV request failed without an attempt.");
     }
 
     private static IOException statusError(String action, int status) {
-        return new IOException("Unable to " + action + " (HTTP " + status + ").");
+        return new RemoteStorageException("Unable to " + action + " (HTTP " + status + ").",
+                status == 408 || status == 429 || status >= 500, null);
     }
 
     private static boolean success(int status) {

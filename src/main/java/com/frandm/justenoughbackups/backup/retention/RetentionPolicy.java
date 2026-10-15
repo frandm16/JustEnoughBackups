@@ -55,7 +55,10 @@ public final class RetentionPolicy {
             }
         }
         long cap = toCapBytes(config);
-        long total = manifests.stream().mapToLong(m -> Math.max(0L, sizes.getOrDefault(m.id, 0L))).sum();
+        long total = manifests.stream()
+                .filter(m -> !deletions.contains(m.id))
+                .mapToLong(m -> Math.max(0L, sizes.getOrDefault(m.id, 0L)))
+                .sum();
         for (BackupManifest manifest : ordered) {
             if (cap <= 0L || total <= cap) break;
             if (protectedIds.contains(manifest.id) || deletions.contains(manifest.id)) continue;

@@ -11,6 +11,7 @@ import com.frandm.justenoughbackups.client.ui.popup.PopupPositioning;
 import com.frandm.justenoughbackups.config.BackupConfig;
 import com.frandm.justenoughbackups.config.ConfigColor;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
@@ -50,6 +51,7 @@ public final class JEBConfigScreen extends Screen {
     private boolean draggingScrollbar;
     private int scrollbarDragOffset;
     private ConfigColorChannel draggingChannel;
+    private EditBox activeTextInput;
 
     public JEBConfigScreen(Screen parent) {
         super(Component.translatable("screen.justenoughbackups.config.title"));
@@ -77,7 +79,7 @@ public final class JEBConfigScreen extends Screen {
         buildRowsForTab(state.selectedTab);
         clampScroll();
         validationErrors = validator.validate(state).stream()
-                .filter(error -> visibleTabs().contains(error.fieldId().tab()))
+                .filter(error -> error.fieldId().tab() == state.selectedTab)
                 .toList();
         clampPreviewPosition();
     }
@@ -89,6 +91,7 @@ public final class JEBConfigScreen extends Screen {
 
         for (ConfigFieldSpec spec : ConfigFieldSpecs.forTab(tab)) {
             ConfigFieldId id = spec.id();
+            if (!shouldShowRemoteProviderField(id)) continue;
 
             boolean isSubOption = isAutomaticBackupSubOption(id);
             int x = isSubOption ? baseContainerX + indentX : baseContainerX;
@@ -106,6 +109,22 @@ public final class JEBConfigScreen extends Screen {
                 case SECTION_HEADER -> sectionHeaderRow(x, y, w, id);
             };
         }
+    }
+
+    private boolean shouldShowRemoteProviderField(ConfigFieldId id) {
+        boolean s3Field = id == ConfigFieldId.REMOTE_S3_ENDPOINT
+                || id == ConfigFieldId.REMOTE_S3_REGION
+                || id == ConfigFieldId.REMOTE_S3_BUCKET
+                || id == ConfigFieldId.REMOTE_S3_PREFIX
+                || id == ConfigFieldId.REMOTE_S3_ACCESS_KEY
+                || id == ConfigFieldId.REMOTE_S3_SECRET_KEY;
+        boolean webDavField = id == ConfigFieldId.REMOTE_WEBDAV_URL
+                || id == ConfigFieldId.REMOTE_WEBDAV_PREFIX
+                || id == ConfigFieldId.REMOTE_WEBDAV_USERNAME
+                || id == ConfigFieldId.REMOTE_WEBDAV_PASSWORD;
+        return (!s3Field && !webDavField)
+                || (s3Field && state.working.remoteStorage.provider == RemoteProviderType.S3)
+                || (webDavField && state.working.remoteStorage.provider == RemoteProviderType.WEBDAV);
     }
 
     private boolean isAutomaticBackupSubOption(ConfigFieldId id) {
@@ -211,9 +230,12 @@ public final class JEBConfigScreen extends Screen {
             case REMOTE_S3_REGION -> () -> state.working.remoteStorage.s3Region;
             case REMOTE_S3_BUCKET -> () -> state.working.remoteStorage.s3Bucket;
             case REMOTE_S3_PREFIX -> () -> state.working.remoteStorage.s3Prefix;
+            case REMOTE_S3_ACCESS_KEY -> () -> state.working.remoteStorage.s3AccessKey;
+            case REMOTE_S3_SECRET_KEY -> () -> state.working.remoteStorage.s3SecretKey;
             case REMOTE_WEBDAV_URL -> () -> state.working.remoteStorage.webDavUrl;
             case REMOTE_WEBDAV_PREFIX -> () -> state.working.remoteStorage.webDavPrefix;
             case REMOTE_WEBDAV_USERNAME -> () -> state.working.remoteStorage.webDavUsername;
+            case REMOTE_WEBDAV_PASSWORD -> () -> state.working.remoteStorage.webDavPassword;
             case POPUP_TITLE -> () -> state.working.popup.title;
             case POPUP_RUNNING_TEXT -> () -> state.working.popup.runningText;
             case POPUP_SCANNING_TEXT -> () -> state.working.popup.scanningText;
@@ -231,9 +253,12 @@ public final class JEBConfigScreen extends Screen {
             case REMOTE_S3_REGION -> value -> state.working.remoteStorage.s3Region = value;
             case REMOTE_S3_BUCKET -> value -> state.working.remoteStorage.s3Bucket = value;
             case REMOTE_S3_PREFIX -> value -> state.working.remoteStorage.s3Prefix = value;
+            case REMOTE_S3_ACCESS_KEY -> value -> state.working.remoteStorage.s3AccessKey = value;
+            case REMOTE_S3_SECRET_KEY -> value -> state.working.remoteStorage.s3SecretKey = value;
             case REMOTE_WEBDAV_URL -> value -> state.working.remoteStorage.webDavUrl = value;
             case REMOTE_WEBDAV_PREFIX -> value -> state.working.remoteStorage.webDavPrefix = value;
             case REMOTE_WEBDAV_USERNAME -> value -> state.working.remoteStorage.webDavUsername = value;
+            case REMOTE_WEBDAV_PASSWORD -> value -> state.working.remoteStorage.webDavPassword = value;
             case POPUP_TITLE -> value -> state.working.popup.title = value;
             case POPUP_RUNNING_TEXT -> value -> state.working.popup.runningText = value;
             case POPUP_SCANNING_TEXT -> value -> state.working.popup.scanningText = value;
@@ -336,11 +361,8 @@ public final class JEBConfigScreen extends Screen {
                 rebuildRows();
                 return true;
             }
-            if (field.contains(mouseX, mouseY)) {
-                focusField(spec.id(), state.rawInputs.getOrDefault(spec.id(), String.valueOf(getter.getAsInt())));
-                return true;
-            }
-            return false;
+            focusField(spec.id(), state.rawInputs.getOrDefault(spec.id(), String.valueOf(getter.getAsInt())));
+            return true;
         });
         return y + ROW_H + ROW_GAP;
     }
@@ -350,10 +372,6 @@ public final class JEBConfigScreen extends Screen {
             Rect field = controlRect(row, screenY, controlsW);
             drawField(graphics, field, spec.id(), state.rawInputs.getOrDefault(spec.id(), value(getter.get())), mouseX, mouseY);
         }, (row, screenY, mouseX, mouseY) -> {
-            Rect field = controlRect(row, screenY, controlsW);
-            if (!field.contains(mouseX, mouseY)) {
-                return false;
-            }
             focusField(spec.id(), state.rawInputs.getOrDefault(spec.id(), value(getter.get())));
             setter.accept(state.rawInputs.getOrDefault(spec.id(), value(getter.get())));
             return true;
@@ -606,7 +624,11 @@ public final class JEBConfigScreen extends Screen {
 
     private void drawField(GuiGraphicsExtractor graphics, Rect rect, ConfigFieldId fieldId, String text, int mouseX, int mouseY) {
         boolean focused = fieldId == state.focusedField;
-        drawField(graphics, rect, focused, text, mouseX, mouseY);
+        drawField(graphics, rect, focused, isSecretField(fieldId) ? "•".repeat(text.length()) : text, mouseX, mouseY);
+    }
+
+    private boolean isSecretField(ConfigFieldId fieldId) {
+        return fieldId == ConfigFieldId.REMOTE_S3_SECRET_KEY || fieldId == ConfigFieldId.REMOTE_WEBDAV_PASSWORD;
     }
 
     private void drawDynamicField(GuiGraphicsExtractor graphics, Rect rect, boolean focused, String text, int mouseX, int mouseY) {
@@ -643,6 +665,7 @@ public final class JEBConfigScreen extends Screen {
         }
         double mouseX = event.x();
         double mouseY = event.y();
+        activeTextInput = null;
         state.focusedField = null;
         state.focusedExcludedPathIndex = null;
         if (handleTabClick(mouseX, mouseY) || handleFooterClick(mouseX, mouseY) || handleScrollbarClick(mouseX, mouseY)) {
@@ -672,16 +695,18 @@ public final class JEBConfigScreen extends Screen {
     }
 
     private Rect tabRect(ConfigTab tab) {
-        int areaX = width / 3;
-        int areaW = width / 3;
+        int areaX = ScreenChrome.OUTER;
+        int areaW = Math.max(1, width - ScreenChrome.OUTER * 2);
         int gap = 4;
         List<ConfigTab> tabs = visibleTabs();
         int tabCount = tabs.size();
-        int tabW = Math.max(48, (areaW - gap * (tabCount - 1)) / tabCount);
+        int tabW = Math.max(1, (areaW - gap * (tabCount - 1)) / tabCount);
         int totalW = tabW * tabCount + gap * (tabCount - 1);
         int x = areaX + (areaW - totalW) / 2;
-        int tabX = x + tabs.indexOf(tab) * (tabW + gap);
-        return new Rect(tabX, TAB_Y, tabW, TAB_H);
+        int index = tabs.indexOf(tab);
+        int tabX = x + index * (tabW + gap);
+        int actualWidth = index == tabCount - 1 ? areaX + areaW - tabX : tabW;
+        return new Rect(tabX, TAB_Y, actualWidth, TAB_H);
     }
 
     private boolean handleFooterClick(double mouseX, double mouseY) {
@@ -749,7 +774,18 @@ public final class JEBConfigScreen extends Screen {
     @Override
     public boolean keyPressed(KeyEvent event) {
         if (event.key() == InputConstants.KEY_ESCAPE) {
+            activeTextInput = null;
             onClose();
+            return true;
+        }
+        if (activeTextInput != null) {
+            if (event.key() == InputConstants.KEY_RETURN) {
+                activeTextInput = null;
+                state.focusedField = null;
+                return true;
+            }
+            activeTextInput.keyPressed(event);
+            state.cursor = activeTextInput.getCursorPosition();
             return true;
         }
         if (state.focusedExcludedPathIndex != null) {
@@ -841,6 +877,9 @@ public final class JEBConfigScreen extends Screen {
 
     @Override
     public boolean charTyped(CharacterEvent event) {
+        if (activeTextInput != null) {
+            return activeTextInput.charTyped(event);
+        }
         if (!event.isAllowedChatCharacter()) {
             return false;
         }
@@ -889,6 +928,16 @@ public final class JEBConfigScreen extends Screen {
             case PERMISSION_LEVEL -> parseInt(input).ifPresent(value -> state.working.commandPermissionLevel = value);
             case BACKUP_DIRECTORY -> state.working.backupDirectory = input;
             case TEMP_DIRECTORY -> state.working.tempBackupDirectory = input;
+            case REMOTE_S3_ENDPOINT -> state.working.remoteStorage.s3Endpoint = input;
+            case REMOTE_S3_REGION -> state.working.remoteStorage.s3Region = input;
+            case REMOTE_S3_BUCKET -> state.working.remoteStorage.s3Bucket = input;
+            case REMOTE_S3_PREFIX -> state.working.remoteStorage.s3Prefix = input;
+            case REMOTE_S3_ACCESS_KEY -> state.working.remoteStorage.s3AccessKey = input;
+            case REMOTE_S3_SECRET_KEY -> state.working.remoteStorage.s3SecretKey = input;
+            case REMOTE_WEBDAV_URL -> state.working.remoteStorage.webDavUrl = input;
+            case REMOTE_WEBDAV_PREFIX -> state.working.remoteStorage.webDavPrefix = input;
+            case REMOTE_WEBDAV_USERNAME -> state.working.remoteStorage.webDavUsername = input;
+            case REMOTE_WEBDAV_PASSWORD -> state.working.remoteStorage.webDavPassword = input;
             case POPUP_TITLE -> state.working.popup.title = input;
             case POPUP_RUNNING_TEXT -> state.working.popup.runningText = input;
             case POPUP_SCANNING_TEXT -> state.working.popup.scanningText = input;
@@ -1106,9 +1155,24 @@ public final class JEBConfigScreen extends Screen {
         state.focusedExcludedPathIndex = null;
         state.rawInputs.putIfAbsent(id, value);
         state.cursor = state.rawInputs.get(id).length();
+
+        EditBox input = new EditBox(font, 0, 0, 1, 1, Component.empty());
+        input.setMaxLength(maxLengthFor(id));
+        input.setCanLoseFocus(false);
+        input.setFocused(true);
+        activeTextInput = input;
+        input.setResponder(text -> {
+            if (state.focusedField != id) return;
+            state.rawInputs.put(id, text);
+            state.cursor = input.getCursorPosition();
+            applyFocusedField();
+        });
+        input.setValue(state.rawInputs.get(id));
+        state.cursor = input.getCursorPosition();
     }
 
     private void focusExcludedPath(int index) {
+        activeTextInput = null;
         state.focusedField = null;
         state.focusedExcludedPathIndex = index;
         state.cursor = excludedPathValue(index).length();
@@ -1171,20 +1235,41 @@ public final class JEBConfigScreen extends Screen {
     }
 
     private void drawTooltipBox(GuiGraphicsExtractor graphics, String tooltip, int mouseX, int mouseY) {
-        String[] lines = tooltip.replace("\\n", "\n").split("\\R");
-        int tooltipW = 0;
-        for (String line : lines) {
-            tooltipW = Math.max(tooltipW, font.width(line));
-        }
-        tooltipW += 12;
-        int tooltipH = lines.length * 11 + 8;
-        int x = Math.min(mouseX + 12, width - tooltipW - 6);
-        int y = Math.min(mouseY + 12, height - tooltipH - 6);
+        int maxTextWidth = Math.max(80, Math.min(320, width - 24));
+        List<String> lines = wrapTooltip(tooltip, maxTextWidth);
+        int tooltipW = lines.stream().mapToInt(font::width).max().orElse(0) + 12;
+        int tooltipH = lines.size() * 11 + 8;
+        int x = Math.clamp(mouseX + 12, 6, Math.max(6, width - tooltipW - 6));
+        int y = Math.clamp(mouseY + 12, 6, Math.max(6, height - tooltipH - 6));
         graphics.fill(x, y, x + tooltipW, y + tooltipH, 0xF0101010);
         graphics.outline(x, y, tooltipW, tooltipH, 0xFF707070);
-        for (int i = 0; i < lines.length; i++) {
-            graphics.text(font, lines[i], x + 6, y + 5 + i * 11, 0xFFE0E0E0, true);
+        for (int i = 0; i < lines.size(); i++) {
+            graphics.text(font, lines.get(i), x + 6, y + 5 + i * 11, 0xFFE0E0E0, true);
         }
+    }
+
+    private List<String> wrapTooltip(String tooltip, int maxWidth) {
+        List<String> wrapped = new ArrayList<>();
+        for (String paragraph : tooltip.replace("\\n", "\n").split("\\R", -1)) {
+            if (paragraph.isBlank()) {
+                wrapped.add("");
+                continue;
+            }
+            StringBuilder line = new StringBuilder();
+            for (String word : paragraph.split("\\s+")) {
+                String candidate = line.isEmpty() ? word : line + " " + word;
+                if (!line.isEmpty() && font.width(candidate) > maxWidth) {
+                    wrapped.add(line.toString());
+                    line.setLength(0);
+                    line.append(word);
+                } else {
+                    if (!line.isEmpty()) line.append(' ');
+                    line.append(word);
+                }
+            }
+            wrapped.add(line.toString());
+        }
+        return wrapped;
     }
 
     private String trimToWidth(String text, int maxWidth) {

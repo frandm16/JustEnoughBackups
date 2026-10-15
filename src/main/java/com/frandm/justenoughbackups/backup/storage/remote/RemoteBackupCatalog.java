@@ -8,11 +8,11 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
 import java.io.IOException;
+import java.io.FilterInputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HexFormat;
@@ -38,7 +38,10 @@ public final class RemoteBackupCatalog implements AutoCloseable {
         String archivesPrefix = worldPrefix + "archives/";
         String catalogPrefix = worldPrefix + "catalog/";
         var archives = store.list(archivesPrefix).stream()
-                .collect(java.util.stream.Collectors.toMap(RemoteObjectStore.ObjectInfo::key, RemoteObjectStore.ObjectInfo::size));
+                .collect(java.util.stream.Collectors.toMap(
+                        RemoteObjectStore.ObjectInfo::key,
+                        RemoteObjectStore.ObjectInfo::size,
+                        (existing, replacement) -> replacement));
         List<CatalogEntry> entries = new ArrayList<>();
         for (RemoteObjectStore.ObjectInfo object : store.list(catalogPrefix)) {
             if (!object.key().endsWith(".json")) continue;
@@ -76,27 +79,39 @@ public final class RemoteBackupCatalog implements AutoCloseable {
         boolean promoted = false;
         try {
             if (objectExists(finalKey)) throw new IOException("A remote backup already uses this archive name: " + manifest.zipFileName);
-            store.put(tempKey, archive);
+            MessageDigest digest = sha256();
+            CountingInputStream counted = new CountingInputStream(archive);
+            try (InputStream checked = new DigestInputStream(counted, digest)) {
+                store.put(tempKey, checked);
+            }
+            UploadInfo uploaded = new UploadInfo(counted.bytesRead(), HexFormat.of().formatHex(digest.digest()));
             if (completedStatus != null) {
                 try { status = completedStatus.join(); }
                 catch (java.util.concurrent.CompletionException exception) {
                     throw new IOException("Archive creation failed before publication.", exception.getCause());
                 }
             }
-            UploadInfo verified = verify(tempKey);
             store.move(tempKey, finalKey);
             promoted = true;
-            UploadInfo published = verify(finalKey);
-            if (!verified.sha256().equals(published.sha256()) || verified.bytes() != published.bytes())
-                throw new IOException("Remote archive changed while being published; checksum verification failed.");
-            manifest.archiveBytes = published.bytes();
+            RemoteObjectStore.ObjectInfo published = null;
+            for (int attempt = 0; attempt < 3; attempt++) {
+                published = store.list(finalKey).stream()
+                        .filter(object -> object.key().equals(finalKey))
+                        .findFirst()
+                        .orElse(null);
+                if (published != null) break;
+                try { Thread.sleep(300L); } catch (InterruptedException ignored) { }
+            }
+            if (published != null && published.size() > 0 && uploaded.bytes() != published.size())
+                throw new IOException("Remote archive size changed while being published: " + manifest.id);
+            manifest.archiveBytes = uploaded.bytes();
             manifest.compressionMethod = manifest.compressionMethod == null ? "DEFLATED" : manifest.compressionMethod;
-            CatalogEnvelope envelope = new CatalogEnvelope(new BackupMetadata(manifest, status), verified.sha256());
+            CatalogEnvelope envelope = new CatalogEnvelope(new BackupMetadata(manifest, status), uploaded.sha256());
             byte[] bytes = GSON.toJson(envelope).getBytes(java.nio.charset.StandardCharsets.UTF_8);
             String finalCatalog = catalogKey(manifest.id);
             store.put(tempCatalog, new java.io.ByteArrayInputStream(bytes));
             store.move(tempCatalog, finalCatalog);
-            return verified;
+            return uploaded;
         } catch (IOException | RuntimeException exception) {
             try { store.delete(tempKey); } catch (IOException cleanup) { exception.addSuppressed(cleanup); }
             try { store.delete(tempCatalog); } catch (IOException cleanup) { exception.addSuppressed(cleanup); }
@@ -211,17 +226,6 @@ public final class RemoteBackupCatalog implements AutoCloseable {
         return removed;
     }
 
-    private UploadInfo verify(String key) throws IOException {
-        MessageDigest digest = sha256();
-        long bytes = 0;
-        try (InputStream in = new DigestInputStream(store.get(key), digest)) {
-            byte[] buffer = new byte[64 * 1024];
-            int read;
-            while ((read = in.read(buffer)) != -1) bytes += read;
-        }
-        return new UploadInfo(bytes, HexFormat.of().formatHex(digest.digest()));
-    }
-
     private boolean objectExists(String key) throws IOException {
         return store.list(key).stream().anyMatch(object -> object.key().equals(key));
     }
@@ -242,7 +246,14 @@ public final class RemoteBackupCatalog implements AutoCloseable {
     }
 
     private static String cleanSegment(String value) throws IOException {
-        return cleanFileName(value.trim()) + "/";
+        if (value == null || value.isBlank()) {
+            throw new IOException("Invalid world directory name.");
+        }
+        String cleaned = value.trim().replace('\\', '/').replaceAll("^/+|/+$", "");
+        if (cleaned.contains("..")) {
+            throw new IOException("Invalid remote object name.");
+        }
+        return cleaned + "/";
     }
 
     private static String cleanPrefix(String value) {
@@ -252,7 +263,7 @@ public final class RemoteBackupCatalog implements AutoCloseable {
 
     private static MessageDigest sha256() {
         try { return MessageDigest.getInstance("SHA-256"); }
-        catch (NoSuchAlgorithmException exception) { throw new IllegalStateException(exception); }
+        catch (java.security.NoSuchAlgorithmException exception) { throw new IllegalStateException(exception); }
     }
 
     @Override
@@ -273,4 +284,30 @@ public final class RemoteBackupCatalog implements AutoCloseable {
 
     public record CatalogEntry(BackupManifest manifest, BackupStatus status, String sha256, long archiveBytes) { }
     public record UploadInfo(long bytes, String sha256) { }
+
+    private static final class CountingInputStream extends FilterInputStream {
+        private long bytesRead;
+
+        private CountingInputStream(InputStream input) {
+            super(input);
+        }
+
+        @Override
+        public int read() throws IOException {
+            int value = super.read();
+            if (value >= 0) bytesRead++;
+            return value;
+        }
+
+        @Override
+        public int read(byte[] bytes, int offset, int length) throws IOException {
+            int count = super.read(bytes, offset, length);
+            if (count > 0) bytesRead += count;
+            return count;
+        }
+
+        private long bytesRead() {
+            return bytesRead;
+        }
+    }
 }

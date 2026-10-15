@@ -2,6 +2,7 @@ package com.frandm.justenoughbackups.client.screen.config;
 
 public enum ConfigTab {
     BACKUPS("screen.justenoughbackups.config.tab.backups"),
+    REMOTE_STORAGE("screen.justenoughbackups.config.tab.remote_storage"),
     HUD("screen.justenoughbackups.config.tab.hud"),
     PREVIEW("screen.justenoughbackups.config.tab.preview");
 

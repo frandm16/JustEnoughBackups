@@ -11,6 +11,13 @@ base {
     archivesName = project.archives_base_name
 }
 
+def awsSdkVersion = "2.31.78"
+def minecraftNettyVersion = "4.2.16.Final"
+def bundledRuntime = configurations.create("bundledRuntime")
+bundledRuntime.canBeConsumed = false
+bundledRuntime.canBeResolved = true
+configurations.implementation.extendsFrom(bundledRuntime)
+
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(targetJavaVersion)
@@ -36,17 +43,25 @@ dependencies {
     implementation "net.fabricmc.fabric-api:fabric-api:${fabric_api_version}"
     compileOnly "maven.modrinth:modmenu:${modmenu_version}"
 
-    implementation "org.apache.commons:commons-compress:1.28.0"
-    include "org.apache.commons:commons-compress:1.28.0"
-    implementation "com.github.luben:zstd-jni:1.5.7-3"
-    include "com.github.luben:zstd-jni:1.5.7-3"
-    implementation "software.amazon.awssdk:s3:2.31.78"
-    implementation "software.amazon.awssdk:netty-nio-client:2.31.78"
-    include "software.amazon.awssdk:s3:2.31.78"
-    include "software.amazon.awssdk:netty-nio-client:2.31.78"
+    add("bundledRuntime", "org.apache.commons:commons-compress:1.28.0")
+    add("bundledRuntime", "com.github.luben:zstd-jni:1.5.7-3")
+    add("bundledRuntime", "software.amazon.awssdk:s3:${awsSdkVersion}")
+    add("bundledRuntime", "software.amazon.awssdk:netty-nio-client:${awsSdkVersion}")
+    add("bundledRuntime", "io.netty:netty-codec-http2:${minecraftNettyVersion}")
 
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+afterEvaluate {
+    configurations.bundledRuntime.resolvedConfiguration.resolvedArtifacts
+            .sort { left, right -> left.moduleVersion.id.toString() <=> right.moduleVersion.id.toString() }
+            .each { artifact ->
+                def id = artifact.moduleVersion.id
+                if (id.group != "io.netty" || artifact.name == "netty-codec-http2") {
+                    dependencies.add("include", "${id.group}:${artifact.name}:${id.version}")
+                }
+            }
 }
 
 test {
@@ -55,6 +70,97 @@ test {
         html.required = false
         junitXml.required = false
     }
+}
+
+tasks.register("verifyAwsSdkPackaging") {
+    group = "verification"
+    description = "Checks that the distributable mod nests all bundled runtime dependencies."
+    dependsOn tasks.named("jar")
+
+    doLast {
+        def archive = tasks.named("jar").get().archiveFile.get().asFile
+        def archiveZip = new java.util.zip.ZipFile(archive)
+        try {
+            def metadataEntry = archiveZip.getEntry("fabric.mod.json")
+            if (metadataEntry == null) {
+                throw new GradleException("${archive.name} has no fabric.mod.json")
+            }
+            def metadata = new groovy.json.JsonSlurper().parse(archiveZip.getInputStream(metadataEntry))
+            def nestedPaths = (metadata.jars ?: []).collect { it.file.toString() } as Set
+
+            configurations.bundledRuntime.resolvedConfiguration.resolvedArtifacts
+                    .findAll { it.moduleVersion.id.group != "io.netty" || it.name == "netty-codec-http2" }
+                    .each { artifact ->
+                        def id = artifact.moduleVersion.id
+                        def expectedPath = "META-INF/jars/${artifact.name}-${id.version}.jar".toString()
+                        if (!nestedPaths.contains(expectedPath)) {
+                            throw new GradleException("Bundled runtime artifact is missing from fabric.mod.json: ${expectedPath}")
+                        }
+                        if (archiveZip.getEntry(expectedPath) == null) {
+                            throw new GradleException("Bundled runtime jar is missing from ${archive.name}: ${expectedPath}")
+                        }
+                    }
+
+            configurations.bundledRuntime.resolvedConfiguration.resolvedArtifacts
+                    .findAll { it.moduleVersion.id.group == "io.netty" }
+                    .each { artifact ->
+                        def id = artifact.moduleVersion.id
+                        def nettyPath = "META-INF/jars/${artifact.name}-${id.version}.jar".toString()
+                        if (artifact.name != "netty-codec-http2" && (nestedPaths.contains(nettyPath) || archiveZip.getEntry(nettyPath) != null)) {
+                            throw new GradleException("Netty must come from Minecraft, not nested jars: ${nettyPath}")
+                        }
+                    }
+
+            def http2Path = "META-INF/jars/netty-codec-http2-${minecraftNettyVersion}.jar".toString()
+            if (!nestedPaths.contains(http2Path) || archiveZip.getEntry(http2Path) == null) {
+                throw new GradleException("Minecraft-aligned Netty HTTP/2 jar is missing: ${http2Path}")
+            }
+            def http2Bytes = archiveZip.getInputStream(archiveZip.getEntry(http2Path)).bytes
+            def http2Zip = new java.util.zip.ZipInputStream(new ByteArrayInputStream(http2Bytes))
+            try {
+                def hasHttp2Listener = false
+                for (def entry = http2Zip.nextEntry; entry != null; entry = http2Zip.nextEntry) {
+                    if (entry.name == 'io/netty/handler/codec/http2/Http2Connection$Listener.class') {
+                        hasHttp2Listener = true
+                        break
+                    }
+                }
+                if (!hasHttp2Listener) {
+                    throw new GradleException('Http2Connection$Listener.class is missing from netty-codec-http2')
+                }
+            } finally {
+                http2Zip.close()
+            }
+
+            def authJarEntry = archiveZip.getEntry("META-INF/jars/auth-${awsSdkVersion}.jar")
+            if (authJarEntry == null) {
+                throw new GradleException("AWS auth SDK jar is missing from ${archive.name}")
+            }
+            def authBytes = archiveZip.getInputStream(authJarEntry).bytes
+            def authZip = new java.util.zip.ZipInputStream(new ByteArrayInputStream(authBytes))
+            try {
+                def hasAwsCredentials = false
+                for (def entry = authZip.nextEntry; entry != null; entry = authZip.nextEntry) {
+                    if (entry.name == "software/amazon/awssdk/auth/credentials/AwsCredentials.class") {
+                        hasAwsCredentials = true
+                        break
+                    }
+                }
+                if (!hasAwsCredentials) {
+                    throw new GradleException("AwsCredentials.class is missing from auth-${awsSdkVersion}.jar")
+                }
+            } finally {
+                authZip.close()
+            }
+            logger.lifecycle("Verified ${archive.name}: bundled dependencies are nested, AwsCredentials and HTTP/2 classes are present, and remaining Netty modules are supplied by Minecraft.")
+        } finally {
+            archiveZip.close()
+        }
+    }
+}
+
+tasks.named("check") {
+    dependsOn tasks.named("verifyAwsSdkPackaging")
 }
 
 tasks.withType(JavaCompile).configureEach {

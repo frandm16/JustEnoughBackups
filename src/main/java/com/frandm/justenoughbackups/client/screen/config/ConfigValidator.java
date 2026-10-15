@@ -30,20 +30,38 @@ final class ConfigValidator {
         validateInt(errors, ConfigFieldId.REMOTE_STORAGE_RETRIES, state.working.remoteStorage.maxRetries, 0, 10, "screen.justenoughbackups.config.error.remote_retries_range");
 
         if (state.working.remoteStorage.enabled) {
-            boolean valid = state.working.remoteStorage.provider == RemoteProviderType.S3
-                    ? !blank(state.working.remoteStorage.s3Bucket)
-                        && !blank(state.working.remoteStorage.s3Region)
-                        && (!blank(state.working.remoteStorage.s3AccessKey) || !blank(System.getenv("JEB_S3_ACCESS_KEY_ID")))
-                        && (!blank(state.working.remoteStorage.s3SecretKey) || !blank(System.getenv("JEB_S3_SECRET_ACCESS_KEY")))
-                    : !blank(state.working.remoteStorage.webDavUrl);
-            if (!valid) errors.add(new ValidationError(ConfigFieldId.REMOTE_STORAGE_ENABLED,
-                    Component.translatable("screen.justenoughbackups.config.error.remote_incomplete")));
-            String endpoint = state.working.remoteStorage.provider == RemoteProviderType.S3
-                    ? state.working.remoteStorage.s3Endpoint : state.working.remoteStorage.webDavUrl;
-            if (!blank(endpoint) && !validRemoteUri(endpoint, state.working.remoteStorage.provider == RemoteProviderType.WEBDAV)) {
-                errors.add(new ValidationError(state.working.remoteStorage.provider == RemoteProviderType.S3
-                        ? ConfigFieldId.REMOTE_S3_ENDPOINT : ConfigFieldId.REMOTE_WEBDAV_URL,
-                        Component.translatable("screen.justenoughbackups.config.error.remote_url")));
+            if (state.working.remoteStorage.provider == RemoteProviderType.S3) {
+                if (blank(state.working.remoteStorage.s3Bucket)) {
+                    errors.add(new ValidationError(ConfigFieldId.REMOTE_S3_BUCKET,
+                            Component.translatable("screen.justenoughbackups.config.error.remote_s3_bucket_required")));
+                }
+                if (blank(state.working.remoteStorage.s3Region)) {
+                    errors.add(new ValidationError(ConfigFieldId.REMOTE_S3_REGION,
+                            Component.translatable("screen.justenoughbackups.config.error.remote_s3_region_required")));
+                }
+                if (blank(state.working.remoteStorage.s3AccessKey) && blank(System.getenv("JEB_S3_ACCESS_KEY_ID"))) {
+                    errors.add(new ValidationError(ConfigFieldId.REMOTE_S3_ACCESS_KEY,
+                            Component.translatable("screen.justenoughbackups.config.error.remote_s3_access_key_required")));
+                }
+                if (blank(state.working.remoteStorage.s3SecretKey) && blank(System.getenv("JEB_S3_SECRET_ACCESS_KEY"))) {
+                    errors.add(new ValidationError(ConfigFieldId.REMOTE_S3_SECRET_KEY,
+                            Component.translatable("screen.justenoughbackups.config.error.remote_s3_secret_key_required")));
+                }
+                String endpoint = state.working.remoteStorage.s3Endpoint;
+                if (!blank(endpoint) && !validRemoteUri(endpoint, false)) {
+                    errors.add(new ValidationError(ConfigFieldId.REMOTE_S3_ENDPOINT,
+                            Component.translatable("screen.justenoughbackups.config.error.remote_url")));
+                }
+            } else if (state.working.remoteStorage.provider == RemoteProviderType.WEBDAV) {
+                if (blank(state.working.remoteStorage.webDavUrl)) {
+                    errors.add(new ValidationError(ConfigFieldId.REMOTE_WEBDAV_URL,
+                            Component.translatable("screen.justenoughbackups.config.error.remote_webdav_url_required")));
+                }
+                String endpoint = state.working.remoteStorage.webDavUrl;
+                if (!blank(endpoint) && !validRemoteUri(endpoint, true)) {
+                    errors.add(new ValidationError(ConfigFieldId.REMOTE_WEBDAV_URL,
+                            Component.translatable("screen.justenoughbackups.config.error.remote_url")));
+                }
             }
         }
 
@@ -63,6 +81,7 @@ final class ConfigValidator {
         validateRawInt(errors, state, ConfigFieldId.MINIMUM_FREE_SPACE_RESERVE_MB, 0, Integer.MAX_VALUE);
         validateRawInt(errors, state, ConfigFieldId.THREAD_COUNT, 1, Math.max(1, Runtime.getRuntime().availableProcessors()));
         validateRawInt(errors, state, ConfigFieldId.ZSTD_COMPRESSION_LEVEL, 1, 22);
+        validateRawInt(errors, state, ConfigFieldId.REMOTE_STORAGE_RETRIES, 0, 10);
 
         if (state.rawInputs.getOrDefault(ConfigFieldId.BACKUP_DIRECTORY, value(state.working.backupDirectory)).isBlank()) {
             errors.add(new ValidationError(ConfigFieldId.BACKUP_DIRECTORY, Component.translatable("screen.justenoughbackups.config.error.backup_directory_empty")));

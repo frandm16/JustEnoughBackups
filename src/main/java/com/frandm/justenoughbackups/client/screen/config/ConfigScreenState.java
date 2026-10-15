@@ -53,13 +53,13 @@ final class ConfigScreenState {
                 working.minimumFreeSpaceReserveMb = defaults.minimumFreeSpaceReserveMb;
                 working.compressionMethod = defaults.compressionMethod;
                 working.zstdCompressionLevel = defaults.zstdCompressionLevel;
-                working.remoteStorage = defaults.remoteStorage;
                 working.excludeSafetyBackupsFromIncremental = defaults.excludeSafetyBackupsFromIncremental;
 
                 BackupConfig.AutomaticSchedule defaultSchedule = new BackupConfig.AutomaticSchedule();
                     defaultSchedule.normalize();
                     working.automaticSchedule = defaultSchedule;
             }
+            case REMOTE_STORAGE -> working.remoteStorage = defaults.remoteStorage;
             case HUD -> {
                 working.popup = defaults.popup.copy();
                 previewState = ConfigPreviewState.RUNNING;

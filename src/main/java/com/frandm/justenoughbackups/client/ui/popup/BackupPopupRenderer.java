@@ -73,7 +73,7 @@ public final class BackupPopupRenderer {
         };
         String written = BackupProgressFormat.formatBytes(progress.bytesWritten());
         if (progress.totalBytes() <= 0L) {
-            return BackupProgressFormat.percent(progress.bytesWritten(), progress.totalBytes()) + "% - " + written + action;
+            return written + action;
         }
         return BackupProgressFormat.percent(progress.bytesWritten(), progress.totalBytes()) + "% - "
                 + written
