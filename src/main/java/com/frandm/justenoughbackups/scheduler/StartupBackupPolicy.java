@@ -1,5 +1,7 @@
 package com.frandm.justenoughbackups.scheduler;
 
+import com.frandm.justenoughbackups.backup.model.BackupType;
+
 import java.time.Duration;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
@@ -22,6 +24,10 @@ final class StartupBackupPolicy {
             return true;
         }
         return Duration.between(createdAt, now).compareTo(Duration.ofMinutes(minimumAgeMinutes)) >= 0;
+    }
+
+    static boolean satisfiesRequestedType(BackupType requestedType, BackupType completedType) {
+        return completedType == requestedType || requestedType != BackupType.FULL && completedType == BackupType.FULL;
     }
 
     static long remainingMinutes(int minimumAgeMinutes, Instant createdAt, Instant now) {

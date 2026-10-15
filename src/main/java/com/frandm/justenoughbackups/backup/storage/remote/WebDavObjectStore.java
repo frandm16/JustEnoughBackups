@@ -22,7 +22,7 @@ import org.w3c.dom.Element;
 
 final class WebDavObjectStore implements RemoteObjectStore {
     private static final String PROPFIND_BODY = "<?xml version=\"1.0\" encoding=\"utf-8\" ?>"
-            + "<d:propfind xmlns:d=\"DAV:\"><d:prop><d:getcontentlength/><d:resourcetype/></d:prop></d:propfind>";
+            + "<d:propfind xmlns:d=\"DAV:\"><d:prop><d:getcontentlength/><d:getlastmodified/><d:resourcetype/></d:prop></d:propfind>";
     private final URI root;
     private final String authorization;
     private final int maxRetries;
@@ -94,7 +94,7 @@ final class WebDavObjectStore implements RemoteObjectStore {
                     } catch (NumberFormatException exception) {
                         size = 0L;
                     }
-                    Instant lastModified = Instant.EPOCH;
+                    Instant lastModified = null;
                     if (modified.getLength() > 0) {
                         try { lastModified = ZonedDateTime.parse(modified.item(0).getTextContent().trim(), DateTimeFormatter.RFC_1123_DATE_TIME).toInstant(); }
                         catch (RuntimeException ignored) { }

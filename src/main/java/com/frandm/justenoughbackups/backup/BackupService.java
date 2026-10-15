@@ -25,10 +25,12 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -384,25 +386,34 @@ public final class BackupService {
                     .findFirst().orElseThrow(() -> new IOException("Remote backup not found: " + requested));
             Map<String, RemoteBackupCatalog.CatalogEntry> byBackupId = new HashMap<>();
             entries.forEach(entry -> byBackupId.put(entry.manifest().id, entry));
-            List<BackupManifest> chain = new java.util.ArrayList<>();
-            BackupManifest current = selected.manifest();
-            while (current != null) {
-                RemoteBackupCatalog.CatalogEntry entry = byBackupId.get(current.id);
-                if (entry == null || entry.sha256() == null || entry.sha256().isBlank())
-                    throw new IOException("Remote backup is missing its integrity metadata: " + current.id);
-                chain.add(0, current);
-                if (current.type == BackupType.FULL) break;
-                if (current.baseBackupId == null) throw new IOException("Remote backup chain has no full base: " + current.id);
-                RemoteBackupCatalog.CatalogEntry base = byBackupId.get(current.baseBackupId);
-                if (base == null) throw new IOException("Missing remote base backup: " + current.baseBackupId);
-                current = base.manifest();
-            }
-            if (chain.isEmpty() || chain.getFirst().type != BackupType.FULL)
-                throw new IOException("Remote restore chain does not start with a full backup.");
+            List<BackupManifest> chain = resolveRemoteRestoreChain(selected.manifest(), byBackupId);
             Path localBackupDir = BackupPaths.worldBackupDir(server);
             return RestoreService.prepareRemoteRestore(localBackupDir, worldPath, selected.manifest(), chain,
                     byBackupId, catalog, requested, progress);
         }
+    }
+
+    static List<BackupManifest> resolveRemoteRestoreChain(
+            BackupManifest selected, Map<String, RemoteBackupCatalog.CatalogEntry> entries) throws IOException {
+        List<BackupManifest> chain = new java.util.ArrayList<>();
+        Set<String> visited = new HashSet<>();
+        BackupManifest current = selected;
+        while (current != null) {
+            if (current.id == null || !visited.add(current.id))
+                throw new IOException("Remote backup chain contains a cycle at backup: " + current.id);
+            RemoteBackupCatalog.CatalogEntry entry = entries.get(current.id);
+            if (entry == null || entry.sha256() == null || entry.sha256().isBlank())
+                throw new IOException("Remote backup is missing its integrity metadata: " + current.id);
+            chain.add(0, current);
+            if (current.type == BackupType.FULL) break;
+            if (current.baseBackupId == null) throw new IOException("Remote backup chain has no full base: " + current.id);
+            RemoteBackupCatalog.CatalogEntry base = entries.get(current.baseBackupId);
+            if (base == null) throw new IOException("Missing remote base backup: " + current.baseBackupId);
+            current = base.manifest();
+        }
+        if (chain.isEmpty() || chain.getFirst().type != BackupType.FULL)
+            throw new IOException("Remote restore chain does not start with a full backup.");
+        return List.copyOf(chain);
     }
 
     private static CompletableFuture<PendingRestore> runSafetyBackup(MinecraftServer server, PendingRestore restore) {

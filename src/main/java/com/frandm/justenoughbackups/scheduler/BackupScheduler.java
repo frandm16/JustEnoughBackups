@@ -125,7 +125,7 @@ public final class BackupScheduler {
             }
             Map<String, BackupStatus> statuses = remoteStatuses;
             BackupManifest newest = manifests.stream()
-                    .filter(manifest -> manifest.type == config.backupMode)
+                    .filter(manifest -> StartupBackupPolicy.satisfiesRequestedType(config.backupMode, manifest.type))
                     .filter(manifest -> !manifest.isSafetyBackup)
                     .filter(manifest -> config.remoteStorage != null && config.remoteStorage.enabled
                             ? hasCompletedStatus(statuses.get(manifest.id)) : hasCompletedStatus(server, manifest))

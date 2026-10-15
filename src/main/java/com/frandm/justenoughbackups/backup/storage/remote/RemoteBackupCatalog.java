@@ -182,6 +182,7 @@ public final class RemoteBackupCatalog implements AutoCloseable {
         int removed = 0;
         for (RemoteObjectStore.ObjectInfo object : temporary) {
             if (object.key().endsWith(".uploading") && object.lastModified() != null
+                    && !object.lastModified().equals(java.time.Instant.EPOCH)
                     && object.lastModified().isBefore(cutoff)) {
                 store.delete(object.key());
                 removed++;
