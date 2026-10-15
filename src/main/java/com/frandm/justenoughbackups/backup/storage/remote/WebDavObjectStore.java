@@ -39,25 +39,64 @@ final class WebDavObjectStore implements RemoteObjectStore {
 
     WebDavObjectStore(BackupConfig.RemoteStorage config, Duration controlRequestTimeout) throws IOException {
         this.controlRequestTimeout = controlRequestTimeout;
+        URI initial;
         try {
             URI parsed = URI.create(config.webDavUrl.trim());
             if (parsed.getUserInfo() != null || parsed.getQuery() != null || parsed.getFragment() != null)
                 throw new IOException("WebDAV URL must not include credentials, a query, or a fragment.");
             String normalized = parsed.toString();
             if (!normalized.endsWith("/")) normalized += "/";
-            root = URI.create(normalized);
+            initial = URI.create(normalized);
         } catch (IllegalArgumentException exception) {
             throw new IOException("Invalid WebDAV URL.", exception);
         }
-        if (root.getHost() == null || !"https".equalsIgnoreCase(root.getScheme())
-                && !("http".equalsIgnoreCase(root.getScheme()) && isLoopback(root.getHost()))) {
-            throw new IOException("WebDAV URL must use HTTPS (HTTP is allowed only for localhost).");
-        }
+        validateUri(initial);
         String username = envOrConfig("JEB_WEBDAV_USERNAME", config.webDavUsername);
         String password = envOrConfig("JEB_WEBDAV_PASSWORD", config.webDavPassword);
         maxRetries = Math.clamp(config.maxRetries, 0, 10);
         authorization = username.isBlank() && password.isBlank() ? ""
                 : "Basic " + Base64.getEncoder().encodeToString((username + ":" + password).getBytes(StandardCharsets.UTF_8));
+        root = discoverCanonicalRoot(initial);
+    }
+
+    private URI discoverCanonicalRoot(URI initial) {
+        URI current = initial;
+        for (int hop = 0; hop < 3; hop++) {
+            try {
+                HttpRequest request = authorized(HttpRequest.newBuilder(current)
+                        .header("Depth", "0")
+                        .method("PROPFIND", HttpRequest.BodyPublishers.noBody()),
+                        Duration.ofMillis(Math.min(controlRequestTimeout.toMillis(), 2000L))).build();
+                HttpResponse<Void> response = client.send(request, HttpResponse.BodyHandlers.discarding());
+                int status = response.statusCode();
+                if (status == 301 || status == 302 || status == 307 || status == 308) {
+                    String location = response.headers().firstValue("Location").orElse("");
+                    if (!location.isBlank()) {
+                        URI resolved = current.resolve(location);
+                        String normalized = resolved.toString();
+                        if (!normalized.endsWith("/")) normalized += "/";
+                        URI next = URI.create(normalized);
+                        validateUri(next);
+                        current = next;
+                        continue;
+                    }
+                }
+                break;
+            } catch (Exception ignored) {
+                break;
+            }
+        }
+        return current;
+    }
+
+    private static void validateUri(URI uri) throws IOException {
+        if (uri.getHost() == null || !"https".equalsIgnoreCase(uri.getScheme())
+                && !("http".equalsIgnoreCase(uri.getScheme()) && isLoopback(uri.getHost()))) {
+            throw new IOException("WebDAV URL must use HTTPS (HTTP is allowed only for localhost).");
+        }
+        if (uri.getUserInfo() != null || uri.getQuery() != null || uri.getFragment() != null) {
+            throw new IOException("WebDAV URL must not include credentials, a query, or a fragment.");
+        }
     }
 
     @Override
@@ -74,7 +113,7 @@ final class WebDavObjectStore implements RemoteObjectStore {
         }
         if (response.statusCode() != 207 && response.statusCode() != 200) {
             response.body().close();
-            throw statusError("list WebDAV objects", response.statusCode());
+            throw statusError("list WebDAV objects", response.statusCode(), response);
         }
         try (InputStream body = response.body()) {
             var factory = DocumentBuilderFactory.newInstance();
@@ -121,11 +160,18 @@ final class WebDavObjectStore implements RemoteObjectStore {
     @Override
     public void put(String key, InputStream input) throws IOException {
         ensureParentCollections(key);
+        HttpRequest.BodyPublisher publisher;
+        if (input instanceof java.io.ByteArrayInputStream || (input.markSupported() && input.available() > 0)) {
+            byte[] data = input.readAllBytes();
+            publisher = HttpRequest.BodyPublishers.ofByteArray(data);
+        } else {
+            publisher = HttpRequest.BodyPublishers.ofInputStream(() -> input);
+        }
         HttpRequest request = authorized(HttpRequest.newBuilder(objectUri(key))
                 .header("Content-Type", "application/octet-stream")
-                .PUT(HttpRequest.BodyPublishers.ofInputStream(() -> input)), TRANSFER_REQUEST_TIMEOUT).build();
+                .PUT(publisher), TRANSFER_REQUEST_TIMEOUT).build();
         HttpResponse<Void> response = send(request, HttpResponse.BodyHandlers.discarding());
-        if (!success(response.statusCode())) throw statusError("upload WebDAV object", response.statusCode());
+        if (!success(response.statusCode())) throw statusError("upload WebDAV object", response.statusCode(), response);
     }
 
     private void ensureParentCollections(String key) throws IOException {
@@ -141,7 +187,7 @@ final class WebDavObjectStore implements RemoteObjectStore {
                     .method("MKCOL", HttpRequest.BodyPublishers.noBody()), controlRequestTimeout).build();
             HttpResponse<Void> response = send(request, HttpResponse.BodyHandlers.discarding());
             if (!success(response.statusCode()) && response.statusCode() != 405 && response.statusCode() != 301) {
-                throw statusError("create WebDAV collection", response.statusCode());
+                throw statusError("create WebDAV collection", response.statusCode(), response);
             }
             createdCollections.add(current);
         }
@@ -153,7 +199,7 @@ final class WebDavObjectStore implements RemoteObjectStore {
                 HttpResponse.BodyHandlers.ofInputStream());
         if (!success(response.statusCode())) {
             response.body().close();
-            throw statusError("download WebDAV object", response.statusCode());
+            throw statusError("download WebDAV object", response.statusCode(), response);
         }
         return response.body();
     }
@@ -163,7 +209,7 @@ final class WebDavObjectStore implements RemoteObjectStore {
         HttpResponse<Void> response = sendRetryable(authorized(HttpRequest.newBuilder(objectUri(key)).DELETE(), controlRequestTimeout).build(),
                 HttpResponse.BodyHandlers.discarding());
         if (!success(response.statusCode()) && response.statusCode() != 404) {
-            throw statusError("delete WebDAV object", response.statusCode());
+            throw statusError("delete WebDAV object", response.statusCode(), response);
         }
     }
 
@@ -175,7 +221,7 @@ final class WebDavObjectStore implements RemoteObjectStore {
                 .header("Overwrite", "T")
                 .method("MOVE", HttpRequest.BodyPublishers.noBody()), controlRequestTimeout).build();
         HttpResponse<Void> response = send(request, HttpResponse.BodyHandlers.discarding());
-        if (!success(response.statusCode())) throw statusError("move WebDAV object", response.statusCode());
+        if (!success(response.statusCode())) throw statusError("move WebDAV object", response.statusCode(), response);
     }
 
     private URI objectUri(String key) throws IOException {
@@ -233,7 +279,20 @@ final class WebDavObjectStore implements RemoteObjectStore {
     }
 
     private static IOException statusError(String action, int status) {
-        return new RemoteStorageException("Unable to " + action + " (HTTP " + status + ").",
+        return statusError(action, status, null);
+    }
+
+    private static IOException statusError(String action, int status, HttpResponse<?> response) {
+        String detail = "";
+        if (status == 301 || status == 302 || status == 307 || status == 308) {
+            String location = response != null ? response.headers().firstValue("Location").orElse("") : "";
+            if (!location.isBlank()) {
+                detail = " The server redirected to '" + location + "'. Please configure the canonical WebDAV URL.";
+            }
+        } else if (status == 411) {
+            detail = " The WebDAV server rejected chunked upload (HTTP 411 Length Required). Enable chunked transfer encoding or proxy request buffering on the WebDAV server.";
+        }
+        return new RemoteStorageException("Unable to " + action + " (HTTP " + status + ")." + detail,
                 status == 408 || status == 429 || status >= 500, null);
     }
 
