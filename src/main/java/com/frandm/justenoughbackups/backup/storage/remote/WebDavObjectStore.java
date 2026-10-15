@@ -29,6 +29,7 @@ final class WebDavObjectStore implements RemoteObjectStore {
     private final String authorization;
     private final int maxRetries;
     private final Duration controlRequestTimeout;
+    private final java.util.Set<String> createdCollections = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private final HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(20))
             .followRedirects(HttpClient.Redirect.NEVER).build();
 
@@ -93,7 +94,7 @@ final class WebDavObjectStore implements RemoteObjectStore {
                 var modified = item.getElementsByTagNameNS("DAV:", "getlastmodified");
                 var collections = item.getElementsByTagNameNS("DAV:", "collection");
                 if (hrefs.getLength() == 0 || collections.getLength() > 0) continue;
-                URI itemUri = root.resolve(hrefs.item(0).getTextContent());
+                URI itemUri = uri.resolve(hrefs.item(0).getTextContent().trim());
                 String key = relativeKey(itemUri);
                 if (!key.isBlank() && key.startsWith(prefix) && lengths.getLength() > 0) {
                     long size;
@@ -134,12 +135,15 @@ final class WebDavObjectStore implements RemoteObjectStore {
             if (parts[i].isBlank()) continue;
             if (!path.isEmpty()) path.append('/');
             path.append(parts[i]);
-            HttpRequest request = authorized(HttpRequest.newBuilder(objectUri(path + "/"))
+            String current = path.toString();
+            if (createdCollections.contains(current)) continue;
+            HttpRequest request = authorized(HttpRequest.newBuilder(objectUri(current + "/"))
                     .method("MKCOL", HttpRequest.BodyPublishers.noBody()), controlRequestTimeout).build();
             HttpResponse<Void> response = send(request, HttpResponse.BodyHandlers.discarding());
             if (!success(response.statusCode()) && response.statusCode() != 405 && response.statusCode() != 301) {
                 throw statusError("create WebDAV collection", response.statusCode());
             }
+            createdCollections.add(current);
         }
     }
 
@@ -245,5 +249,10 @@ final class WebDavObjectStore implements RemoteObjectStore {
     private static boolean isLoopback(String host) {
         String normalized = host == null ? "" : host.replace("[", "").replace("]", "");
         return normalized.equalsIgnoreCase("localhost") || normalized.equals("127.0.0.1") || normalized.equals("::1");
+    }
+
+    @Override
+    public void close() {
+        client.close();
     }
 }

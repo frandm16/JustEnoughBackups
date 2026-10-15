@@ -150,10 +150,10 @@ public final class RestoreService {
                 private void report(long count) {
                     long current = downloaded.addAndGet(count);
                     long now = System.currentTimeMillis();
-                    if (now - lastUpdate.get() < 500 && current < 1024 * 1024) return;
+                    if (now - lastUpdate.get() < 500) return;
                     lastUpdate.set(now);
                     progressListener.onProgress(new BackupProgress(manifest.id, manifest.type, reason,
-                            BackupProgressPhase.DOWNLOADING, current, 0L, 0,
+                            BackupProgressPhase.DOWNLOADING, current, entry.archiveBytes(), 0,
                             manifest.includedFiles == null ? 0 : manifest.includedFiles.size(), BackupProgressState.RUNNING));
                 }
                 @Override public int read() throws IOException {

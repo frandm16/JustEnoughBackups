@@ -25,7 +25,14 @@ public final class RemoteBackupCatalog implements AutoCloseable {
     private final String worldPrefix;
 
     public RemoteBackupCatalog(BackupConfig.RemoteStorage config, String worldDirectoryName) throws IOException {
-        this(config, worldDirectoryName, RemoteObjectStores.create(config));
+        this(config, worldDirectoryName, createValidatedStore(config, worldDirectoryName));
+    }
+
+    private static RemoteObjectStore createValidatedStore(BackupConfig.RemoteStorage config, String worldDirectoryName) throws IOException {
+        String configuredPrefix = config.provider == RemoteProviderType.S3 ? config.s3Prefix : config.webDavPrefix;
+        cleanPrefix(configuredPrefix);
+        cleanSegment(worldDirectoryName);
+        return RemoteObjectStores.create(config);
     }
 
     RemoteBackupCatalog(BackupConfig.RemoteStorage config, String worldDirectoryName, RemoteObjectStore store) throws IOException {
@@ -48,7 +55,7 @@ public final class RemoteBackupCatalog implements AutoCloseable {
             CatalogEnvelope envelope;
             try (InputStream in = store.get(object.key())) {
                 envelope = GSON.fromJson(new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8), CatalogEnvelope.class);
-            } catch (RuntimeException exception) {
+            } catch (RuntimeException | IOException exception) {
                 continue;
             }
             if (envelope == null || envelope.metadata == null || envelope.metadata.manifest == null) continue;
@@ -93,17 +100,6 @@ public final class RemoteBackupCatalog implements AutoCloseable {
             }
             store.move(tempKey, finalKey);
             promoted = true;
-            RemoteObjectStore.ObjectInfo published = null;
-            for (int attempt = 0; attempt < 3; attempt++) {
-                published = store.list(finalKey).stream()
-                        .filter(object -> object.key().equals(finalKey))
-                        .findFirst()
-                        .orElse(null);
-                if (published != null) break;
-                try { Thread.sleep(300L); } catch (InterruptedException ignored) { }
-            }
-            if (published != null && published.size() > 0 && uploaded.bytes() != published.size())
-                throw new IOException("Remote archive size changed while being published: " + manifest.id);
             manifest.archiveBytes = uploaded.bytes();
             manifest.compressionMethod = manifest.compressionMethod == null ? "DEFLATED" : manifest.compressionMethod;
             CatalogEnvelope envelope = new CatalogEnvelope(new BackupMetadata(manifest, status), uploaded.sha256());
@@ -144,12 +140,11 @@ public final class RemoteBackupCatalog implements AutoCloseable {
         String newKey = archiveKey(safeName);
         if (oldKey.equals(newKey)) return;
         if (objectExists(newKey)) throw new IOException("A remote backup already uses this archive name: " + safeName);
-        CatalogEntry existing = list().stream().filter(entry -> entry.manifest().id.equals(manifest.id)).findFirst()
-                .orElseThrow(() -> new IOException("Remote backup not found: " + manifest.id));
+        CatalogEnvelope existing = readEnvelope(manifest.id);
         store.move(oldKey, newKey);
         manifest.zipFileName = safeName;
         try {
-            publishCatalog(manifest, existing.status(), existing.sha256());
+            publishCatalog(manifest, existing.metadata.status, existing.sha256);
         } catch (IOException exception) {
             manifest.zipFileName = oldName;
             try { store.move(newKey, oldKey); } catch (IOException rollback) { exception.addSuppressed(rollback); }
@@ -158,9 +153,21 @@ public final class RemoteBackupCatalog implements AutoCloseable {
     }
 
     public void updateCatalog(BackupManifest manifest) throws IOException {
-        CatalogEntry existing = list().stream().filter(entry -> entry.manifest().id.equals(manifest.id)).findFirst()
-                .orElseThrow(() -> new IOException("Remote backup not found: " + manifest.id));
-        publishCatalog(manifest, existing.status(), existing.sha256());
+        CatalogEnvelope existing = readEnvelope(manifest.id);
+        publishCatalog(manifest, existing.metadata.status, existing.sha256);
+    }
+
+    private CatalogEnvelope readEnvelope(String backupId) throws IOException {
+        String key = catalogKey(backupId);
+        try (InputStream in = store.get(key)) {
+            CatalogEnvelope envelope = GSON.fromJson(new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8), CatalogEnvelope.class);
+            if (envelope == null || envelope.metadata == null || envelope.metadata.manifest == null) {
+                throw new IOException("Remote backup catalog entry is corrupted: " + backupId);
+            }
+            return envelope;
+        } catch (RuntimeException exception) {
+            throw new IOException("Remote backup not found: " + backupId, exception);
+        }
     }
 
     private void publishCatalog(BackupManifest manifest, BackupStatus status, String sha256) throws IOException {

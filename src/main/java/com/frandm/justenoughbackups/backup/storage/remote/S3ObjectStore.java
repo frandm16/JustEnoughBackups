@@ -41,19 +41,11 @@ import java.util.concurrent.Executors;
 
 final class S3ObjectStore implements RemoteObjectStore {
     private static final long SINGLE_COPY_LIMIT_BYTES = 5_000_000_000L;
-    private static final long COPY_PART_SIZE_BYTES    =   512_000_000L; // 512 MB por parte (límite S3: 5 MB–5 GiB)
+    private static final long COPY_PART_SIZE_BYTES    =   512_000_000L;
     private final String bucket;
     private final S3AsyncClient client;
-    private final ExecutorService streamExecutor = Executors.newSingleThreadExecutor(runnable -> {
-        Thread thread = new Thread(runnable, "JEB-S3-stream");
-        thread.setDaemon(true);
-        return thread;
-    });
-    private final ExecutorService completionExecutor = Executors.newFixedThreadPool(2, runnable -> {
-        Thread thread = new Thread(runnable, "JEB-S3-completion");
-        thread.setDaemon(true);
-        return thread;
-    });
+    private final ExecutorService streamExecutor;
+    private final ExecutorService completionExecutor;
 
     S3ObjectStore(BackupConfig.RemoteStorage config) throws IOException {
         bucket = config.s3Bucket.trim();
@@ -61,6 +53,17 @@ final class S3ObjectStore implements RemoteObjectStore {
         String accessKey = envOrConfig("JEB_S3_ACCESS_KEY_ID", config.s3AccessKey);
         String secretKey = envOrConfig("JEB_S3_SECRET_ACCESS_KEY", config.s3SecretKey);
         if (accessKey.isBlank() || secretKey.isBlank()) throw new IOException("S3 credentials are missing.");
+        streamExecutor = Executors.newSingleThreadExecutor(runnable -> {
+            Thread thread = new Thread(runnable, "JEB-S3-stream");
+            thread.setDaemon(true);
+            return thread;
+        });
+        completionExecutor = Executors.newFixedThreadPool(2, runnable -> {
+            Thread thread = new Thread(runnable, "JEB-S3-completion");
+            thread.setDaemon(true);
+            return thread;
+        });
+        try {
         var builder = S3AsyncClient.builder()
                 .region(Region.of(config.s3Region))
                 .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(accessKey, secretKey)))
@@ -99,6 +102,12 @@ final class S3ObjectStore implements RemoteObjectStore {
             }
         }
         client = builder.build();
+        } catch (RuntimeException | IOException failure) {
+            streamExecutor.shutdownNow();
+            completionExecutor.shutdownNow();
+            if (failure instanceof IOException ioFailure) throw ioFailure;
+            throw new IOException("Failed to initialize S3 client.", failure);
+        }
     }
 
     @Override
@@ -162,7 +171,8 @@ final class S3ObjectStore implements RemoteObjectStore {
             try {
                 delete(sourceKey);
             } catch (IOException cleanupFailure) {
-                WorldBackupMod.LOGGER.warn("S3 object was copied but its source could not be removed; leaving an orphan at {}.", sourceKey);
+                WorldBackupMod.LOGGER.warn("S3 object was copied to {} but its source could not be removed; "
+                        + "an orphan remains at {} and must be removed manually or by the next catalog cleanup.", targetKey, sourceKey);
             }
         } catch (RuntimeException exception) {
             throw ioFailure("Unable to publish S3 object", exception);

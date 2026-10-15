@@ -248,7 +248,7 @@ public final class BackupStorage {
                     + BackupSizeFormatter.formatBytes(required) + ", available " + BackupSizeFormatter.formatBytes(usable) + ").");
         }
 
-        java.io.PipedInputStream input = new java.io.PipedInputStream(1024 * 1024);
+        java.io.PipedInputStream input = new java.io.PipedInputStream(4 * 1024 * 1024);
         java.io.PipedOutputStream output = new java.io.PipedOutputStream(input);
         BackupProgressListener remoteProgress = new RemoteUploadProgressListener(listener);
         java.util.concurrent.CompletableFuture<BackupStatus> statusFuture = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
@@ -265,7 +265,7 @@ public final class BackupStorage {
                 private void report(long count) {
                     long total = uploadedBytes.addAndGet(count);
                     long now = System.currentTimeMillis();
-                    if (total >= 1024 * 1024 && now - lastUploadUpdate.get() < 500) return;
+                    if (now - lastUploadUpdate.get() < 500) return;
                     lastUploadUpdate.set(now);
                     remoteProgress.onProgress(new BackupProgress(manifest.id, manifest.type, reason,
                             BackupProgressPhase.UPLOADING, total, 0L, 0,
@@ -292,8 +292,9 @@ public final class BackupStorage {
             throw exception;
         }
         BackupStatus status;
-        try { status = statusFuture.join(); }
-        catch (java.util.concurrent.CompletionException exception) {
+        try {
+            status = statusFuture.join();
+        } catch (java.util.concurrent.CompletionException exception) {
             Throwable cause = exception.getCause();
             if (cause instanceof IOException io) throw io;
             throw new IOException("Remote archive creation failed.", cause);
