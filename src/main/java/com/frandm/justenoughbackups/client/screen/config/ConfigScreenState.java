@@ -36,6 +36,7 @@ final class ConfigScreenState {
                 working.pauseAutomaticBackupsWithoutPlayers = defaults.pauseAutomaticBackupsWithoutPlayers;
                 working.backupOnServerStart = defaults.backupOnServerStart;
                 working.backupOnServerStop = defaults.backupOnServerStop;
+                working.startupBackupThreshold = defaults.startupBackupThreshold.copy();
                 working.automaticBackupWarningEnabled = defaults.automaticBackupWarningEnabled;
                 working.automaticBackupWarningMinutes = defaults.automaticBackupWarningMinutes;
                 working.commandPermissionLevel = defaults.commandPermissionLevel;
@@ -50,6 +51,8 @@ final class ConfigScreenState {
                 working.retention.differential = defaults.retention.differential;
                 working.retention.maxTotalSizeMb = defaults.retention.maxTotalSizeMb;
                 working.minimumFreeSpaceReserveMb = defaults.minimumFreeSpaceReserveMb;
+                working.compressionMethod = defaults.compressionMethod;
+                working.zstdCompressionLevel = defaults.zstdCompressionLevel;
                 working.excludeSafetyBackupsFromIncremental = defaults.excludeSafetyBackupsFromIncremental;
 
                 BackupConfig.AutomaticSchedule defaultSchedule = new BackupConfig.AutomaticSchedule();

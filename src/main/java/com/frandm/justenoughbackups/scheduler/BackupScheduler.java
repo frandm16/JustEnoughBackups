@@ -5,6 +5,9 @@ import com.frandm.justenoughbackups.backup.BackupMessages;
 import com.frandm.justenoughbackups.backup.model.BackupManifest;
 import com.frandm.justenoughbackups.backup.BackupService;
 import com.frandm.justenoughbackups.backup.model.BackupType;
+import com.frandm.justenoughbackups.backup.BackupPaths;
+import com.frandm.justenoughbackups.backup.storage.BackupStorage;
+import com.frandm.justenoughbackups.backup.model.BackupStatus;
 import com.frandm.justenoughbackups.config.BackupConfig;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
@@ -16,6 +19,9 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.io.IOException;
+import java.time.Instant;
+import java.time.format.DateTimeParseException;
 
 public final class BackupScheduler {
     private static long ticksUntilNextCheck = 20L;
@@ -40,7 +46,9 @@ public final class BackupScheduler {
             resetTimer();
             playersSeenSinceLastBackup = hasOnlinePlayers(server);
             if (config.backupOnServerStart) {
-                runLifecycleBackup(server, config, "startup", false);
+                if (shouldRunStartupBackup(server, config)) {
+                    runLifecycleBackup(server, config, "startup", false);
+                }
             }
         });
 
@@ -90,6 +98,60 @@ public final class BackupScheduler {
                         }
                     });
         });
+    }
+
+    private static boolean shouldRunStartupBackup(MinecraftServer server, BackupConfig config) {
+        int minimumMinutes = config.startupBackupThreshold.forType(config.backupMode);
+        if (minimumMinutes <= 0) {
+            return true;
+        }
+
+        try {
+            List<BackupManifest> manifests = BackupStorage.readManifests(BackupPaths.worldBackupDir(server));
+            BackupManifest newest = manifests.stream()
+                    .filter(manifest -> manifest.type == config.backupMode)
+                    .filter(manifest -> !manifest.isSafetyBackup)
+                    .filter(manifest -> hasCompletedStatus(server, manifest))
+                    .filter(manifest -> parseCreatedAt(manifest.createdAt) != null)
+                    .max(Comparator.comparing(manifest -> parseCreatedAt(manifest.createdAt)))
+                    .orElse(null);
+            if (newest == null) {
+                return true;
+            }
+
+            Instant createdAt = parseCreatedAt(newest.createdAt);
+            Instant now = Instant.now();
+            if (!StartupBackupPolicy.shouldRun(minimumMinutes, newest.createdAt, now)) {
+                long remainingMinutes = StartupBackupPolicy.remainingMinutes(minimumMinutes, createdAt, now);
+                WorldBackupMod.LOGGER.info("Skipping {} startup backup; latest completed backup {} is too recent ({} minute(s) remaining).",
+                        config.backupMode, newest.id, remainingMinutes);
+                return false;
+            }
+            return true;
+        } catch (IOException | RuntimeException exception) {
+            WorldBackupMod.LOGGER.warn("Unable to check the latest {} backup; startup backup will run.", config.backupMode, exception);
+            return true;
+        }
+    }
+
+    private static boolean hasCompletedStatus(MinecraftServer server, BackupManifest manifest) {
+        try {
+            BackupStatus status = BackupStorage.readStatus(BackupPaths.worldBackupDir(server).resolve(manifest.zipFileName));
+            return status != null && status.completed && (status.brokenFiles == null || status.brokenFiles.isEmpty());
+        } catch (RuntimeException exception) {
+            return false;
+        }
+    }
+
+    private static Instant parseCreatedAt(String createdAt) {
+        if (createdAt == null || createdAt.isBlank()) {
+            return null;
+        }
+        try {
+            return Instant.parse(createdAt);
+        } catch (DateTimeParseException exception) {
+            return null;
+        }
     }
 
     private static void runLifecycleBackup(MinecraftServer server, BackupConfig config, String reason, boolean waitForCompletion) {

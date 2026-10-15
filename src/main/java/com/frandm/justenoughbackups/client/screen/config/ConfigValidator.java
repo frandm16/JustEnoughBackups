@@ -15,6 +15,9 @@ final class ConfigValidator {
         validateInt(errors, ConfigFieldId.AUTOMATIC_FULL_INTERVAL_MINUTES, state.working.automaticSchedule.full.intervalMinutes, 1, Integer.MAX_VALUE, "screen.justenoughbackups.config.error.interval_min");
         validateInt(errors, ConfigFieldId.AUTOMATIC_DIFFERENTIAL_INTERVAL_MINUTES, state.working.automaticSchedule.differential.intervalMinutes, 1, Integer.MAX_VALUE, "screen.justenoughbackups.config.error.interval_min");
         validateInt(errors, ConfigFieldId.AUTOMATIC_PARTIAL_INTERVAL_MINUTES, state.working.automaticSchedule.partial.intervalMinutes, 1, Integer.MAX_VALUE, "screen.justenoughbackups.config.error.interval_min");
+        validateInt(errors, ConfigFieldId.STARTUP_FULL_MINIMUM_AGE, state.working.startupBackupThreshold.fullMinutes, 0, Integer.MAX_VALUE, "screen.justenoughbackups.config.error.startup_age_min");
+        validateInt(errors, ConfigFieldId.STARTUP_PARTIAL_MINIMUM_AGE, state.working.startupBackupThreshold.partialMinutes, 0, Integer.MAX_VALUE, "screen.justenoughbackups.config.error.startup_age_min");
+        validateInt(errors, ConfigFieldId.STARTUP_DIFFERENTIAL_MINIMUM_AGE, state.working.startupBackupThreshold.differentialMinutes, 0, Integer.MAX_VALUE, "screen.justenoughbackups.config.error.startup_age_min");
         validateInt(errors, ConfigFieldId.PERMISSION_LEVEL, state.working.commandPermissionLevel, 0, 4, "screen.justenoughbackups.config.error.permission_range");
         validateInt(errors, ConfigFieldId.KEEP_FULL, state.working.retention.full, 1, Integer.MAX_VALUE, "screen.justenoughbackups.config.error.full_min");
         validateInt(errors, ConfigFieldId.KEEP_PARTIAL, state.working.retention.incremental, 0, Integer.MAX_VALUE, "screen.justenoughbackups.config.error.partial_min");
@@ -22,12 +25,16 @@ final class ConfigValidator {
         validateInt(errors, ConfigFieldId.MAX_TOTAL_SIZE_MB, state.working.retention.maxTotalSizeMb, 0, Integer.MAX_VALUE, "screen.justenoughbackups.config.error.max_total_size_mb_min");
         validateInt(errors, ConfigFieldId.MINIMUM_FREE_SPACE_RESERVE_MB, state.working.minimumFreeSpaceReserveMb, 0, Integer.MAX_VALUE, "screen.justenoughbackups.config.error.minimum_free_space_reserve_mb_min");
         validateInt(errors, ConfigFieldId.THREAD_COUNT, state.working.threadCount, 1, Math.max(1, Runtime.getRuntime().availableProcessors()), "screen.justenoughbackups.config.error.thread_count_range");
+        validateInt(errors, ConfigFieldId.ZSTD_COMPRESSION_LEVEL, state.working.zstdCompressionLevel, 1, 22, "screen.justenoughbackups.config.error.zstd_level_range");
 
         validateRawInt(errors, state, ConfigFieldId.INTERVAL_MINUTES, 1, Integer.MAX_VALUE);
         validateRawInt(errors, state, ConfigFieldId.AUTOMATIC_BACKUP_WARNING_MINUTES, 1, Integer.MAX_VALUE);
         validateRawInt(errors, state, ConfigFieldId.AUTOMATIC_FULL_INTERVAL_MINUTES, 1, Integer.MAX_VALUE);
         validateRawInt(errors, state, ConfigFieldId.AUTOMATIC_DIFFERENTIAL_INTERVAL_MINUTES, 1, Integer.MAX_VALUE);
         validateRawInt(errors, state, ConfigFieldId.AUTOMATIC_PARTIAL_INTERVAL_MINUTES, 1, Integer.MAX_VALUE);
+        validateRawInt(errors, state, ConfigFieldId.STARTUP_FULL_MINIMUM_AGE, 0, Integer.MAX_VALUE);
+        validateRawInt(errors, state, ConfigFieldId.STARTUP_PARTIAL_MINIMUM_AGE, 0, Integer.MAX_VALUE);
+        validateRawInt(errors, state, ConfigFieldId.STARTUP_DIFFERENTIAL_MINIMUM_AGE, 0, Integer.MAX_VALUE);
         validateRawInt(errors, state, ConfigFieldId.PERMISSION_LEVEL, 0, 4);
         validateRawInt(errors, state, ConfigFieldId.KEEP_FULL, 1, Integer.MAX_VALUE);
         validateRawInt(errors, state, ConfigFieldId.KEEP_PARTIAL, 0, Integer.MAX_VALUE);
@@ -35,6 +42,7 @@ final class ConfigValidator {
         validateRawInt(errors, state, ConfigFieldId.MAX_TOTAL_SIZE_MB, 0, Integer.MAX_VALUE);
         validateRawInt(errors, state, ConfigFieldId.MINIMUM_FREE_SPACE_RESERVE_MB, 0, Integer.MAX_VALUE);
         validateRawInt(errors, state, ConfigFieldId.THREAD_COUNT, 1, Math.max(1, Runtime.getRuntime().availableProcessors()));
+        validateRawInt(errors, state, ConfigFieldId.ZSTD_COMPRESSION_LEVEL, 1, 22);
 
         if (state.rawInputs.getOrDefault(ConfigFieldId.BACKUP_DIRECTORY, value(state.working.backupDirectory)).isBlank()) {
             errors.add(new ValidationError(ConfigFieldId.BACKUP_DIRECTORY, Component.translatable("screen.justenoughbackups.config.error.backup_directory_empty")));

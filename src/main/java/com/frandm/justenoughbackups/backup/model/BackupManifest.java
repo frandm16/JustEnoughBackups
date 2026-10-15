@@ -16,6 +16,8 @@ public final class BackupManifest {
     public String baseBackupId;
     public boolean isSafetyBackup = false;
     public String zipFileName;
+    public String compressionMethod = "DEFLATED";
+    public int compressionLevel = -1;
     public String reason;
     public BackupIntegrityMode integrityMode;
     public long includedBytes;

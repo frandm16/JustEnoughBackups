@@ -2,6 +2,7 @@ package com.frandm.justenoughbackups.client.screen.config;
 
 import com.frandm.justenoughbackups.backup.model.BackupIntegrityMode;
 import com.frandm.justenoughbackups.backup.model.BackupType;
+import com.frandm.justenoughbackups.backup.model.BackupCompressionMethod;
 import com.frandm.justenoughbackups.backup.BackupMessageChannel;
 import com.frandm.justenoughbackups.client.screen.preview.PopupPreviewScreen;
 import com.frandm.justenoughbackups.client.ui.ScreenChrome;
@@ -160,12 +161,16 @@ public final class JEBConfigScreen extends Screen {
             case AUTOMATIC_FULL_INTERVAL_MINUTES -> () -> state.working.automaticSchedule.full.intervalMinutes;
             case AUTOMATIC_PARTIAL_INTERVAL_MINUTES -> () -> state.working.automaticSchedule.partial.intervalMinutes;
             case AUTOMATIC_DIFFERENTIAL_INTERVAL_MINUTES -> () -> state.working.automaticSchedule.differential.intervalMinutes;
+            case STARTUP_FULL_MINIMUM_AGE -> () -> state.working.startupBackupThreshold.fullMinutes;
+            case STARTUP_PARTIAL_MINIMUM_AGE -> () -> state.working.startupBackupThreshold.partialMinutes;
+            case STARTUP_DIFFERENTIAL_MINIMUM_AGE -> () -> state.working.startupBackupThreshold.differentialMinutes;
             case KEEP_FULL -> () -> state.working.retention.full;
             case KEEP_PARTIAL -> () -> state.working.retention.incremental;
             case KEEP_DIFFERENTIAL -> () -> state.working.retention.differential;
             case MAX_TOTAL_SIZE_MB -> () -> state.working.retention.maxTotalSizeMb;
             case MINIMUM_FREE_SPACE_RESERVE_MB -> () -> state.working.minimumFreeSpaceReserveMb;
             case THREAD_COUNT -> () -> state.working.threadCount;
+            case ZSTD_COMPRESSION_LEVEL -> () -> state.working.zstdCompressionLevel;
             case PERMISSION_LEVEL -> () -> state.working.commandPermissionLevel;
             default -> throw new IllegalArgumentException("Not an int field: " + fieldId);
         };
@@ -178,12 +183,16 @@ public final class JEBConfigScreen extends Screen {
             case AUTOMATIC_FULL_INTERVAL_MINUTES -> value -> state.working.automaticSchedule.full.intervalMinutes = value;
             case AUTOMATIC_PARTIAL_INTERVAL_MINUTES -> value -> state.working.automaticSchedule.partial.intervalMinutes = value;
             case AUTOMATIC_DIFFERENTIAL_INTERVAL_MINUTES -> value -> state.working.automaticSchedule.differential.intervalMinutes = value;
+            case STARTUP_FULL_MINIMUM_AGE -> value -> state.working.startupBackupThreshold.fullMinutes = value;
+            case STARTUP_PARTIAL_MINIMUM_AGE -> value -> state.working.startupBackupThreshold.partialMinutes = value;
+            case STARTUP_DIFFERENTIAL_MINIMUM_AGE -> value -> state.working.startupBackupThreshold.differentialMinutes = value;
             case KEEP_FULL -> value -> state.working.retention.full = value;
             case KEEP_PARTIAL -> value -> state.working.retention.incremental = value;
             case KEEP_DIFFERENTIAL -> value -> state.working.retention.differential = value;
             case MAX_TOTAL_SIZE_MB -> value -> state.working.retention.maxTotalSizeMb = value;
             case MINIMUM_FREE_SPACE_RESERVE_MB -> value -> state.working.minimumFreeSpaceReserveMb = value;
             case THREAD_COUNT -> value -> state.working.threadCount = value;
+            case ZSTD_COMPRESSION_LEVEL -> value -> state.working.zstdCompressionLevel = value;
             case PERMISSION_LEVEL -> value -> state.working.commandPermissionLevel = value;
             default -> throw new IllegalArgumentException("Not an int field: " + fieldId);
         };
@@ -257,6 +266,7 @@ public final class JEBConfigScreen extends Screen {
             case BACKUP_MODE -> enumRow(x, y, w, controlsW, fieldId, state.working.backupMode, BackupType.values(), value -> state.working.backupMode = value);
             case MESSAGE_CHANNEL -> enumRow(x, y, w, controlsW, fieldId, state.working.messageChannel, BackupMessageChannel.values(), value -> state.working.messageChannel = value);
             case INTEGRITY_MODE -> enumRow(x, y, w, controlsW, fieldId, state.working.integrityMode, BackupIntegrityMode.values(), value -> state.working.integrityMode = value);
+            case COMPRESSION_METHOD -> enumRow(x, y, w, controlsW, fieldId, state.working.compressionMethod, BackupCompressionMethod.values(), value -> state.working.compressionMethod = value);
             default -> throw new IllegalArgumentException("Unsupported enum field: " + fieldId);
         };
     }

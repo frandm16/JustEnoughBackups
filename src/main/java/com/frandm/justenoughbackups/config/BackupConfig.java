@@ -4,6 +4,7 @@ import com.frandm.justenoughbackups.WorldBackupMod;
 import com.frandm.justenoughbackups.backup.BackupConstants;
 import com.frandm.justenoughbackups.backup.BackupMessageChannel;
 import com.frandm.justenoughbackups.backup.model.BackupIntegrityMode;
+import com.frandm.justenoughbackups.backup.model.BackupCompressionMethod;
 import com.frandm.justenoughbackups.backup.model.BackupType;
 import com.frandm.justenoughbackups.scheduler.BackupScheduler;
 import com.google.gson.Gson;
@@ -26,6 +27,7 @@ public final class BackupConfig {
     public boolean pauseAutomaticBackupsWithoutPlayers = true;
     public boolean backupOnServerStart = false;
     public boolean backupOnServerStop = false;
+    public StartupBackupThreshold startupBackupThreshold = new StartupBackupThreshold();
     public boolean automaticBackupsEnabled = true; // not in use anymore
     public int automaticIntervalMinutes = 60; // not in use anymore
     public AutomaticSchedule automaticSchedule;
@@ -37,6 +39,8 @@ public final class BackupConfig {
     public boolean includeSummaryFile = false;
     public int minimumFreeSpaceReserveMb = 512;
     public int threadCount = Math.max(1, Runtime.getRuntime().availableProcessors() - 2);
+    public BackupCompressionMethod compressionMethod = BackupCompressionMethod.DEFLATED;
+    public int zstdCompressionLevel = 3;
     public Retention retention = new Retention();
     public Popup popup = new Popup();
     public String backupDirectory = BackupConstants.DEFAULT_BACKUP_DIRECTORY;
@@ -98,6 +102,7 @@ public final class BackupConfig {
         copy.pauseAutomaticBackupsWithoutPlayers = pauseAutomaticBackupsWithoutPlayers;
         copy.backupOnServerStart = backupOnServerStart;
         copy.backupOnServerStop = backupOnServerStop;
+        copy.startupBackupThreshold = startupBackupThreshold.copy();
         copy.automaticIntervalMinutes = automaticIntervalMinutes;
         copy.automaticSchedule = automaticSchedule.copy();
         copy.automaticBackupWarningEnabled = automaticBackupWarningEnabled;
@@ -108,6 +113,8 @@ public final class BackupConfig {
         copy.includeSummaryFile = includeSummaryFile;
         copy.minimumFreeSpaceReserveMb = minimumFreeSpaceReserveMb;
         copy.threadCount = threadCount;
+        copy.compressionMethod = compressionMethod;
+        copy.zstdCompressionLevel = zstdCompressionLevel;
         copy.backupDirectory = backupDirectory;
         copy.tempBackupDirectory = tempBackupDirectory;
         copy.retention = retention.copy();
@@ -194,6 +201,11 @@ public final class BackupConfig {
             automaticSchedule.normalize();
         }
 
+        if (startupBackupThreshold == null) {
+            startupBackupThreshold = new StartupBackupThreshold();
+        }
+        startupBackupThreshold.normalize();
+
         if (automaticBackupWarningMinutes < 1) {
             automaticBackupWarningMinutes = defaults().automaticBackupWarningMinutes;
         }
@@ -212,6 +224,8 @@ public final class BackupConfig {
         }
         minimumFreeSpaceReserveMb = Math.max(0, minimumFreeSpaceReserveMb);
         threadCount = Math.clamp(threadCount, 1, Math.max(1, Runtime.getRuntime().availableProcessors()));
+        if (compressionMethod == null) compressionMethod = BackupCompressionMethod.DEFLATED;
+        zstdCompressionLevel = Math.clamp(zstdCompressionLevel, 1, 22);
         if (retention == null) {
             retention = new Retention();
         }
@@ -294,6 +308,34 @@ public final class BackupConfig {
 
         private void normalize() {
             intervalMinutes = Math.max(1, intervalMinutes);
+        }
+    }
+
+    public static final class StartupBackupThreshold {
+        public int fullMinutes;
+        public int partialMinutes;
+        public int differentialMinutes;
+
+        public int forType(BackupType type) {
+            return switch (type) {
+                case FULL -> fullMinutes;
+                case PARTIAL -> partialMinutes;
+                case DIFFERENTIAL -> differentialMinutes;
+            };
+        }
+
+        private void normalize() {
+            fullMinutes = Math.max(0, fullMinutes);
+            partialMinutes = Math.max(0, partialMinutes);
+            differentialMinutes = Math.max(0, differentialMinutes);
+        }
+
+        public StartupBackupThreshold copy() {
+            StartupBackupThreshold copy = new StartupBackupThreshold();
+            copy.fullMinutes = fullMinutes;
+            copy.partialMinutes = partialMinutes;
+            copy.differentialMinutes = differentialMinutes;
+            return copy;
         }
     }
 

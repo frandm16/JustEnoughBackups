@@ -21,6 +21,7 @@ It supports:
 - restore preparation from the backup browser
 - a configurable client HUD popup with live preview
 - parallel (multi-threaded) scanning, compression, and restore extraction
+- optional Zstandard compression inside ZIP archives
 - optional Mod Menu integration
 
 The mod is designed to keep the actual backup logic on the server side while exposing management and configuration through a client UI.
@@ -81,6 +82,8 @@ Backups and restores use multiple worker threads to speed up large worlds:
 - **restore extraction**: backup ZIP files are extracted across `threadCount` threads
 
 The number of threads is controlled by `threadCount` in the config and can be set between `1` and the maximum number of CPU threads (default: CPU cores minus two). Lower values reduce CPU usage; higher values speed up large worlds.
+
+ZIP compression uses `DEFLATED` by default. `compressionMethod: "ZSTANDARD"` writes ZIP method 93 entries and `zstdCompressionLevel` controls the level (1–22). Existing DEFLATED archives remain supported. Zstandard archives require the mod's Zstandard reader and may not open in older ZIP utilities.
 
 ### Backup management UI
 
@@ -179,6 +182,9 @@ Main config areas:
 - `integrityMode`
 - `minimumFreeSpaceReserveMb`
 - `threadCount`
+- `compressionMethod`
+- `zstdCompressionLevel`
+- `startupBackupThreshold`
 - `backupDirectory`
 - `tempBackupDirectory`
 - `excludedPaths`
@@ -195,17 +201,18 @@ Main config areas:
 `tempBackupDirectory` controls where the backup ZIP is compressed before being moved into `backupDirectory`. It may be relative to the game directory or an absolute path. Leave it empty to compress inside the backup directory (default). Pointing it at a local drive is recommended when backups are stored on a slow or networked drive, since only the finished ZIP is then transferred to the backup location.
 
 `excludedPaths` uses paths relative to the world root. A folder entry excludes that full subtree, while a file entry excludes only that specific file.
-
-`excludeSafetyBackupsFromIncremental` prevents "Old_World restore" safety backups from being used as base for incremental/differential backups.
-
-`threadCount` controls parallel scanning, compression, and restore extraction, and is clamped between `1` and the number of CPU threads.
-
 Examples:
 
 ```text
 voxy
 voxy/cache.db
 ```
+
+`excludeSafetyBackupsFromIncremental` prevents "Old_World restore" safety backups from being used as base for incremental/differential backups.
+
+`threadCount` controls parallel scanning, compression, and restore extraction, and is clamped between `1` and the number of CPU threads.
+
+`startupBackupThreshold` sets the minimum age in minutes for the most recent successful backup of each type before a startup backup of that type runs. A value of `0` keeps the existing behavior. Scheduled and shutdown backups are unaffected.
 
 Before creating a backup, the mod also checks free disk space on the backup destination filesystem. The check is conservative and requires:
 

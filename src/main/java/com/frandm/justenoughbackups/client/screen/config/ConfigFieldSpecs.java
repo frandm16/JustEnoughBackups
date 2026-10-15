@@ -7,6 +7,8 @@ final class ConfigFieldSpecs {
             //Backups tab
             ConfigFieldSpec.of(ConfigFieldId.BACKUP_MODE),
             ConfigFieldSpec.intField(ConfigFieldId.THREAD_COUNT, 1, Math.max(1, Runtime.getRuntime().availableProcessors())),
+            ConfigFieldSpec.of(ConfigFieldId.COMPRESSION_METHOD),
+            ConfigFieldSpec.intField(ConfigFieldId.ZSTD_COMPRESSION_LEVEL, 1, 22),
             ConfigFieldSpec.of(ConfigFieldId.AUTOMATIC_BACKUPS_HEADER),
             ConfigFieldSpec.of(ConfigFieldId.AUTOMATIC_FULL_ENABLED),
             ConfigFieldSpec.intField(ConfigFieldId.AUTOMATIC_FULL_INTERVAL_MINUTES, 1, Integer.MAX_VALUE),
@@ -17,6 +19,9 @@ final class ConfigFieldSpecs {
             ConfigFieldSpec.of(ConfigFieldId.EXCLUDE_SAFETY_BACKUPS_FROM_INCREMENTAL),
             ConfigFieldSpec.of(ConfigFieldId.PAUSE_WITHOUT_PLAYERS),
             ConfigFieldSpec.of(ConfigFieldId.BACKUP_ON_START),
+            ConfigFieldSpec.intField(ConfigFieldId.STARTUP_FULL_MINIMUM_AGE, 0, Integer.MAX_VALUE),
+            ConfigFieldSpec.intField(ConfigFieldId.STARTUP_PARTIAL_MINIMUM_AGE, 0, Integer.MAX_VALUE),
+            ConfigFieldSpec.intField(ConfigFieldId.STARTUP_DIFFERENTIAL_MINIMUM_AGE, 0, Integer.MAX_VALUE),
             ConfigFieldSpec.of(ConfigFieldId.BACKUP_ON_STOP),
             ConfigFieldSpec.of(ConfigFieldId.AUTOMATIC_BACKUP_WARNING),
             ConfigFieldSpec.intField(ConfigFieldId.AUTOMATIC_BACKUP_WARNING_MINUTES, 1, Integer.MAX_VALUE),

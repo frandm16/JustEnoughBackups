@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## 1.2.0.8+26.3 - 15/10/2026
+
+### Added
+
+- Configurable per-type minimum age for startup backups. A value of `0` preserves the previous behavior.
+- Optional Zstandard compression for ZIP entries with a configurable level; existing DEFLATED backups remain readable.
+
 ## 1.2.0.7+26.3 - 15/09/2026
 
 ### Fixed
