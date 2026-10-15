@@ -6,6 +6,7 @@ import com.frandm.justenoughbackups.backup.BackupMessageChannel;
 import com.frandm.justenoughbackups.backup.model.BackupIntegrityMode;
 import com.frandm.justenoughbackups.backup.model.BackupCompressionMethod;
 import com.frandm.justenoughbackups.backup.model.BackupType;
+import com.frandm.justenoughbackups.backup.storage.remote.RemoteProviderType;
 import com.frandm.justenoughbackups.scheduler.BackupScheduler;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -41,6 +42,7 @@ public final class BackupConfig {
     public int threadCount = Math.max(1, Runtime.getRuntime().availableProcessors() - 2);
     public BackupCompressionMethod compressionMethod = BackupCompressionMethod.DEFLATED;
     public int zstdCompressionLevel = 3;
+    public RemoteStorage remoteStorage = new RemoteStorage();
     public Retention retention = new Retention();
     public Popup popup = new Popup();
     public String backupDirectory = BackupConstants.DEFAULT_BACKUP_DIRECTORY;
@@ -115,6 +117,7 @@ public final class BackupConfig {
         copy.threadCount = threadCount;
         copy.compressionMethod = compressionMethod;
         copy.zstdCompressionLevel = zstdCompressionLevel;
+        copy.remoteStorage = remoteStorage.copy();
         copy.backupDirectory = backupDirectory;
         copy.tempBackupDirectory = tempBackupDirectory;
         copy.retention = retention.copy();
@@ -226,6 +229,8 @@ public final class BackupConfig {
         threadCount = Math.clamp(threadCount, 1, Math.max(1, Runtime.getRuntime().availableProcessors()));
         if (compressionMethod == null) compressionMethod = BackupCompressionMethod.DEFLATED;
         zstdCompressionLevel = Math.clamp(zstdCompressionLevel, 1, 22);
+        if (remoteStorage == null) remoteStorage = new RemoteStorage();
+        remoteStorage.normalize();
         if (retention == null) {
             retention = new Retention();
         }
@@ -335,6 +340,55 @@ public final class BackupConfig {
             copy.fullMinutes = fullMinutes;
             copy.partialMinutes = partialMinutes;
             copy.differentialMinutes = differentialMinutes;
+            return copy;
+        }
+    }
+
+    public static final class RemoteStorage {
+        public boolean enabled;
+        public RemoteProviderType provider = RemoteProviderType.S3;
+        public String s3Endpoint = "";
+        public String s3Region = "us-east-1";
+        public String s3Bucket = "";
+        public String s3Prefix = "justenoughbackups";
+        public String s3AccessKey = "";
+        public String s3SecretKey = "";
+        public String webDavUrl = "";
+        public String webDavPrefix = "justenoughbackups";
+        public String webDavUsername = "";
+        public String webDavPassword = "";
+        public int maxRetries = 3;
+
+        private void normalize() {
+            if (provider == null) provider = RemoteProviderType.S3;
+            if (s3Endpoint == null) s3Endpoint = "";
+            if (s3Region == null || s3Region.isBlank()) s3Region = "us-east-1";
+            if (s3Bucket == null) s3Bucket = "";
+            if (s3Prefix == null) s3Prefix = "";
+            if (s3AccessKey == null) s3AccessKey = "";
+            if (s3SecretKey == null) s3SecretKey = "";
+            if (webDavUrl == null) webDavUrl = "";
+            if (webDavPrefix == null) webDavPrefix = "";
+            if (webDavUsername == null) webDavUsername = "";
+            if (webDavPassword == null) webDavPassword = "";
+            maxRetries = Math.clamp(maxRetries, 0, 10);
+        }
+
+        private RemoteStorage copy() {
+            RemoteStorage copy = new RemoteStorage();
+            copy.enabled = enabled;
+            copy.provider = provider;
+            copy.s3Endpoint = s3Endpoint;
+            copy.s3Region = s3Region;
+            copy.s3Bucket = s3Bucket;
+            copy.s3Prefix = s3Prefix;
+            copy.s3AccessKey = s3AccessKey;
+            copy.s3SecretKey = s3SecretKey;
+            copy.webDavUrl = webDavUrl;
+            copy.webDavPrefix = webDavPrefix;
+            copy.webDavUsername = webDavUsername;
+            copy.webDavPassword = webDavPassword;
+            copy.maxRetries = maxRetries;
             return copy;
         }
     }

@@ -193,6 +193,75 @@ public final class BackupStorage {
     public record BackupCreation(BackupManifest manifest, List<BackupManifest> manifests, BackupStatus status) {
     }
 
+    public static BackupCreation createRemoteBackup(
+            Path worldPath, String worldName, String worldDirectoryName, BackupConfig config,
+            BackupType requestedType, String reason, String requestedName, boolean isSafetyBackup,
+            List<BackupManifest> existing, com.frandm.justenoughbackups.backup.storage.remote.RemoteBackupCatalog catalog,
+            BackupProgressListener listener
+    ) throws IOException {
+        Path backupDir = config.resolveBackupRoot().resolve(worldDirectoryName);
+        Files.createDirectories(backupDir);
+        Map<String, BackupManifest.FileState> snapshot = WorldSnapshotter.snapshot(worldPath, requestedType, reason, listener);
+        BackupType type = requestedType;
+        BackupManifest base = type == BackupType.FULL ? null : findBaseManifest(existing, type, config);
+        if (type != BackupType.FULL && (hasNoFullBackup(existing) || base == null)) {
+            WorldBackupMod.LOGGER.info("No remote base backup found for {} backup. Falling back to FULL backup.", type);
+            type = BackupType.FULL;
+            base = null;
+        }
+
+        String timestamp = LocalDateTime.now().format(BackupConstants.FILE_TIME);
+        String id = type.commandName() + "-" + timestamp + "-" + java.util.UUID.randomUUID().toString().substring(0, 8);
+        String zipName = resolveBackupFileName(backupDir, requestedName, id + ".zip");
+        BackupManifest manifest = new BackupManifest();
+        manifest.id = id;
+        manifest.type = type;
+        manifest.createdAt = Instant.now().toString();
+        manifest.worldName = worldName;
+        manifest.worldDirectoryName = worldDirectoryName;
+        manifest.baseBackupId = base == null ? null : base.id;
+        manifest.zipFileName = zipName;
+        manifest.reason = reason;
+        manifest.isSafetyBackup = isSafetyBackup;
+        manifest.integrityMode = config.integrityMode;
+        manifest.compressionMethod = config.compressionMethod.name();
+        manifest.compressionLevel = config.compressionMethod == BackupCompressionMethod.ZSTANDARD ? config.zstdCompressionLevel : -1;
+        manifest.includedFiles.addAll(includedFiles(type, snapshot, base));
+        manifest.snapshot.putAll(snapshot);
+        Path scratch = config.resolveTempRoot().resolve(worldDirectoryName);
+        Path worldAbs = worldPath.toAbsolutePath().normalize();
+        Path scratchAbs = scratch.toAbsolutePath().normalize();
+        if (scratchAbs.startsWith(worldAbs) || worldAbs.startsWith(scratchAbs))
+            throw new IOException("tempBackupDirectory must not overlap the world directory: " + scratchAbs);
+        Files.createDirectories(scratch);
+
+        java.io.PipedInputStream input = new java.io.PipedInputStream(1024 * 1024);
+        java.io.PipedOutputStream output = new java.io.PipedOutputStream(input);
+        java.util.concurrent.CompletableFuture<BackupStatus> statusFuture = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+            try { return writeBackupZipToStream(worldPath, scratch, output, manifest, manifest.includedFiles, snapshot, config, listener); }
+            catch (Throwable exception) {
+                try { output.close(); } catch (IOException ignored) { }
+                throw new java.util.concurrent.CompletionException(exception);
+            }
+        });
+        try (input) {
+            catalog.uploadAndPublish(manifest, new BackupStatus(), input, statusFuture);
+        } catch (IOException | RuntimeException exception) {
+            statusFuture.cancel(true);
+            throw exception;
+        }
+        BackupStatus status;
+        try { status = statusFuture.join(); }
+        catch (java.util.concurrent.CompletionException exception) {
+            Throwable cause = exception.getCause();
+            if (cause instanceof IOException io) throw io;
+            throw new IOException("Remote archive creation failed.", cause);
+        }
+        List<BackupManifest> manifests = new ArrayList<>(existing);
+        manifests.add(manifest);
+        return new BackupCreation(manifest, List.copyOf(manifests), status);
+    }
+
     private record WriteResult(BackupManifest manifest, BackupStatus status) {
     }
 
@@ -420,6 +489,36 @@ public final class BackupStorage {
             BackupConfig config,
             BackupProgressListener progressListener
     ) throws IOException {
+        Files.createDirectories(backupFile.getParent());
+        try (OutputStream fileOut = Files.newOutputStream(backupFile)) {
+            return writeBackupZip(worldPath, backupFile.getParent(), fileOut, manifest, includedFiles,
+                    currentSnapshot, integrityMode, includeSummaryFile, config, progressListener);
+        }
+    }
+
+    /** Writes a complete archive to a caller-owned stream; no complete ZIP is staged locally. */
+    public static BackupStatus writeBackupZipToStream(
+            Path worldPath, Path scratchDirectory, OutputStream output, BackupManifest manifest,
+            List<String> includedFiles, Map<String, BackupManifest.FileState> currentSnapshot,
+            BackupConfig config, BackupProgressListener progressListener
+    ) throws IOException {
+        Files.createDirectories(scratchDirectory);
+        return writeBackupZip(worldPath, scratchDirectory, output, manifest, includedFiles,
+                currentSnapshot, config.integrityMode, config.includeSummaryFile, config, progressListener);
+    }
+
+    private static BackupStatus writeBackupZip(
+            Path worldPath,
+            Path scratchDirectory,
+            OutputStream output,
+            BackupManifest manifest,
+            List<String> includedFiles,
+            Map<String, BackupManifest.FileState> currentSnapshot,
+            BackupIntegrityMode integrityMode,
+            boolean includeSummaryFile,
+            BackupConfig config,
+            BackupProgressListener progressListener
+    ) throws IOException {
         BackupStatus status = new BackupStatus();
         status.backupId = manifest.id;
         status.type = manifest.type;
@@ -452,11 +551,10 @@ public final class BackupStorage {
 
         int threadCount = Math.clamp(config.threadCount, 1, Math.max(1, Runtime.getRuntime().availableProcessors()));
 
-        try (OutputStream fileOut = Files.newOutputStream(backupFile);
-             ZipArchiveOutputStream zipOut = new ZipArchiveOutputStream(new ProgressCountingOutputStream(fileOut, progress::bytesWritten))) {
+        try (ZipArchiveOutputStream zipOut = new ZipArchiveOutputStream(new ProgressCountingOutputStream(output, progress::bytesWritten))) {
             zipOut.setUseZip64(Zip64Mode.AsNeeded);
             if (config.compressionMethod == BackupCompressionMethod.ZSTANDARD) {
-                writeEntriesZstandard(worldPath, backupFile.getParent(), zipOut, toWrite, manifest, status, finalSnapshot, config, progress);
+                writeEntriesZstandard(worldPath, scratchDirectory, zipOut, toWrite, manifest, status, finalSnapshot, config, progress);
             } else if (threadCount <= 1 || toWrite.size() <= 1) {
                 writeEntriesSerially(worldPath, zipOut, toWrite, manifest, status, finalSnapshot, integrityMode, progress);
             } else {

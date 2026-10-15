@@ -8,6 +8,7 @@ All notable changes to this project are documented in this file.
 
 - Configurable per-type minimum age for startup backups. A value of `0` preserves the previous behavior.
 - Optional Zstandard compression for ZIP entries with a configurable level; existing DEFLATED backups remain readable.
+- Optional S3-compatible and WebDAV backup storage with bounded streaming uploads, published catalogs, checksums, and remote retention.
 
 ## 1.2.0.7+26.3 - 15/09/2026
 

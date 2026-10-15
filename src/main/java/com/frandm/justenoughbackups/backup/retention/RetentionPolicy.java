@@ -45,6 +45,26 @@ public final class RetentionPolicy {
         return plan(backupDir, manifests, config, null, 0L);
     }
 
+    public static List<BackupManifest> planRemote(List<BackupManifest> manifests, Map<String, Long> sizes, BackupConfig config) {
+        Set<String> protectedIds = requiredChainIds(manifests, config);
+        LinkedHashSet<String> deletions = new LinkedHashSet<>();
+        List<BackupManifest> ordered = manifests.stream().sorted(Comparator.comparing(m -> m.createdAt)).toList();
+        for (BackupManifest manifest : ordered) {
+            if (!protectedIds.contains(manifest.id) && isOverLimit(manifest, manifests, protectedIds, config)) {
+                deletions.add(manifest.id);
+            }
+        }
+        long cap = toCapBytes(config);
+        long total = manifests.stream().mapToLong(m -> Math.max(0L, sizes.getOrDefault(m.id, 0L))).sum();
+        for (BackupManifest manifest : ordered) {
+            if (cap <= 0L || total <= cap) break;
+            if (protectedIds.contains(manifest.id) || deletions.contains(manifest.id)) continue;
+            deletions.add(manifest.id);
+            total -= Math.max(0L, sizes.getOrDefault(manifest.id, 0L));
+        }
+        return ordered.stream().filter(m -> deletions.contains(m.id)).toList();
+    }
+
     public static RetentionDecision planWithPending(Path backupDir, List<BackupManifest> manifests, BackupConfig config, BackupManifest pendingManifest, long pendingBytes) throws IOException {
         return plan(backupDir, manifests, config, pendingManifest, pendingBytes);
     }

@@ -15,6 +15,7 @@ import com.frandm.justenoughbackups.backup.progress.BackupProgressPhase;
 import com.frandm.justenoughbackups.backup.restore.RestoreService;
 import com.frandm.justenoughbackups.backup.retention.RetentionPolicy;
 import com.frandm.justenoughbackups.backup.storage.BackupStorage;
+import com.frandm.justenoughbackups.backup.storage.remote.RemoteBackupCatalog;
 import com.frandm.justenoughbackups.config.BackupConfig;
 import com.frandm.justenoughbackups.scheduler.BackupScheduler;
 import net.minecraft.server.MinecraftServer;
@@ -100,19 +101,20 @@ public final class BackupService {
                 lastProgress.set(initialProgress(type, reason));
                 BackupProgressBroadcaster.broadcast(server, lastProgress.get());
                 BackupStorage.resetAbortState();
-                BackupStorage.BackupCreation creation = BackupStorage.createBackupWithManifests(
-                        worldPath,
-                        worldName,
-                        worldDirectoryName,
-                        config,
-                        type,
-                        reason,
-                        requestedName,
-                        isSafetyBackup,
-                        watchdog.listener()
-                );
+                BackupStorage.BackupCreation creation;
+                if (config.remoteStorage != null && config.remoteStorage.enabled) {
+                    try (RemoteBackupCatalog catalog = new RemoteBackupCatalog(config.remoteStorage, worldDirectoryName)) {
+                        List<BackupManifest> remoteManifests = catalog.list().stream().map(RemoteBackupCatalog.CatalogEntry::manifest).toList();
+                        creation = BackupStorage.createRemoteBackup(worldPath, worldName, worldDirectoryName, config,
+                                type, reason, requestedName, isSafetyBackup, remoteManifests, catalog, watchdog.listener());
+                        catalog.applyRetention(config);
+                    }
+                } else {
+                    creation = BackupStorage.createBackupWithManifests(worldPath, worldName, worldDirectoryName,
+                            config, type, reason, requestedName, isSafetyBackup, watchdog.listener());
+                    RetentionPolicy.apply(worldDirectoryName, config, creation.manifests());
+                }
                 BackupManifest manifest = creation.manifest();
-                RetentionPolicy.apply(worldDirectoryName, config, creation.manifests());
                 watchdog.stop();
                 broadcastTerminal(server, manifest, creation.status());
                 WorldBackupMod.LOGGER.info("Backup created: {}", manifest.id);
@@ -141,6 +143,13 @@ public final class BackupService {
     }
 
     public static List<BackupManifest> listBackups(MinecraftServer server) throws IOException {
+        BackupConfig config = BackupConfig.get();
+        if (config.remoteStorage != null && config.remoteStorage.enabled) {
+            try (RemoteBackupCatalog catalog = new RemoteBackupCatalog(config.remoteStorage, BackupPaths.worldDirectoryName(server, server.getWorldPath(LevelResource.ROOT)))) {
+                return catalog.list().stream().map(RemoteBackupCatalog.CatalogEntry::manifest)
+                        .sorted(Comparator.comparing(manifest -> manifest.createdAt)).toList();
+            }
+        }
         return BackupStorage.readManifests(BackupPaths.worldBackupDir(server)).stream()
                 .sorted(Comparator.comparing(manifest -> manifest.createdAt))
                 .toList();
@@ -210,7 +219,7 @@ public final class BackupService {
     }
 
     public static List<BackupSummary> listBackupSummaries(MinecraftServer server) throws IOException {
-        List<BackupManifest> manifests = BackupStorage.readManifests(BackupPaths.worldBackupDir(server)).stream()
+        List<BackupManifest> manifests = listBackups(server).stream()
                 .sorted(Comparator.comparing((BackupManifest manifest) -> value(manifest.createdAt)).reversed())
                 .toList();
         Map<String, String> displayNames = new HashMap<>();
@@ -224,10 +233,36 @@ public final class BackupService {
     }
 
     public static void renameBackup(MinecraftServer server, String backupId, String requestedName) throws IOException {
+        BackupConfig config = BackupConfig.get();
+        if (config.remoteStorage != null && config.remoteStorage.enabled) {
+            String worldDirectoryName = BackupPaths.worldDirectoryName(server, server.getWorldPath(LevelResource.ROOT));
+            try (RemoteBackupCatalog catalog = new RemoteBackupCatalog(config.remoteStorage, worldDirectoryName)) {
+                BackupManifest manifest = catalog.list().stream().map(RemoteBackupCatalog.CatalogEntry::manifest)
+                        .filter(item -> Objects.equals(item.id, backupId)).findFirst()
+                        .orElseThrow(() -> new IOException("Backup not found: " + backupId));
+                catalog.rename(manifest, requestedName);
+                return;
+            }
+        }
         BackupStorage.renameBackup(BackupPaths.worldBackupDir(server), backupId, requestedName);
     }
 
     public static void deleteBackup(MinecraftServer server, String backupId) throws IOException {
+        BackupConfig config = BackupConfig.get();
+        if (config.remoteStorage != null && config.remoteStorage.enabled) {
+            String worldDirectoryName = BackupPaths.worldDirectoryName(server, server.getWorldPath(LevelResource.ROOT));
+            try (RemoteBackupCatalog catalog = new RemoteBackupCatalog(config.remoteStorage, worldDirectoryName)) {
+                List<RemoteBackupCatalog.CatalogEntry> entries = catalog.list();
+                BackupManifest dependent = entries.stream().map(RemoteBackupCatalog.CatalogEntry::manifest)
+                        .filter(manifest -> Objects.equals(manifest.baseBackupId, backupId)).findFirst().orElse(null);
+                if (dependent != null) throw new IOException("Required by backup: " + BackupStorage.displayName(dependent));
+                BackupManifest target = entries.stream().map(RemoteBackupCatalog.CatalogEntry::manifest)
+                        .filter(manifest -> Objects.equals(manifest.id, backupId)).findFirst()
+                        .orElseThrow(() -> new IOException("Backup not found: " + backupId));
+                catalog.delete(target.id, target.zipFileName);
+                return;
+            }
+        }
         List<BackupManifest> manifests = BackupStorage.readManifests(BackupPaths.worldBackupDir(server));
         BackupManifest dependent = manifests.stream()
                 .filter(manifest -> Objects.equals(manifest.baseBackupId, backupId))
