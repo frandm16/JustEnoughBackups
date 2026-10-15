@@ -105,9 +105,18 @@ public final class BackupService {
                 if (config.remoteStorage != null && config.remoteStorage.enabled) {
                     try (RemoteBackupCatalog catalog = new RemoteBackupCatalog(config.remoteStorage, worldDirectoryName)) {
                         List<BackupManifest> remoteManifests = catalog.list().stream().map(RemoteBackupCatalog.CatalogEntry::manifest).toList();
-                        creation = BackupStorage.createRemoteBackup(worldPath, worldName, worldDirectoryName, config,
+                        creation = createRemoteBackupWithRetries(worldPath, worldName, worldDirectoryName, config,
                                 type, reason, requestedName, isSafetyBackup, remoteManifests, catalog, watchdog.listener());
-                        catalog.applyRetention(config);
+                        try { catalog.applyRetention(config); }
+                        catch (IOException retentionFailure) {
+                            WorldBackupMod.LOGGER.error("Remote backup succeeded, but remote retention could not be completed.", retentionFailure);
+                        }
+                        try {
+                            int cleaned = catalog.cleanupAbandonedUploads();
+                            if (cleaned > 0) WorldBackupMod.LOGGER.info("Removed {} abandoned remote upload(s).", cleaned);
+                        } catch (IOException cleanupFailure) {
+                            WorldBackupMod.LOGGER.warn("Unable to clean abandoned remote uploads.", cleanupFailure);
+                        }
                     }
                 } else {
                     creation = BackupStorage.createBackupWithManifests(worldPath, worldName, worldDirectoryName,
@@ -140,6 +149,32 @@ public final class BackupService {
                 }
             }
         });
+    }
+
+    private static BackupStorage.BackupCreation createRemoteBackupWithRetries(
+            Path worldPath, String worldName, String worldDirectoryName, BackupConfig config, BackupType type,
+            String reason, String requestedName, boolean isSafetyBackup, List<BackupManifest> manifests,
+            RemoteBackupCatalog catalog, BackupProgressListener progress
+    ) throws IOException {
+        int retries = Math.clamp(config.remoteStorage.maxRetries, 0, 10);
+        IOException lastFailure = null;
+        for (int attempt = 0; attempt <= retries; attempt++) {
+            try {
+                return BackupStorage.createRemoteBackup(worldPath, worldName, worldDirectoryName, config, type,
+                        reason, requestedName, isSafetyBackup, manifests, catalog, progress);
+            } catch (IOException exception) {
+                lastFailure = exception;
+                if (attempt == retries) break;
+                WorldBackupMod.LOGGER.warn("Remote backup upload failed (attempt {} of {}). Retrying the streamed archive.",
+                        attempt + 1, retries + 1);
+                try { Thread.sleep(Math.min(1000L << attempt, 15_000L)); }
+                catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException("Remote backup retry interrupted.", interrupted);
+                }
+            }
+        }
+        throw new IOException("Remote backup upload failed after " + (retries + 1) + " attempt(s).", lastFailure);
     }
 
     public static List<BackupManifest> listBackups(MinecraftServer server) throws IOException {
@@ -305,6 +340,9 @@ public final class BackupService {
 
         CompletableFuture<PendingRestore> prepared = CompletableFuture.supplyAsync(() -> {
             try {
+                if (BackupConfig.get().remoteStorage != null && BackupConfig.get().remoteStorage.enabled) {
+                    return prepareRemoteRestore(server, worldPath, backup, byId, restoreProgress);
+                }
                 BackupManifest target = byId
                         ? BackupStorage.findById(backupDir, backup)
                         : BackupStorage.findByZipName(backupDir, backup);
@@ -327,6 +365,40 @@ public final class BackupService {
                     BackupMessages.broadcastRestorePrepared(server, restore.backupId());
                     return restore;
                 });
+    }
+
+    private static PendingRestore prepareRemoteRestore(MinecraftServer server, Path worldPath, String requested,
+                                                       boolean byId, BackupProgressListener progress) throws IOException {
+        BackupConfig config = BackupConfig.get();
+        String worldDirectoryName = BackupPaths.worldDirectoryName(server, worldPath);
+        try (RemoteBackupCatalog catalog = new RemoteBackupCatalog(config.remoteStorage, worldDirectoryName)) {
+            List<RemoteBackupCatalog.CatalogEntry> entries = catalog.list();
+            RemoteBackupCatalog.CatalogEntry selected = entries.stream()
+                    .filter(entry -> byId ? entry.manifest().id.equals(requested)
+                            : entry.manifest().zipFileName.equals(requested)
+                            || BackupStorage.displayName(entry.manifest()).equals(requested))
+                    .findFirst().orElseThrow(() -> new IOException("Remote backup not found: " + requested));
+            Map<String, RemoteBackupCatalog.CatalogEntry> byBackupId = new HashMap<>();
+            entries.forEach(entry -> byBackupId.put(entry.manifest().id, entry));
+            List<BackupManifest> chain = new java.util.ArrayList<>();
+            BackupManifest current = selected.manifest();
+            while (current != null) {
+                RemoteBackupCatalog.CatalogEntry entry = byBackupId.get(current.id);
+                if (entry == null || entry.sha256() == null || entry.sha256().isBlank())
+                    throw new IOException("Remote backup is missing its integrity metadata: " + current.id);
+                chain.add(0, current);
+                if (current.type == BackupType.FULL) break;
+                if (current.baseBackupId == null) throw new IOException("Remote backup chain has no full base: " + current.id);
+                RemoteBackupCatalog.CatalogEntry base = byBackupId.get(current.baseBackupId);
+                if (base == null) throw new IOException("Missing remote base backup: " + current.baseBackupId);
+                current = base.manifest();
+            }
+            if (chain.isEmpty() || chain.getFirst().type != BackupType.FULL)
+                throw new IOException("Remote restore chain does not start with a full backup.");
+            Path localBackupDir = BackupPaths.worldBackupDir(server);
+            return RestoreService.prepareRemoteRestore(localBackupDir, worldPath, selected.manifest(), chain,
+                    byBackupId, catalog, requested, progress);
+        }
     }
 
     private static CompletableFuture<PendingRestore> runSafetyBackup(MinecraftServer server, PendingRestore restore) {

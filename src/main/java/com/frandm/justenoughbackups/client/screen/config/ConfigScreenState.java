@@ -53,6 +53,7 @@ final class ConfigScreenState {
                 working.minimumFreeSpaceReserveMb = defaults.minimumFreeSpaceReserveMb;
                 working.compressionMethod = defaults.compressionMethod;
                 working.zstdCompressionLevel = defaults.zstdCompressionLevel;
+                working.remoteStorage = defaults.remoteStorage;
                 working.excludeSafetyBackupsFromIncremental = defaults.excludeSafetyBackupsFromIncremental;
 
                 BackupConfig.AutomaticSchedule defaultSchedule = new BackupConfig.AutomaticSchedule();

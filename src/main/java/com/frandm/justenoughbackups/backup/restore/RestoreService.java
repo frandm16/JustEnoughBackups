@@ -10,7 +10,11 @@ import com.frandm.justenoughbackups.backup.model.BackupType;
 import com.frandm.justenoughbackups.backup.model.PendingRestore;
 import com.frandm.justenoughbackups.backup.model.RestoreIntent;
 import com.frandm.justenoughbackups.backup.progress.BackupProgressListener;
+import com.frandm.justenoughbackups.backup.progress.BackupProgress;
+import com.frandm.justenoughbackups.backup.progress.BackupProgressPhase;
+import com.frandm.justenoughbackups.backup.progress.BackupProgressState;
 import com.frandm.justenoughbackups.backup.storage.BackupStorage;
+import com.frandm.justenoughbackups.backup.storage.remote.RemoteBackupCatalog;
 import com.frandm.justenoughbackups.backup.storage.WorldSnapshotter;
 import com.frandm.justenoughbackups.config.BackupConfig;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
@@ -105,6 +109,87 @@ public final class RestoreService {
                 strict,
                 snapshot
         );
+    }
+
+    public static PendingRestore prepareRemoteRestore(
+            Path backupDir, Path worldPath, BackupManifest target, List<BackupManifest> chain,
+            Map<String, RemoteBackupCatalog.CatalogEntry> catalogEntries, RemoteBackupCatalog catalog,
+            String requestedName, BackupProgressListener progressListener
+    ) throws IOException {
+        String backupId = target.id;
+        String reason = "Restore " + backupId;
+        Path normalizedWorld = worldPath.toAbsolutePath().normalize();
+        Path worldParent = normalizedWorld.getParent();
+        if (worldParent == null) throw new IOException("Unable to resolve the parent directory of the world: " + normalizedWorld);
+        Path container = worldParent.resolve(BackupConstants.RESTORE_CONTAINER);
+        Path staging = container.resolve(BackupConstants.RESTORE_STAGING_PREFIX + backupId);
+        Path oldWorld = container.resolve(BackupConstants.RESTORE_OLD_PREFIX + backupId);
+        deleteRecursively(staging);
+        deleteRecursively(oldWorld);
+        Files.createDirectories(container);
+        Files.createDirectories(staging);
+        try {
+        boolean targetHasSummary = false;
+        boolean strict = true;
+        for (BackupManifest manifest : chain) {
+            RemoteBackupCatalog.CatalogEntry entry = catalogEntries.get(manifest.id);
+            if (entry == null) throw new IOException("Remote backup disappeared from the catalog: " + manifest.id);
+            BackupStatus status = entry.status();
+            if (status == null) strict = false;
+            else if (!status.completed || status.brokenFiles != null && !status.brokenFiles.isEmpty()) {
+                BackupIntegrityMode mode = manifest.integrityMode == null ? BackupConfig.get().integrityMode : manifest.integrityMode;
+                if (mode != BackupIntegrityMode.VERY_PERMISSIVE)
+                    throw new IOException("Backup integrity status is incomplete or damaged: " + manifest.id);
+                strict = false;
+                WorldBackupMod.LOGGER.warn("Remote backup {} has damaged status, but VERY_PERMISSIVE mode allows restore.", manifest.id);
+            }
+            java.util.concurrent.atomic.AtomicLong downloaded = new java.util.concurrent.atomic.AtomicLong();
+            java.util.concurrent.atomic.AtomicLong lastUpdate = new java.util.concurrent.atomic.AtomicLong();
+            java.io.InputStream downloadProgress = new java.io.FilterInputStream(catalog.download(manifest.zipFileName)) {
+                private void report(long count) {
+                    long current = downloaded.addAndGet(count);
+                    long now = System.currentTimeMillis();
+                    if (now - lastUpdate.get() < 500 && current < 1024 * 1024) return;
+                    lastUpdate.set(now);
+                    progressListener.onProgress(new BackupProgress(manifest.id, manifest.type, reason,
+                            BackupProgressPhase.DOWNLOADING, current, 0L, 0,
+                            manifest.includedFiles == null ? 0 : manifest.includedFiles.size(), BackupProgressState.RUNNING));
+                }
+                @Override public int read() throws IOException {
+                    int value = super.read();
+                    if (value >= 0) report(1);
+                    return value;
+                }
+                @Override public int read(byte[] bytes, int offset, int length) throws IOException {
+                    int count = super.read(bytes, offset, length);
+                    if (count > 0) report(count);
+                    return count;
+                }
+            };
+            boolean hasSummary = BackupStorage.extractBackup(downloadProgress, entry.sha256(),
+                    staging, manifest, progressListener);
+            progressListener.onProgress(new BackupProgress(manifest.id, manifest.type, reason,
+                    BackupProgressPhase.VERIFYING, downloaded.get(), downloaded.get(),
+                    manifest.includedFiles == null ? 0 : manifest.includedFiles.size(),
+                    manifest.includedFiles == null ? 0 : manifest.includedFiles.size(), BackupProgressState.COMPLETED));
+            if (manifest.id.equals(target.id)) targetHasSummary = hasSummary;
+        }
+        if (!targetHasSummary) Files.deleteIfExists(staging.resolve(BackupConstants.SUMMARY_ENTRY));
+        pruneToSnapshot(staging, target.snapshot);
+        BackupIntegrityMode integrityMode = target.integrityMode == null ? BackupConfig.get().integrityMode : target.integrityMode;
+        Map<String, BackupManifest.FileState> snapshot = Map.copyOf(target.snapshot);
+        verifyRestoreSnapshot(staging, integrityMode, strict, snapshot);
+        RestoreJournal.write(new RestoreIntent(RestoreIntent.CURRENT_VERSION, backupId, normalizedWorld, staging,
+                oldWorld, RestoreIntent.RestoreState.PREPARED, integrityMode, strict, snapshot));
+        WorldBackupMod.LOGGER.warn("Remote restore {} prepared from request {}. It will be applied when the server stops.", backupId, requestedName);
+        return new PendingRestore(backupId, backupDir, normalizedWorld, staging,
+                target.worldName == null ? backupDir.getFileName().toString() : target.worldName,
+                target.worldDirectoryName == null ? backupDir.getFileName().toString() : target.worldDirectoryName,
+                integrityMode, strict, snapshot);
+        } catch (IOException | RuntimeException failure) {
+            try { deleteRecursively(staging); } catch (IOException cleanup) { failure.addSuppressed(cleanup); }
+            throw failure;
+        }
     }
 
     public static void cancelPreparedRestore(PendingRestore restore) {

@@ -26,6 +26,17 @@ It supports:
 
 The mod is designed to keep the actual backup logic on the server side while exposing management and configuration through a client UI.
 
+## Remote storage
+
+Remote storage is disabled by default. Enable `remoteStorage.enabled` in `config/justenoughbackups.json`, then set `remoteStorage.provider` to `S3` or `WEBDAV` and fill the matching endpoint fields. For S3, `s3Bucket` and `s3Region` are required; `s3Endpoint` is optional for AWS and can point to an S3-compatible service. For WebDAV, set `webDavUrl` to the destination collection URL. The provider selector and enable switch are also available in the configuration screen; connection details remain in the server JSON config.
+
+Set credentials in the server config or use environment variables, which take precedence:
+
+- S3: `JEB_S3_ACCESS_KEY_ID` and `JEB_S3_SECRET_ACCESS_KEY`
+- WebDAV: `JEB_WEBDAV_USERNAME` and `JEB_WEBDAV_PASSWORD`
+
+Use HTTPS for remote endpoints. Plain HTTP is accepted only for loopback development endpoints. Remote backups are published after upload and SHA-256 verification; their catalog contains the metadata and checksum. Retention protects bases required by incremental chains. Restore downloads each required archive as a stream into isolated staging, verifies its checksum, then verifies the reconstructed world before preparing the world replacement. `remoteStorage.maxRetries` bounds upload attempts; a failed WebDAV upload restarts compression and transfer, while interrupted uploads are not resumed across process restarts. Do not place credentials in shared or committed config files.
+
 ## Screenshots
 
 ![Backup completed popup](assets/BackupCompleted.png)

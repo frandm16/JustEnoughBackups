@@ -1,6 +1,7 @@
 package com.frandm.justenoughbackups.client.screen.config;
 
 import com.frandm.justenoughbackups.config.ConfigColor;
+import com.frandm.justenoughbackups.backup.storage.remote.RemoteProviderType;
 import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
@@ -26,6 +27,18 @@ final class ConfigValidator {
         validateInt(errors, ConfigFieldId.MINIMUM_FREE_SPACE_RESERVE_MB, state.working.minimumFreeSpaceReserveMb, 0, Integer.MAX_VALUE, "screen.justenoughbackups.config.error.minimum_free_space_reserve_mb_min");
         validateInt(errors, ConfigFieldId.THREAD_COUNT, state.working.threadCount, 1, Math.max(1, Runtime.getRuntime().availableProcessors()), "screen.justenoughbackups.config.error.thread_count_range");
         validateInt(errors, ConfigFieldId.ZSTD_COMPRESSION_LEVEL, state.working.zstdCompressionLevel, 1, 22, "screen.justenoughbackups.config.error.zstd_level_range");
+        validateInt(errors, ConfigFieldId.REMOTE_STORAGE_RETRIES, state.working.remoteStorage.maxRetries, 0, 10, "screen.justenoughbackups.config.error.remote_retries_range");
+
+        if (state.working.remoteStorage.enabled) {
+            boolean valid = state.working.remoteStorage.provider == RemoteProviderType.S3
+                    ? !blank(state.working.remoteStorage.s3Bucket)
+                        && !blank(state.working.remoteStorage.s3Region)
+                        && (!blank(state.working.remoteStorage.s3AccessKey) || !blank(System.getenv("JEB_S3_ACCESS_KEY_ID")))
+                        && (!blank(state.working.remoteStorage.s3SecretKey) || !blank(System.getenv("JEB_S3_SECRET_ACCESS_KEY")))
+                    : !blank(state.working.remoteStorage.webDavUrl);
+            if (!valid) errors.add(new ValidationError(ConfigFieldId.REMOTE_STORAGE_ENABLED,
+                    Component.translatable("screen.justenoughbackups.config.error.remote_incomplete")));
+        }
 
         validateRawInt(errors, state, ConfigFieldId.INTERVAL_MINUTES, 1, Integer.MAX_VALUE);
         validateRawInt(errors, state, ConfigFieldId.AUTOMATIC_BACKUP_WARNING_MINUTES, 1, Integer.MAX_VALUE);
@@ -99,4 +112,6 @@ final class ConfigValidator {
     private static String value(String value) {
         return value == null ? "" : value;
     }
+
+    private static boolean blank(String value) { return value == null || value.isBlank(); }
 }

@@ -62,9 +62,11 @@ public final class RemoteBackupCatalog implements AutoCloseable {
     public UploadInfo uploadAndPublish(BackupManifest manifest, BackupStatus status, InputStream archive,
                                        java.util.concurrent.CompletableFuture<BackupStatus> completedStatus) throws IOException {
         String tempKey = worldPrefix + "temporary/" + manifest.id + "-" + UUID.randomUUID() + ".zip.uploading";
+        String tempCatalog = worldPrefix + "temporary/" + manifest.id + "-" + UUID.randomUUID() + ".json.uploading";
         String finalKey = archiveKey(manifest.zipFileName);
         boolean promoted = false;
         try {
+            if (objectExists(finalKey)) throw new IOException("A remote backup already uses this archive name: " + manifest.zipFileName);
             store.put(tempKey, archive);
             if (completedStatus != null) {
                 try { status = completedStatus.join(); }
@@ -75,16 +77,19 @@ public final class RemoteBackupCatalog implements AutoCloseable {
             UploadInfo verified = verify(tempKey);
             store.move(tempKey, finalKey);
             promoted = true;
+            UploadInfo published = verify(finalKey);
+            if (!verified.sha256().equals(published.sha256()) || verified.bytes() != published.bytes())
+                throw new IOException("Remote archive changed while being published; checksum verification failed.");
             manifest.compressionMethod = manifest.compressionMethod == null ? "DEFLATED" : manifest.compressionMethod;
             CatalogEnvelope envelope = new CatalogEnvelope(new BackupMetadata(manifest, status), verified.sha256());
             byte[] bytes = GSON.toJson(envelope).getBytes(java.nio.charset.StandardCharsets.UTF_8);
-            String tempCatalog = worldPrefix + "temporary/" + manifest.id + ".json.uploading";
             String finalCatalog = catalogKey(manifest.id);
             store.put(tempCatalog, new java.io.ByteArrayInputStream(bytes));
             store.move(tempCatalog, finalCatalog);
             return verified;
         } catch (IOException | RuntimeException exception) {
             try { store.delete(tempKey); } catch (IOException cleanup) { exception.addSuppressed(cleanup); }
+            try { store.delete(tempCatalog); } catch (IOException cleanup) { exception.addSuppressed(cleanup); }
             if (promoted) {
                 try { store.delete(finalKey); } catch (IOException cleanup) { exception.addSuppressed(cleanup); }
                 try { store.delete(catalogKey(manifest.id)); } catch (IOException cleanup) { exception.addSuppressed(cleanup); }
@@ -112,10 +117,14 @@ public final class RemoteBackupCatalog implements AutoCloseable {
         String oldName = manifest.zipFileName;
         String oldKey = archiveKey(oldName);
         String newKey = archiveKey(safeName);
+        if (oldKey.equals(newKey)) return;
+        if (objectExists(newKey)) throw new IOException("A remote backup already uses this archive name: " + safeName);
+        CatalogEntry existing = list().stream().filter(entry -> entry.manifest().id.equals(manifest.id)).findFirst()
+                .orElseThrow(() -> new IOException("Remote backup not found: " + manifest.id));
         store.move(oldKey, newKey);
         manifest.zipFileName = safeName;
         try {
-            updateCatalog(manifest);
+            publishCatalog(manifest, existing.status(), existing.sha256());
         } catch (IOException exception) {
             manifest.zipFileName = oldName;
             try { store.move(newKey, oldKey); } catch (IOException rollback) { exception.addSuppressed(rollback); }
@@ -126,11 +135,19 @@ public final class RemoteBackupCatalog implements AutoCloseable {
     public void updateCatalog(BackupManifest manifest) throws IOException {
         CatalogEntry existing = list().stream().filter(entry -> entry.manifest().id.equals(manifest.id)).findFirst()
                 .orElseThrow(() -> new IOException("Remote backup not found: " + manifest.id));
-        CatalogEnvelope envelope = new CatalogEnvelope(new BackupMetadata(manifest, existing.status()), existing.sha256());
-        String tempKey = worldPrefix + "temporary/" + manifest.id + ".json.uploading";
+        publishCatalog(manifest, existing.status(), existing.sha256());
+    }
+
+    private void publishCatalog(BackupManifest manifest, BackupStatus status, String sha256) throws IOException {
+        CatalogEnvelope envelope = new CatalogEnvelope(new BackupMetadata(manifest, status), sha256);
+        String tempKey = worldPrefix + "temporary/" + manifest.id + "-" + UUID.randomUUID() + ".json.uploading";
         byte[] bytes = GSON.toJson(envelope).getBytes(java.nio.charset.StandardCharsets.UTF_8);
         store.put(tempKey, new java.io.ByteArrayInputStream(bytes));
-        store.move(tempKey, catalogKey(manifest.id));
+        try { store.move(tempKey, catalogKey(manifest.id)); }
+        catch (IOException failure) {
+            try { store.delete(tempKey); } catch (IOException cleanup) { failure.addSuppressed(cleanup); }
+            throw failure;
+        }
     }
 
     public void applyRetention(BackupConfig config) throws IOException {
@@ -148,6 +165,20 @@ public final class RemoteBackupCatalog implements AutoCloseable {
         }
     }
 
+    public int cleanupAbandonedUploads() throws IOException {
+        java.time.Instant cutoff = java.time.Instant.now().minus(java.time.Duration.ofDays(7));
+        List<RemoteObjectStore.ObjectInfo> temporary = store.list(worldPrefix + "temporary/");
+        int removed = 0;
+        for (RemoteObjectStore.ObjectInfo object : temporary) {
+            if (object.key().endsWith(".uploading") && object.lastModified() != null
+                    && object.lastModified().isBefore(cutoff)) {
+                store.delete(object.key());
+                removed++;
+            }
+        }
+        return removed;
+    }
+
     private UploadInfo verify(String key) throws IOException {
         MessageDigest digest = sha256();
         long bytes = 0;
@@ -157,6 +188,10 @@ public final class RemoteBackupCatalog implements AutoCloseable {
             while ((read = in.read(buffer)) != -1) bytes += read;
         }
         return new UploadInfo(bytes, HexFormat.of().formatHex(digest.digest()));
+    }
+
+    private boolean objectExists(String key) throws IOException {
+        return store.list(key).stream().anyMatch(object -> object.key().equals(key));
     }
 
     private String archiveKey(String name) throws IOException {

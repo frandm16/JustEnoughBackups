@@ -64,6 +64,7 @@ import org.apache.commons.compress.archivers.zip.ParallelScatterZipCreator;
 import org.apache.commons.compress.archivers.zip.Zip64Mode;
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
 import org.apache.commons.compress.archivers.zip.ZipArchiveOutputStream;
+import org.apache.commons.compress.archivers.zip.ZipArchiveInputStream;
 import org.apache.commons.compress.archivers.zip.ZipMethod;
 import org.apache.commons.compress.archivers.zip.ZipFile;
 import com.github.luben.zstd.ZstdOutputStream;
@@ -245,7 +246,33 @@ public final class BackupStorage {
             }
         });
         try (input) {
-            catalog.uploadAndPublish(manifest, new BackupStatus(), input, statusFuture);
+            java.util.concurrent.atomic.AtomicLong uploadedBytes = new java.util.concurrent.atomic.AtomicLong();
+            java.util.concurrent.atomic.AtomicLong lastUploadUpdate = new java.util.concurrent.atomic.AtomicLong();
+            InputStream uploadProgressStream = new java.io.FilterInputStream(input) {
+                private void report(long count) {
+                    long total = uploadedBytes.addAndGet(count);
+                    long now = System.currentTimeMillis();
+                    if (total >= 1024 * 1024 && now - lastUploadUpdate.get() < 500) return;
+                    lastUploadUpdate.set(now);
+                    listener.onProgress(new BackupProgress(manifest.id, manifest.type, reason,
+                            BackupProgressPhase.UPLOADING, total, 0L, 0,
+                            manifest.includedFiles.size(), BackupProgressState.RUNNING));
+                }
+                @Override public int read() throws IOException {
+                    int value = super.read();
+                    if (value >= 0) report(1);
+                    return value;
+                }
+                @Override public int read(byte[] bytes, int offset, int length) throws IOException {
+                    int count = super.read(bytes, offset, length);
+                    if (count > 0) report(count);
+                    return count;
+                }
+            };
+            var uploadInfo = catalog.uploadAndPublish(manifest, new BackupStatus(), uploadProgressStream, statusFuture);
+            listener.onProgress(new BackupProgress(manifest.id, manifest.type, reason, BackupProgressPhase.UPLOADING,
+                    uploadInfo.bytes(), uploadInfo.bytes(), manifest.includedFiles.size(), manifest.includedFiles.size(),
+                    BackupProgressState.COMPLETED));
         } catch (IOException | RuntimeException exception) {
             statusFuture.cancel(true);
             throw exception;
@@ -473,6 +500,56 @@ public final class BackupStorage {
             }
             tracker.complete();
         }
+    }
+
+    public static boolean extractBackup(InputStream archive, String expectedSha256, Path targetDir,
+                                        BackupManifest manifest, BackupProgressListener listener) throws IOException {
+        Path normalizedTarget = targetDir.toAbsolutePath().normalize();
+        MessageDigest digest = newDigest();
+        var digestInput = new DigestInputStream(archive, digest);
+        boolean summaryFound = false;
+        long totalBytes = Math.max(0L, manifest.includedBytes);
+        int totalFiles = manifest.includedFiles == null ? 0 : manifest.includedFiles.size();
+        RestoreProgressTracker tracker = new RestoreProgressTracker(manifest.id, manifest.type,
+                "Restore " + manifest.id, totalBytes, totalFiles, listener);
+        tracker.start();
+        byte[] buffer = new byte[64 * 1024];
+        try (ZipArchiveInputStream zip = new ZipArchiveInputStream(digestInput, "UTF-8", true, true)) {
+            ZipArchiveEntry entry;
+            while ((entry = zip.getNextZipEntry()) != null) {
+                String name = entry.getName();
+                if (entry.isDirectory()) continue;
+                if (BackupConstants.DATA_ENTRY.equals(name) || BackupConstants.MANIFEST_ENTRY.equals(name)
+                        || BackupConstants.STATUS_ENTRY.equals(name)) {
+                    while (zip.read(buffer) != -1) { }
+                    continue;
+                }
+                if (BackupConstants.SUMMARY_ENTRY.equals(name)) summaryFound = true;
+                Path target = normalizedTarget.resolve(name).normalize();
+                if (!target.startsWith(normalizedTarget)) throw new IOException("Backup contains an unsafe path: " + name);
+                Path parent = target.getParent();
+                if (parent == null) throw new IOException("Backup contains an invalid path: " + name);
+                Files.createDirectories(parent);
+                long written = 0;
+                try (OutputStream out = Files.newOutputStream(target)) {
+                    int read;
+                    while ((read = zip.read(buffer)) != -1) {
+                        if (read == 0) continue;
+                        out.write(buffer, 0, read);
+                        written += read;
+                    }
+                }
+                tracker.advance(written);
+                tracker.fileCompleted();
+            }
+            digestInput.transferTo(OutputStream.nullOutputStream());
+        }
+        String actualHash = HexFormat.of().formatHex(digest.digest());
+        if (expectedSha256 == null || !MessageDigest.isEqual(actualHash.getBytes(StandardCharsets.US_ASCII),
+                expectedSha256.getBytes(StandardCharsets.US_ASCII)))
+            throw new IOException("Remote backup checksum verification failed: " + manifest.id);
+        tracker.complete();
+        return summaryFound;
     }
 
     private record ReadResult(String relativeName, String sha256, long bytes, long lastModified) {

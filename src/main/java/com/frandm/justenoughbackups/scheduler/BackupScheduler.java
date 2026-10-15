@@ -7,16 +7,19 @@ import com.frandm.justenoughbackups.backup.BackupService;
 import com.frandm.justenoughbackups.backup.model.BackupType;
 import com.frandm.justenoughbackups.backup.BackupPaths;
 import com.frandm.justenoughbackups.backup.storage.BackupStorage;
+import com.frandm.justenoughbackups.backup.storage.remote.RemoteBackupCatalog;
 import com.frandm.justenoughbackups.backup.model.BackupStatus;
 import com.frandm.justenoughbackups.config.BackupConfig;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.world.level.storage.LevelResource;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.io.IOException;
@@ -107,11 +110,25 @@ public final class BackupScheduler {
         }
 
         try {
-            List<BackupManifest> manifests = BackupStorage.readManifests(BackupPaths.worldBackupDir(server));
+            List<BackupManifest> manifests;
+            Map<String, BackupStatus> remoteStatuses = Map.of();
+            if (config.remoteStorage != null && config.remoteStorage.enabled) {
+                String worldDirectoryName = BackupPaths.worldDirectoryName(server, server.getWorldPath(LevelResource.ROOT));
+                try (RemoteBackupCatalog catalog = new RemoteBackupCatalog(config.remoteStorage, worldDirectoryName)) {
+                    List<RemoteBackupCatalog.CatalogEntry> entries = catalog.list();
+                    manifests = entries.stream().map(RemoteBackupCatalog.CatalogEntry::manifest).toList();
+                    remoteStatuses = entries.stream().collect(java.util.stream.Collectors.toMap(
+                            entry -> entry.manifest().id, RemoteBackupCatalog.CatalogEntry::status));
+                }
+            } else {
+                manifests = BackupStorage.readManifests(BackupPaths.worldBackupDir(server));
+            }
+            Map<String, BackupStatus> statuses = remoteStatuses;
             BackupManifest newest = manifests.stream()
                     .filter(manifest -> manifest.type == config.backupMode)
                     .filter(manifest -> !manifest.isSafetyBackup)
-                    .filter(manifest -> hasCompletedStatus(server, manifest))
+                    .filter(manifest -> config.remoteStorage != null && config.remoteStorage.enabled
+                            ? hasCompletedStatus(statuses.get(manifest.id)) : hasCompletedStatus(server, manifest))
                     .filter(manifest -> parseCreatedAt(manifest.createdAt) != null)
                     .max(Comparator.comparing(manifest -> parseCreatedAt(manifest.createdAt)))
                     .orElse(null);
@@ -141,6 +158,10 @@ public final class BackupScheduler {
         } catch (RuntimeException exception) {
             return false;
         }
+    }
+
+    private static boolean hasCompletedStatus(BackupStatus status) {
+        return status != null && status.completed && (status.brokenFiles == null || status.brokenFiles.isEmpty());
     }
 
     private static Instant parseCreatedAt(String createdAt) {

@@ -4,6 +4,7 @@ import com.frandm.justenoughbackups.backup.model.BackupIntegrityMode;
 import com.frandm.justenoughbackups.backup.model.BackupType;
 import com.frandm.justenoughbackups.backup.model.BackupCompressionMethod;
 import com.frandm.justenoughbackups.backup.BackupMessageChannel;
+import com.frandm.justenoughbackups.backup.storage.remote.RemoteProviderType;
 import com.frandm.justenoughbackups.client.screen.preview.PopupPreviewScreen;
 import com.frandm.justenoughbackups.client.ui.ScreenChrome;
 import com.frandm.justenoughbackups.client.ui.popup.PopupPositioning;
@@ -127,6 +128,7 @@ public final class JEBConfigScreen extends Screen {
             case AUTOMATIC_DIFFERENTIAL_ENABLED -> () -> state.working.automaticSchedule.differential.enabled;
             case INCLUDE_SUMMARY_FILE -> () -> state.working.includeSummaryFile;
             case EXCLUDE_SAFETY_BACKUPS_FROM_INCREMENTAL -> () -> state.working.excludeSafetyBackupsFromIncremental;
+            case REMOTE_STORAGE_ENABLED -> () -> state.working.remoteStorage.enabled;
             case POPUP_ENABLED -> () -> state.working.popup.enabled;
             case POPUP_SHOW_TITLE -> () -> state.working.popup.showTitle;
             case POPUP_CENTER_TEXT -> () -> state.working.popup.centerText;
@@ -146,6 +148,7 @@ public final class JEBConfigScreen extends Screen {
             case AUTOMATIC_DIFFERENTIAL_ENABLED -> value -> state.working.automaticSchedule.differential.enabled = value;
             case INCLUDE_SUMMARY_FILE -> value -> state.working.includeSummaryFile = value;
             case EXCLUDE_SAFETY_BACKUPS_FROM_INCREMENTAL ->  value -> state.working.excludeSafetyBackupsFromIncremental = value;
+            case REMOTE_STORAGE_ENABLED -> value -> state.working.remoteStorage.enabled = value;
             case POPUP_ENABLED -> value -> state.working.popup.enabled = value;
             case POPUP_SHOW_TITLE -> value -> state.working.popup.showTitle = value;
             case POPUP_CENTER_TEXT -> value -> state.working.popup.centerText = value;
@@ -171,6 +174,7 @@ public final class JEBConfigScreen extends Screen {
             case MINIMUM_FREE_SPACE_RESERVE_MB -> () -> state.working.minimumFreeSpaceReserveMb;
             case THREAD_COUNT -> () -> state.working.threadCount;
             case ZSTD_COMPRESSION_LEVEL -> () -> state.working.zstdCompressionLevel;
+            case REMOTE_STORAGE_RETRIES -> () -> state.working.remoteStorage.maxRetries;
             case PERMISSION_LEVEL -> () -> state.working.commandPermissionLevel;
             default -> throw new IllegalArgumentException("Not an int field: " + fieldId);
         };
@@ -193,6 +197,7 @@ public final class JEBConfigScreen extends Screen {
             case MINIMUM_FREE_SPACE_RESERVE_MB -> value -> state.working.minimumFreeSpaceReserveMb = value;
             case THREAD_COUNT -> value -> state.working.threadCount = value;
             case ZSTD_COMPRESSION_LEVEL -> value -> state.working.zstdCompressionLevel = value;
+            case REMOTE_STORAGE_RETRIES -> value -> state.working.remoteStorage.maxRetries = value;
             case PERMISSION_LEVEL -> value -> state.working.commandPermissionLevel = value;
             default -> throw new IllegalArgumentException("Not an int field: " + fieldId);
         };
@@ -267,6 +272,7 @@ public final class JEBConfigScreen extends Screen {
             case MESSAGE_CHANNEL -> enumRow(x, y, w, controlsW, fieldId, state.working.messageChannel, BackupMessageChannel.values(), value -> state.working.messageChannel = value);
             case INTEGRITY_MODE -> enumRow(x, y, w, controlsW, fieldId, state.working.integrityMode, BackupIntegrityMode.values(), value -> state.working.integrityMode = value);
             case COMPRESSION_METHOD -> enumRow(x, y, w, controlsW, fieldId, state.working.compressionMethod, BackupCompressionMethod.values(), value -> state.working.compressionMethod = value);
+            case REMOTE_STORAGE_PROVIDER -> enumRow(x, y, w, controlsW, fieldId, state.working.remoteStorage.provider, RemoteProviderType.values(), value -> state.working.remoteStorage.provider = value);
             default -> throw new IllegalArgumentException("Unsupported enum field: " + fieldId);
         };
     }

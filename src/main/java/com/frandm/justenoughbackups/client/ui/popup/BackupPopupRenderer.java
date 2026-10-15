@@ -66,6 +66,9 @@ public final class BackupPopupRenderer {
             case SCANNING -> " scanned";
             case COPYING -> " copied";
             case COMPRESSING -> " copied";
+            case UPLOADING -> " uploaded";
+            case DOWNLOADING -> " downloaded";
+            case VERIFYING -> " verified";
             default -> " written";
         };
         String written = BackupProgressFormat.formatBytes(progress.bytesWritten());

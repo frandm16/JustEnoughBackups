@@ -4,5 +4,8 @@ public enum BackupProgressPhase {
     SCANNING,
     COPYING,
     COMPRESSING,
-    WRITING
+    WRITING,
+    UPLOADING,
+    DOWNLOADING,
+    VERIFYING
 }

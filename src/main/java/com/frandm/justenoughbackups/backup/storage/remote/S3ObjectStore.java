@@ -106,7 +106,6 @@ final class S3ObjectStore implements RemoteObjectStore {
 
     @Override
     public void move(String sourceKey, String targetKey) throws IOException {
-        String source = bucket + "/" + sourceKey.replace("%", "%25").replace(" ", "%20");
         try {
             client.copyObject(CopyObjectRequest.builder().sourceBucket(bucket).sourceKey(sourceKey)
                     .destinationBucket(bucket).destinationKey(targetKey).build()).join();
