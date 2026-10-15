@@ -10,6 +10,14 @@ import software.amazon.awssdk.services.s3.S3AsyncClient;
 import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.CopyObjectRequest;
+import software.amazon.awssdk.services.s3.model.UploadPartCopyRequest;
+import software.amazon.awssdk.services.s3.model.CompletedPart;
+import software.amazon.awssdk.services.s3.model.CompletedMultipartUpload;
+import software.amazon.awssdk.services.s3.model.CreateMultipartUploadRequest;
+import software.amazon.awssdk.services.s3.model.UploadPartCopyResponse;
+import software.amazon.awssdk.services.s3.model.CompleteMultipartUploadRequest;
+import software.amazon.awssdk.services.s3.model.AbortMultipartUploadRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
@@ -26,6 +34,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 final class S3ObjectStore implements RemoteObjectStore {
+    private static final long SINGLE_COPY_LIMIT_BYTES = 5_000_000_000L;
+    private static final long COPY_PART_SIZE_BYTES = 5_000_000_000L;
     private final String bucket;
     private final S3AsyncClient client;
     private final ExecutorService streamExecutor = Executors.newSingleThreadExecutor(runnable -> {
@@ -115,8 +125,14 @@ final class S3ObjectStore implements RemoteObjectStore {
     @Override
     public void move(String sourceKey, String targetKey) throws IOException {
         try {
-            client.copyObject(CopyObjectRequest.builder().sourceBucket(bucket).sourceKey(sourceKey)
-                    .destinationBucket(bucket).destinationKey(targetKey).build()).join();
+            long size = client.headObject(HeadObjectRequest.builder().bucket(bucket).key(sourceKey).build())
+                    .join().contentLength();
+            if (size > SINGLE_COPY_LIMIT_BYTES) {
+                multipartCopy(sourceKey, targetKey, size);
+            } else {
+                client.copyObject(CopyObjectRequest.builder().sourceBucket(bucket).sourceKey(sourceKey)
+                        .destinationBucket(bucket).destinationKey(targetKey).build()).join();
+            }
             try {
                 delete(sourceKey);
             } catch (IOException cleanupFailure) {
@@ -125,6 +141,49 @@ final class S3ObjectStore implements RemoteObjectStore {
         } catch (RuntimeException exception) {
             throw ioFailure("Unable to publish S3 object", exception);
         }
+    }
+
+    private void multipartCopy(String sourceKey, String targetKey, long size) {
+        if (size > COPY_PART_SIZE_BYTES * 10_000L) {
+            throw new IllegalArgumentException("S3 object exceeds the 10,000-part multipart copy limit.");
+        }
+        String uploadId = client.createMultipartUpload(CreateMultipartUploadRequest.builder()
+                .bucket(bucket).key(targetKey).build()).join().uploadId();
+        List<CompletedPart> completedParts = new ArrayList<>();
+        try {
+            String encodedSource = encodeCopySource(bucket + "/" + sourceKey);
+            int partNumber = 1;
+            for (long firstByte = 0; firstByte < size; firstByte += COPY_PART_SIZE_BYTES) {
+                long lastByte = Math.min(size - 1L, firstByte + COPY_PART_SIZE_BYTES - 1L);
+                UploadPartCopyResponse response = client.uploadPartCopy(UploadPartCopyRequest.builder()
+                        .sourceBucket(bucket).sourceKey(sourceKey)
+                        .destinationBucket(bucket).destinationKey(targetKey).uploadId(uploadId)
+                        .partNumber(partNumber)
+                        .copySource(encodedSource)
+                        .copySourceRange("bytes=" + firstByte + "-" + lastByte)
+                        .build()).join();
+                completedParts.add(CompletedPart.builder().partNumber(partNumber)
+                        .eTag(response.copyPartResult().eTag()).build());
+                partNumber++;
+            }
+            client.completeMultipartUpload(CompleteMultipartUploadRequest.builder()
+                    .bucket(bucket).key(targetKey).uploadId(uploadId)
+                    .multipartUpload(CompletedMultipartUpload.builder().parts(completedParts).build())
+                    .build()).join();
+        } catch (RuntimeException failure) {
+            try {
+                client.abortMultipartUpload(AbortMultipartUploadRequest.builder()
+                        .bucket(bucket).key(targetKey).uploadId(uploadId).build()).join();
+            } catch (RuntimeException abortFailure) {
+                failure.addSuppressed(abortFailure);
+            }
+            throw failure;
+        }
+    }
+
+    private static String encodeCopySource(String source) {
+        return java.net.URLEncoder.encode(source, java.nio.charset.StandardCharsets.UTF_8)
+                .replace("+", "%20").replace("%2F", "/");
     }
 
     @Override
