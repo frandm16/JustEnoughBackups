@@ -141,6 +141,8 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
 
     protected void rebuildWidgets() {
         clearWidgets();
+        searchBox = null;
+        modalInputBox = null;
         if (activeModal == ActiveModal.NONE) {
             buildMainWidgets();
         } else {
@@ -706,6 +708,10 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
                 return true;
             }
 
+            if (searchBox != null && !searchBox.isMouseOver(mx, my)) {
+                setFocused(null);
+            }
+
             if (handleTopHeaderClick(mx, my)) return true;
             if (handleLeftPanelClick(mx, my)) return true;
             if (handleRightPanelClick(mx, my)) return true;
@@ -826,8 +832,7 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
         int btnY = actionY + (actionFooterH - 22) / 2;
         Rect restoreRect = new Rect(rightX + 12, btnY, 90, 22);
         if (restoreRect.contains(mx, my) && backup.restorable()) {
-            modalTargetBackup = backup;
-            activeModal = ActiveModal.CONFIRM_RESTORE_STEP_1;
+            openRestoreStep1Modal(backup);
             return true;
         }
 
@@ -839,8 +844,7 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
 
         Rect deleteRect = new Rect(rightX + rightW - 12 - 80, btnY, 80, 22);
         if (deleteRect.contains(mx, my) && backup.canDelete()) {
-            modalTargetBackup = backup;
-            activeModal = ActiveModal.CONFIRM_DELETE;
+            openDeleteModal(backup);
             return true;
         }
 
@@ -910,7 +914,7 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
                 Rect nextRect = new Rect(x + 65, y + 74, 95, 22);
                 Rect cancelRect = new Rect(x + 170, y + 74, 95, 22);
                 if (nextRect.contains(mx, my)) {
-                    activeModal = ActiveModal.CONFIRM_RESTORE_STEP_2;
+                    openRestoreStep2Modal();
                     return true;
                 }
                 if (cancelRect.contains(mx, my)) {
@@ -974,6 +978,23 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
         rebuildWidgets();
     }
 
+    private void openRestoreStep1Modal(BackupUiBackup backup) {
+        modalTargetBackup = backup;
+        activeModal = ActiveModal.CONFIRM_RESTORE_STEP_1;
+        rebuildWidgets();
+    }
+
+    private void openRestoreStep2Modal() {
+        activeModal = ActiveModal.CONFIRM_RESTORE_STEP_2;
+        rebuildWidgets();
+    }
+
+    private void openDeleteModal(BackupUiBackup backup) {
+        modalTargetBackup = backup;
+        activeModal = ActiveModal.CONFIRM_DELETE;
+        rebuildWidgets();
+    }
+
     private void closeModal() {
         activeModal = ActiveModal.NONE;
         modalTargetBackup = null;
@@ -1028,7 +1049,7 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
 
     @Override
     public boolean keyPressed(KeyEvent event) {
-        if (event.key() == InputConstants.KEY_SPACE) {
+        if (event.key() == InputConstants.KEY_ESCAPE) {
             if (activeModal != ActiveModal.NONE) {
                 closeModal();
                 return true;
