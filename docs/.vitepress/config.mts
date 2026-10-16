@@ -5,11 +5,11 @@ export default defineConfig({
   description: 'Fast, multithreaded world backups with an intuitive in-game GUI for Minecraft Fabric',
   base: '/',
   head: [
-    ['link', { rel: 'icon', type: 'image/png', href: '/icon.png' }],
+    ['link', { rel: 'icon', type: 'image/png', href: '/icon.png?v=20261016' }],
     ['meta', { name: 'theme-color', content: '#486b84' }]
   ],
   themeConfig: {
-    logo: '/icon.png',
+    logo: '/icon.png?v=20261016',
     siteTitle: 'Just Enough Backups',
     nav: [
       { text: 'Getting Started', link: '/getting-started' },
