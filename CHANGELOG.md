@@ -2,15 +2,26 @@
 
 All notable changes to this project are documented in this file.
 
-## 1.2.0.8+26.3 - 15/10/2026
+## 1.2.0.8+26.3 - 16/10/2026
 
 ### Added
 
-- Configurable per-type minimum age for startup backups. A value of `0` preserves the previous behavior.
-- Optional Zstandard compression for ZIP entries with a configurable level; existing DEFLATED backups remain readable.
-- Optional S3-compatible and WebDAV backup storage with bounded streaming uploads, published catalogs, checksums, and remote retention.
-- Remote restores stream verified archive chains directly into isolated world staging; startup age checks use completed backups from the selected storage.
-- Added remote provider selection and enablement in the config screen, plus server JSON and environment-variable setup documentation.
+- S3-compatible and WebDAV backup storage with bounded streaming uploads, published catalogs, checksums, and remote retention.
+- Dedicated "Remote" tab in the in-game configuration screen with provider selection (S3 / WebDAV), connection settings, retry options, and masked credential fields.
+- Support for large S3 backups via multipart copy and 5GB partition handling.
+- Zstandard compression (`ZSTANDARD`) for ZIP entries with configurable level (`zstdCompressionLevel`, 1–22) and parallel multi-threaded compression support; existing DEFLATED backups remain readable.
+- Parallel multi-threaded compression for both DEFLATED and ZSTANDARD modes, with scratch file spilling for large Zstandard entries to bound memory usage.
+- Configurable Deflate compression level (`deflateCompressionLevel`, 1–9) for standard DEFLATED backups.
+- Configurable per-type minimum age for startup backups (`startupBackupThreshold` for FULL, DIFFERENTIAL, and PARTIAL). A value of `0` preserves the previous behavior.
+- Support for setting remote credentials via environment variables (`JEB_S3_ACCESS_KEY_ID`, `JEB_S3_SECRET_ACCESS_KEY`, `JEB_WEBDAV_USERNAME`, `JEB_WEBDAV_PASSWORD`) or server config file.
+
+### Fixed
+
+- Reduced distributed mod JAR size from ~100MB to ~11MB by pruning unused architecture native binaries in `zstd-jni` (retaining standard 64-bit platforms: Windows x64, Linux x64, macOS ARM64/x64) and aligning Netty/Commons dependencies with Minecraft runtime.
+- Input fields in configuration and backup management screens now properly lose focus when clicking outside.
+- Pressing ESC in the backup management screen now properly closes modal confirmation dialogs (restore and delete modals).
+- Prevented integer overflow in progress percentage calculation for backups larger than 2GB.
+- Fixed WebDAV remote storage streaming, collection paths, and redirect handling.
 
 ## 1.2.0.7+26.3 - 15/09/2026
 

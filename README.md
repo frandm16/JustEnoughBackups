@@ -22,13 +22,14 @@ It supports:
 - a configurable client HUD popup with live preview
 - parallel (multi-threaded) scanning, compression, and restore extraction
 - optional Zstandard compression inside ZIP archives
+- optional remote backup storage (S3-compatible and WebDAV)
 - optional Mod Menu integration
 
 The mod is designed to keep the actual backup logic on the server side while exposing management and configuration through a client UI.
 
 ## Remote storage
 
-Remote storage is disabled by default. The configuration screen has a provider selector, enable switch, and fields for the S3 endpoint/region/bucket/prefix and WebDAV URL/prefix/username. For S3, bucket and region are required; the endpoint is optional for AWS and can point to an S3-compatible service. For WebDAV, set the collection URL. Passwords and S3 secrets are intentionally kept out of the UI and should be set in `config/justenoughbackups.json` or the environment.
+Remote storage is disabled by default. The configuration screen has a dedicated Remote tab with a provider selector, enable switch, and fields for S3 (endpoint, region, bucket, prefix, access key, secret key) and WebDAV (URL, prefix, username, password). For S3, bucket and region are required; the endpoint is optional for AWS and can point to an S3-compatible service. For WebDAV, set the collection URL. Credentials can be configured directly in the screen (secrets are masked) or set in `config/justenoughbackups.json` or through environment variables, which take precedence and avoid storing plaintext secrets on disk.
 
 Set credentials in the server config or use environment variables, which take precedence:
 
@@ -94,7 +95,7 @@ Backups and restores use multiple worker threads to speed up large worlds:
 
 The number of threads is controlled by `threadCount` in the config and can be set between `1` and the maximum number of CPU threads (default: CPU cores minus two). Lower values reduce CPU usage; higher values speed up large worlds.
 
-ZIP compression uses `DEFLATED` by default. `compressionMethod: "ZSTANDARD"` writes ZIP method 93 entries and `zstdCompressionLevel` controls the level (1–22). Existing DEFLATED archives remain supported. Zstandard archives require the mod's Zstandard reader and may not open in older ZIP utilities.
+ZIP compression uses `DEFLATED` by default, with `deflateCompressionLevel` controlling the compression level (1–9, default: 6). `compressionMethod: "ZSTANDARD"` writes ZIP method 93 entries and `zstdCompressionLevel` controls the level (1–22, default: 3). Both DEFLATED and ZSTANDARD use parallel multi-threaded compression. For Zstandard, large entries are spilled to temporary scratch files to bound memory usage. Existing DEFLATED archives remain supported. Zstandard archives require the mod's Zstandard reader and may not open in older ZIP utilities.
 
 ### Backup management UI
 
@@ -115,11 +116,14 @@ Manual backup creation supports a custom file name from both the command line an
 The config screen exposes:
 
 - backup mode and scheduler options
+- remote storage settings (provider selection, S3/WebDAV options, retries)
 - retention rules
 - permission level
 - integrity mode
 - backup directory and temporary backup directory
 - excluded paths
+- compression method and level options
+- startup backup minimum age limits
 - popup text, colors, channels, and layout
 
 The popup preview screen lets you move and preview the HUD state before saving.
@@ -181,21 +185,34 @@ config/justenoughbackups.json
 Main config areas:
 
 - `backupMode`
-- `automaticBackupsEnabled`
 - `pauseAutomaticBackupsWithoutPlayers`
 - `backupOnServerStart`
 - `backupOnServerStop`
-- `automaticIntervalMinutes`
+- `automaticSchedule`
+  - `full` (`enabled`, `intervalMinutes`)
+  - `differential` (`enabled`, `intervalMinutes`)
+  - `partial` (`enabled`, `intervalMinutes`)
 - `automaticBackupWarningEnabled`
 - `automaticBackupWarningMinutes`
 - `commandPermissionLevel`
 - `messageChannel`
 - `integrityMode`
+- `includeSummaryFile`
 - `minimumFreeSpaceReserveMb`
 - `threadCount`
 - `compressionMethod`
+- `deflateCompressionLevel`
 - `zstdCompressionLevel`
 - `startupBackupThreshold`
+  - `fullMinutes`
+  - `partialMinutes`
+  - `differentialMinutes`
+- `remoteStorage`
+  - `enabled`
+  - `provider` (`S3` or `WEBDAV`)
+  - `maxRetries`
+  - S3 options: `s3Endpoint`, `s3Region`, `s3Bucket`, `s3Prefix`, `s3AccessKey`, `s3SecretKey`
+  - WebDAV options: `webDavUrl`, `webDavPrefix`, `webDavUsername`, `webDavPassword`
 - `backupDirectory`
 - `tempBackupDirectory`
 - `excludedPaths`
@@ -222,6 +239,8 @@ voxy/cache.db
 `excludeSafetyBackupsFromIncremental` prevents "Old_World restore" safety backups from being used as base for incremental/differential backups.
 
 `threadCount` controls parallel scanning, compression, and restore extraction, and is clamped between `1` and the number of CPU threads.
+
+`compressionMethod` selects between standard `DEFLATED` ZIP compression and `ZSTANDARD` (ZIP method 93). Both methods use parallel multi-threaded compression. `deflateCompressionLevel` configures the Deflate level from `1` (fastest) to `9` (smallest, default: `6`). `zstdCompressionLevel` configures the Zstandard level from `1` (fastest) to `22` (ultra compression, default: `3`).
 
 `startupBackupThreshold` sets the minimum age in minutes for the most recent successful backup of each type before a startup backup of that type runs. A value of `0` keeps the existing behavior. Scheduled and shutdown backups are unaffected.
 
