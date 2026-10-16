@@ -52,6 +52,7 @@ final class ConfigScreenState {
                 working.retention.maxTotalSizeMb = defaults.retention.maxTotalSizeMb;
                 working.minimumFreeSpaceReserveMb = defaults.minimumFreeSpaceReserveMb;
                 working.compressionMethod = defaults.compressionMethod;
+                working.deflateCompressionLevel = defaults.deflateCompressionLevel;
                 working.zstdCompressionLevel = defaults.zstdCompressionLevel;
                 working.excludeSafetyBackupsFromIncremental = defaults.excludeSafetyBackupsFromIncremental;
 

@@ -8,6 +8,7 @@ final class ConfigFieldSpecs {
             ConfigFieldSpec.of(ConfigFieldId.BACKUP_MODE),
             ConfigFieldSpec.intField(ConfigFieldId.THREAD_COUNT, 1, Math.max(1, Runtime.getRuntime().availableProcessors())),
             ConfigFieldSpec.of(ConfigFieldId.COMPRESSION_METHOD),
+            ConfigFieldSpec.intField(ConfigFieldId.DEFLATE_COMPRESSION_LEVEL, 1, 9),
             ConfigFieldSpec.intField(ConfigFieldId.ZSTD_COMPRESSION_LEVEL, 1, 22),
             ConfigFieldSpec.of(ConfigFieldId.AUTOMATIC_BACKUPS_HEADER),
             ConfigFieldSpec.of(ConfigFieldId.AUTOMATIC_FULL_ENABLED),

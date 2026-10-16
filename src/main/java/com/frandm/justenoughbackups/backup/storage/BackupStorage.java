@@ -21,6 +21,8 @@ import com.frandm.justenoughbackups.backup.parallel.BackupThreadPool;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -39,6 +41,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -47,6 +50,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
@@ -61,6 +65,7 @@ import java.util.function.LongConsumer;
 
 import java.util.stream.Stream;
 
+import org.apache.commons.compress.archivers.zip.DefaultBackingStoreSupplier;
 import org.apache.commons.compress.archivers.zip.ParallelScatterZipCreator;
 import org.apache.commons.compress.archivers.zip.Zip64Mode;
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
@@ -75,6 +80,7 @@ public final class BackupStorage {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final AtomicBoolean ABORTED = new AtomicBoolean(false);
     private static final Set<ExecutorService> ACTIVE_PARALLEL_EXECUTORS = ConcurrentHashMap.newKeySet();
+    private static final int ZSTD_MEMORY_BUFFER_THRESHOLD = 4 * 1024 * 1024;
 
     private BackupStorage() {
     }
@@ -227,7 +233,7 @@ public final class BackupStorage {
         manifest.isSafetyBackup = isSafetyBackup;
         manifest.integrityMode = config.integrityMode;
         manifest.compressionMethod = config.compressionMethod.name();
-        manifest.compressionLevel = config.compressionMethod == BackupCompressionMethod.ZSTANDARD ? config.zstdCompressionLevel : -1;
+        manifest.compressionLevel = config.compressionMethod == BackupCompressionMethod.ZSTANDARD ? config.zstdCompressionLevel : config.deflateCompressionLevel;
         manifest.includedFiles.addAll(includedFiles(type, snapshot, base));
         manifest.snapshot.putAll(snapshot);
         Path scratch = config.resolveTempRoot().resolve(worldDirectoryName);
@@ -409,7 +415,7 @@ public final class BackupStorage {
         manifest.isSafetyBackup = isSafetyBackup;
         manifest.integrityMode = config.integrityMode;
         manifest.compressionMethod = config.compressionMethod.name();
-        manifest.compressionLevel = config.compressionMethod == BackupCompressionMethod.ZSTANDARD ? config.zstdCompressionLevel : -1;
+        manifest.compressionLevel = config.compressionMethod == BackupCompressionMethod.ZSTANDARD ? config.zstdCompressionLevel : config.deflateCompressionLevel;
         manifest.includedFiles.addAll(includedFiles);
         manifest.snapshot.putAll(snapshot);
 
@@ -645,12 +651,19 @@ public final class BackupStorage {
 
         try (ZipArchiveOutputStream zipOut = new ZipArchiveOutputStream(new ProgressCountingOutputStream(output, progress::bytesWritten))) {
             zipOut.setUseZip64(Zip64Mode.AsNeeded);
+            if (config.compressionMethod == BackupCompressionMethod.DEFLATED) {
+                zipOut.setLevel(config.deflateCompressionLevel);
+            }
             if (config.compressionMethod == BackupCompressionMethod.ZSTANDARD) {
-                writeEntriesZstandard(worldPath, scratchDirectory, zipOut, toWrite, manifest, status, finalSnapshot, config, progress);
+                if (threadCount <= 1 || toWrite.size() <= 1) {
+                    writeEntriesZstandardSerially(worldPath, scratchDirectory, zipOut, toWrite, manifest, status, finalSnapshot, config, progress);
+                } else {
+                    writeEntriesZstandardParallel(worldPath, scratchDirectory, zipOut, toWrite, manifest, status, finalSnapshot, config, progress, threadCount);
+                }
             } else if (streaming || threadCount <= 1 || toWrite.size() <= 1) {
                 writeEntriesSerially(worldPath, zipOut, toWrite, manifest, status, finalSnapshot, integrityMode, progress);
             } else {
-                writeEntriesInParallel(worldPath, zipOut, toWrite, manifest, status, finalSnapshot, progress);
+                writeEntriesInParallel(worldPath, scratchDirectory, zipOut, toWrite, manifest, status, finalSnapshot, config, progress);
             }
 
             manifest.snapshot.clear();
@@ -662,7 +675,23 @@ public final class BackupStorage {
         return status;
     }
 
-    private static void writeEntriesZstandard(
+    private record ZstdTaskResult(
+            String relativeName,
+            byte[] compressedData,
+            Path compressedFile,
+            long crc,
+            String sha256,
+            long uncompressedBytes,
+            long compressedBytes,
+            long lastModified,
+            IOException error
+    ) {
+        boolean inMemory() {
+            return compressedData != null;
+        }
+    }
+
+    private static void writeEntriesZstandardSerially(
             Path worldPath,
             Path tempDir,
             ZipArchiveOutputStream zipOut,
@@ -673,20 +702,109 @@ public final class BackupStorage {
             BackupConfig config,
             ProgressTracker progress
     ) throws IOException {
-        int index = 0;
         for (String relativeName : files) {
             if (ABORTED.get()) {
                 throw new IOException("Backup was aborted.");
             }
-            Path source = worldPath.resolve(relativeName);
-            Path compressed = tempDir.resolve(".jeb-zstd-" + manifest.id + "-" + index++ + ".tmp");
+            ZstdTaskResult result = compressZstandardEntry(worldPath, tempDir, relativeName, config, progress);
+            writeZstdResultToZip(zipOut, result, manifest, status, finalSnapshot, config, progress);
+        }
+    }
+
+    private static void writeEntriesZstandardParallel(
+            Path worldPath,
+            Path tempDir,
+            ZipArchiveOutputStream zipOut,
+            List<String> files,
+            BackupManifest manifest,
+            BackupStatus status,
+            Map<String, BackupManifest.FileState> finalSnapshot,
+            BackupConfig config,
+            ProgressTracker progress,
+            int threadCount
+    ) throws IOException {
+        int maxInFlight = Math.max(4, threadCount * 2);
+        ExecutorService compressExecutor = newCompressExecutor(threadCount);
+        ACTIVE_PARALLEL_EXECUTORS.add(compressExecutor);
+        Queue<Future<ZstdTaskResult>> window = new ArrayDeque<>();
+        try {
+            for (String relativeName : files) {
+                if (ABORTED.get()) {
+                    throw new IOException("Backup was aborted.");
+                }
+                window.add(compressExecutor.submit(() -> compressZstandardEntry(worldPath, tempDir, relativeName, config, progress)));
+                while (window.size() >= maxInFlight) {
+                    Future<ZstdTaskResult> future = window.poll();
+                    writeZstdResultToZip(zipOut, getFutureResult(future, progress), manifest, status, finalSnapshot, config, progress);
+                }
+            }
+            while (!window.isEmpty()) {
+                Future<ZstdTaskResult> future = window.poll();
+                writeZstdResultToZip(zipOut, getFutureResult(future, progress), manifest, status, finalSnapshot, config, progress);
+            }
+        } finally {
+            ACTIVE_PARALLEL_EXECUTORS.remove(compressExecutor);
+            compressExecutor.shutdownNow();
+            for (Future<ZstdTaskResult> future : window) {
+                future.cancel(true);
+                if (future.isDone()) {
+                    try {
+                        ZstdTaskResult res = future.get();
+                        if (res != null && res.compressedFile != null) {
+                            Files.deleteIfExists(res.compressedFile);
+                        }
+                    } catch (Exception ignored) {
+                    }
+                }
+            }
+        }
+    }
+
+    private static ZstdTaskResult getFutureResult(Future<ZstdTaskResult> future, ProgressTracker progress) throws IOException {
+        try {
+            while (!future.isDone()) {
+                progress.keepAlive();
+                Thread.sleep(20L);
+            }
+            return future.get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Compression interrupted", e);
+        } catch (ExecutionException e) {
+            if (e.getCause() instanceof IOException io) {
+                throw io;
+            }
+            throw new IOException("Failed during Zstandard compression", e.getCause());
+        }
+    }
+
+    private static ZstdTaskResult compressZstandardEntry(
+            Path worldPath,
+            Path tempDir,
+            String relativeName,
+            BackupConfig config,
+            ProgressTracker progress
+    ) {
+        if (ABORTED.get()) {
+            return new ZstdTaskResult(relativeName, null, null, 0, null, 0, 0, 0, new IOException("Backup was aborted."));
+        }
+        Path source = worldPath.resolve(relativeName);
+        if (!Files.isRegularFile(source)) {
+            return new ZstdTaskResult(relativeName, null, null, 0, null, 0, 0, 0, new IOException("Included file is missing: " + source));
+        }
+        Path compressedFile = null;
+        try {
+            long modified = Files.getLastModifiedTime(source).toMillis();
+            long fileSize = Files.size(source);
             CRC32 crc = new CRC32();
             MessageDigest digest = newDigest();
             long bytes = 0L;
-            long modified = Files.getLastModifiedTime(source).toMillis();
-            try {
+            boolean inMemory = fileSize <= ZSTD_MEMORY_BUFFER_THRESHOLD;
+
+            if (inMemory) {
+                ByteArrayOutputStream byteOut = new ByteArrayOutputStream((int) Math.min(Math.max(32L, fileSize), ZSTD_MEMORY_BUFFER_THRESHOLD));
                 try (InputStream in = Files.newInputStream(source);
-                     ZstdOutputStream zstd = new ZstdOutputStream(Files.newOutputStream(compressed), config.zstdCompressionLevel)) {
+                     ZstdOutputStream zstd = new ZstdOutputStream(byteOut, config.zstdCompressionLevel)) {
                     byte[] buffer = new byte[64 * 1024];
                     int read;
                     while ((read = in.read(buffer)) >= 0) {
@@ -701,23 +819,105 @@ public final class BackupStorage {
                         progress.bytesRead(read);
                     }
                 }
+                byte[] compressedData = byteOut.toByteArray();
+                return new ZstdTaskResult(
+                        relativeName,
+                        compressedData,
+                        null,
+                        crc.getValue(),
+                        HexFormat.of().formatHex(digest.digest()),
+                        bytes,
+                        compressedData.length,
+                        modified,
+                        null
+                );
+            } else {
+                compressedFile = Files.createTempFile(tempDir, ".jeb-zstd-", ".tmp");
+                try (InputStream in = Files.newInputStream(source);
+                     OutputStream fileOut = Files.newOutputStream(compressedFile);
+                     ZstdOutputStream zstd = new ZstdOutputStream(fileOut, config.zstdCompressionLevel)) {
+                    byte[] buffer = new byte[64 * 1024];
+                    int read;
+                    while ((read = in.read(buffer)) >= 0) {
+                        if (ABORTED.get()) {
+                            throw new IOException("Backup was aborted.");
+                        }
+                        if (read == 0) continue;
+                        zstd.write(buffer, 0, read);
+                        digest.update(buffer, 0, read);
+                        crc.update(buffer, 0, read);
+                        bytes += read;
+                        progress.bytesRead(read);
+                    }
+                }
+                long compSize = Files.size(compressedFile);
+                return new ZstdTaskResult(
+                        relativeName,
+                        null,
+                        compressedFile,
+                        crc.getValue(),
+                        HexFormat.of().formatHex(digest.digest()),
+                        bytes,
+                        compSize,
+                        modified,
+                        null
+                );
+            }
+        } catch (IOException exception) {
+            if (compressedFile != null) {
+                try {
+                    Files.deleteIfExists(compressedFile);
+                } catch (IOException ignored) {
+                }
+            }
+            return new ZstdTaskResult(relativeName, null, null, 0, null, 0, 0, 0, exception);
+        }
+    }
 
-                ZipArchiveEntry entry = new ZipArchiveEntry(relativeName.replace('\\', '/'));
-                entry.setMethod(ZipMethod.ZSTD.getCode());
-                entry.setSize(bytes);
-                entry.setCompressedSize(Files.size(compressed));
-                entry.setCrc(crc.getValue());
-                try (InputStream input = Files.newInputStream(compressed)) {
+    private static void writeZstdResultToZip(
+            ZipArchiveOutputStream zipOut,
+            ZstdTaskResult result,
+            BackupManifest manifest,
+            BackupStatus status,
+            Map<String, BackupManifest.FileState> finalSnapshot,
+            BackupConfig config,
+            ProgressTracker progress
+    ) throws IOException {
+        if (result.error != null) {
+            if (result.compressedFile != null) {
+                try {
+                    Files.deleteIfExists(result.compressedFile);
+                } catch (IOException ignored) {
+                }
+            }
+            handleBrokenFile(status, result.relativeName, result.error, config.integrityMode);
+            return;
+        }
+        ZipArchiveEntry entry = new ZipArchiveEntry(result.relativeName.replace('\\', '/'));
+        entry.setMethod(ZipMethod.ZSTD.getCode());
+        entry.setSize(result.uncompressedBytes);
+        entry.setCompressedSize(result.compressedBytes);
+        entry.setCrc(result.crc);
+        try {
+            if (result.inMemory()) {
+                try (InputStream input = new ByteArrayInputStream(result.compressedData)) {
                     zipOut.addRawArchiveEntry(entry, input);
                 }
-                recordWrittenFile(manifest, status, finalSnapshot, progress,
-                        new ReadResult(relativeName, HexFormat.of().formatHex(digest.digest()), bytes, modified));
-            } catch (IOException exception) {
-                handleBrokenFile(status, relativeName, exception, config.integrityMode);
-            } finally {
-                Files.deleteIfExists(compressed);
+            } else {
+                try (InputStream input = Files.newInputStream(result.compressedFile)) {
+                    zipOut.addRawArchiveEntry(entry, input);
+                }
+            }
+        } finally {
+            if (result.compressedFile != null) {
+                try {
+                    Files.deleteIfExists(result.compressedFile);
+                } catch (IOException ignored) {
+                }
             }
         }
+        recordWrittenFile(manifest, status, finalSnapshot, progress,
+                new ReadResult(result.relativeName, result.sha256, result.uncompressedBytes, result.lastModified));
     }
 
     private static void handleBrokenFile(
@@ -755,21 +955,27 @@ public final class BackupStorage {
 
     private static void writeEntriesInParallel(
             Path worldPath,
+            Path scratchDirectory,
             ZipArchiveOutputStream zipOut,
             List<String> files,
             BackupManifest manifest,
             BackupStatus status,
             Map<String, BackupManifest.FileState> finalSnapshot,
+            BackupConfig config,
             ProgressTracker progress
     ) throws IOException {
-        int threads = Math.clamp(BackupConfig.get().threadCount, 1, Math.max(1, Runtime.getRuntime().availableProcessors()));
+        int threads = Math.clamp(config.threadCount, 1, Math.max(1, Runtime.getRuntime().availableProcessors()));
         ExecutorService compressExecutor = newCompressExecutor(threads);
         ExecutorService writeExecutor = newSingleWriteExecutor();
         ACTIVE_PARALLEL_EXECUTORS.add(compressExecutor);
         ACTIVE_PARALLEL_EXECUTORS.add(writeExecutor);
         Map<String, ReadResult> results = new ConcurrentHashMap<>();
         try {
-            ParallelScatterZipCreator creator = new ParallelScatterZipCreator(compressExecutor);
+            ParallelScatterZipCreator creator = new ParallelScatterZipCreator(
+                    compressExecutor,
+                    new DefaultBackingStoreSupplier(scratchDirectory),
+                    config.deflateCompressionLevel
+            );
             for (String relativeName : files) {
                 ZipArchiveEntry entry = new ZipArchiveEntry(relativeName.replace('\\', '/'));
                 entry.setMethod(ZipMethod.DEFLATED.getCode());

@@ -41,6 +41,7 @@ public final class BackupConfig {
     public int minimumFreeSpaceReserveMb = 512;
     public int threadCount = Math.max(1, Runtime.getRuntime().availableProcessors() - 2);
     public BackupCompressionMethod compressionMethod = BackupCompressionMethod.DEFLATED;
+    public int deflateCompressionLevel = 6;
     public int zstdCompressionLevel = 3;
     public RemoteStorage remoteStorage = new RemoteStorage();
     public Retention retention = new Retention();
@@ -116,6 +117,7 @@ public final class BackupConfig {
         copy.minimumFreeSpaceReserveMb = minimumFreeSpaceReserveMb;
         copy.threadCount = threadCount;
         copy.compressionMethod = compressionMethod;
+        copy.deflateCompressionLevel = deflateCompressionLevel;
         copy.zstdCompressionLevel = zstdCompressionLevel;
         copy.remoteStorage = remoteStorage.copy();
         copy.backupDirectory = backupDirectory;
@@ -228,6 +230,7 @@ public final class BackupConfig {
         minimumFreeSpaceReserveMb = Math.max(0, minimumFreeSpaceReserveMb);
         threadCount = Math.clamp(threadCount, 1, Math.max(1, Runtime.getRuntime().availableProcessors()));
         if (compressionMethod == null) compressionMethod = BackupCompressionMethod.DEFLATED;
+        deflateCompressionLevel = Math.clamp(deflateCompressionLevel, 1, 9);
         zstdCompressionLevel = Math.clamp(zstdCompressionLevel, 1, 22);
         if (remoteStorage == null) remoteStorage = new RemoteStorage();
         remoteStorage.normalize();

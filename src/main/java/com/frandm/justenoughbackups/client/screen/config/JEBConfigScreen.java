@@ -92,6 +92,7 @@ public final class JEBConfigScreen extends Screen {
         for (ConfigFieldSpec spec : ConfigFieldSpecs.forTab(tab)) {
             ConfigFieldId id = spec.id();
             if (!shouldShowRemoteProviderField(id)) continue;
+            if (!shouldShowCompressionField(id)) continue;
 
             boolean isSubOption = isAutomaticBackupSubOption(id);
             int x = isSubOption ? baseContainerX + indentX : baseContainerX;
@@ -125,6 +126,16 @@ public final class JEBConfigScreen extends Screen {
         return (!s3Field && !webDavField)
                 || (s3Field && state.working.remoteStorage.provider == RemoteProviderType.S3)
                 || (webDavField && state.working.remoteStorage.provider == RemoteProviderType.WEBDAV);
+    }
+
+    private boolean shouldShowCompressionField(ConfigFieldId id) {
+        if (id == ConfigFieldId.DEFLATE_COMPRESSION_LEVEL) {
+            return state.working.compressionMethod == BackupCompressionMethod.DEFLATED;
+        }
+        if (id == ConfigFieldId.ZSTD_COMPRESSION_LEVEL) {
+            return state.working.compressionMethod == BackupCompressionMethod.ZSTANDARD;
+        }
+        return true;
     }
 
     private boolean isAutomaticBackupSubOption(ConfigFieldId id) {
@@ -192,6 +203,7 @@ public final class JEBConfigScreen extends Screen {
             case MAX_TOTAL_SIZE_MB -> () -> state.working.retention.maxTotalSizeMb;
             case MINIMUM_FREE_SPACE_RESERVE_MB -> () -> state.working.minimumFreeSpaceReserveMb;
             case THREAD_COUNT -> () -> state.working.threadCount;
+            case DEFLATE_COMPRESSION_LEVEL -> () -> state.working.deflateCompressionLevel;
             case ZSTD_COMPRESSION_LEVEL -> () -> state.working.zstdCompressionLevel;
             case REMOTE_STORAGE_RETRIES -> () -> state.working.remoteStorage.maxRetries;
             case PERMISSION_LEVEL -> () -> state.working.commandPermissionLevel;
@@ -215,6 +227,7 @@ public final class JEBConfigScreen extends Screen {
             case MAX_TOTAL_SIZE_MB -> value -> state.working.retention.maxTotalSizeMb = value;
             case MINIMUM_FREE_SPACE_RESERVE_MB -> value -> state.working.minimumFreeSpaceReserveMb = value;
             case THREAD_COUNT -> value -> state.working.threadCount = value;
+            case DEFLATE_COMPRESSION_LEVEL -> value -> state.working.deflateCompressionLevel = value;
             case ZSTD_COMPRESSION_LEVEL -> value -> state.working.zstdCompressionLevel = value;
             case REMOTE_STORAGE_RETRIES -> value -> state.working.remoteStorage.maxRetries = value;
             case PERMISSION_LEVEL -> value -> state.working.commandPermissionLevel = value;

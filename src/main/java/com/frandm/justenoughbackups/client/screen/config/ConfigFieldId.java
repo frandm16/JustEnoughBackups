@@ -19,6 +19,7 @@ public enum ConfigFieldId {
     MINIMUM_FREE_SPACE_RESERVE_MB("screen.justenoughbackups.config.minimum_free_space_reserve_mb", ConfigTab.BACKUPS, ConfigControlType.INT),
     THREAD_COUNT("screen.justenoughbackups.config.thread_count", ConfigTab.BACKUPS, ConfigControlType.INT),
     COMPRESSION_METHOD("screen.justenoughbackups.config.compression_method", ConfigTab.BACKUPS, ConfigControlType.ENUM),
+    DEFLATE_COMPRESSION_LEVEL("screen.justenoughbackups.config.deflate_compression_level", ConfigTab.BACKUPS, ConfigControlType.INT),
     ZSTD_COMPRESSION_LEVEL("screen.justenoughbackups.config.zstd_compression_level", ConfigTab.BACKUPS, ConfigControlType.INT),
     REMOTE_STORAGE_ENABLED("screen.justenoughbackups.config.remote_storage_enabled", ConfigTab.REMOTE_STORAGE, ConfigControlType.BOOLEAN),
     REMOTE_STORAGE_PROVIDER("screen.justenoughbackups.config.remote_storage_provider", ConfigTab.REMOTE_STORAGE, ConfigControlType.ENUM),
