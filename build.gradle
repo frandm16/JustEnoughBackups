@@ -13,10 +13,22 @@ base {
 
 def awsSdkVersion = "2.31.78"
 def minecraftNettyVersion = "4.2.16.Final"
+def zstdVersion = "1.5.7-3"
 def bundledRuntime = configurations.create("bundledRuntime")
 bundledRuntime.canBeConsumed = false
 bundledRuntime.canBeResolved = true
 configurations.implementation.extendsFrom(bundledRuntime)
+
+def isIncludedInMod = { artifact ->
+    def id = artifact.moduleVersion.id
+    if (id.group == "io.netty" && artifact.name != "netty-codec-http2") return false
+    if (id.group == "org.slf4j" && artifact.name == "slf4j-api") return false
+    if (id.group == "commons-io" && artifact.name == "commons-io") return false
+    if (id.group == "commons-codec" && artifact.name == "commons-codec") return false
+    if (id.group == "org.apache.commons" && artifact.name == "commons-lang3") return false
+    if (id.group == "org.apache.commons" && artifact.name == "commons-compress") return false
+    return true
+}
 
 java {
     toolchain {
@@ -44,8 +56,12 @@ dependencies {
     compileOnly "maven.modrinth:modmenu:${modmenu_version}"
 
     add("bundledRuntime", "org.apache.commons:commons-compress:1.28.0")
-    add("bundledRuntime", "com.github.luben:zstd-jni:1.5.7-3")
-    add("bundledRuntime", "software.amazon.awssdk:s3:${awsSdkVersion}")
+    add("bundledRuntime", "com.github.luben:zstd-jni:${zstdVersion}")
+    add("bundledRuntime", "software.amazon.awssdk:s3:${awsSdkVersion}") {
+        exclude group: "software.amazon.awssdk", module: "apache-client"
+        exclude group: "org.apache.httpcomponents"
+        exclude group: "commons-logging"
+    }
     add("bundledRuntime", "software.amazon.awssdk:netty-nio-client:${awsSdkVersion}")
     add("bundledRuntime", "io.netty:netty-codec-http2:${minecraftNettyVersion}")
 
@@ -58,7 +74,7 @@ afterEvaluate {
             .sort { left, right -> left.moduleVersion.id.toString() <=> right.moduleVersion.id.toString() }
             .each { artifact ->
                 def id = artifact.moduleVersion.id
-                if (id.group != "io.netty" || artifact.name == "netty-codec-http2") {
+                if (isIncludedInMod(artifact)) {
                     dependencies.add("include", "${id.group}:${artifact.name}:${id.version}")
                 }
             }
@@ -80,6 +96,35 @@ test {
     }
 }
 
+tasks.named("processIncludeJars").configure {
+    doLast {
+        def targetDir = layout.buildDirectory.dir("processIncludeJars").get().asFile
+        def zstdJar = new File(targetDir, "zstd-jni-${zstdVersion}.jar")
+        if (zstdJar.exists()) {
+            def tempJar = new File(targetDir, "zstd-jni-${zstdVersion}-stripped.jar")
+            def excludedPrefixes = [
+                "aix/", "freebsd/", "win/x86/",
+                "linux/arm/", "linux/i386/", "linux/loongarch64/", "linux/mips64/",
+                "linux/ppc64/", "linux/ppc64le/", "linux/riscv64/", "linux/s390x/"
+            ]
+            new java.util.zip.ZipFile(zstdJar).withCloseable { srcZip ->
+                new java.util.zip.ZipOutputStream(new FileOutputStream(tempJar)).withCloseable { dstZip ->
+                    srcZip.entries().each { entry ->
+                        if (!excludedPrefixes.any { entry.name.startsWith(it) }) {
+                            dstZip.putNextEntry(new java.util.zip.ZipEntry(entry.name))
+                            if (!entry.isDirectory()) {
+                                dstZip << srcZip.getInputStream(entry)
+                            }
+                            dstZip.closeEntry()
+                        }
+                    }
+                }
+            }
+            java.nio.file.Files.move(tempJar.toPath(), zstdJar.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+        }
+    }
+}
+
 tasks.register("verifyAwsSdkPackaging") {
     group = "verification"
     description = "Checks that the distributable mod nests all bundled runtime dependencies."
@@ -97,7 +142,7 @@ tasks.register("verifyAwsSdkPackaging") {
             def nestedPaths = (metadata.jars ?: []).collect { it.file.toString() } as Set
 
             configurations.bundledRuntime.resolvedConfiguration.resolvedArtifacts
-                    .findAll { it.moduleVersion.id.group != "io.netty" || it.name == "netty-codec-http2" }
+                    .findAll { isIncludedInMod(it) }
                     .each { artifact ->
                         def id = artifact.moduleVersion.id
                         def expectedPath = "META-INF/jars/${artifact.name}-${id.version}.jar".toString()
@@ -110,14 +155,38 @@ tasks.register("verifyAwsSdkPackaging") {
                     }
 
             configurations.bundledRuntime.resolvedConfiguration.resolvedArtifacts
-                    .findAll { it.moduleVersion.id.group == "io.netty" }
+                    .findAll { !isIncludedInMod(it) }
                     .each { artifact ->
                         def id = artifact.moduleVersion.id
-                        def nettyPath = "META-INF/jars/${artifact.name}-${id.version}.jar".toString()
-                        if (artifact.name != "netty-codec-http2" && (nestedPaths.contains(nettyPath) || archiveZip.getEntry(nettyPath) != null)) {
-                            throw new GradleException("Netty must come from Minecraft, not nested jars: ${nettyPath}")
+                        def excludedPath = "META-INF/jars/${artifact.name}-${id.version}.jar".toString()
+                        if (nestedPaths.contains(excludedPath) || archiveZip.getEntry(excludedPath) != null) {
+                            throw new GradleException("Artifact must come from Minecraft or be excluded, not nested jars: ${excludedPath}")
                         }
                     }
+
+            def zstdPath = "META-INF/jars/zstd-jni-${zstdVersion}.jar".toString()
+            if (archiveZip.getEntry(zstdPath) != null) {
+                def zstdBytes = archiveZip.getInputStream(archiveZip.getEntry(zstdPath)).bytes
+                def zstdZip = new java.util.zip.ZipInputStream(new ByteArrayInputStream(zstdBytes))
+                try {
+                    def hasWinAmd64 = false
+                    def hasLinuxAmd64 = false
+                    def hasDarwinAarch64 = false
+                    for (def entry = zstdZip.nextEntry; entry != null; entry = zstdZip.nextEntry) {
+                        if (entry.name.startsWith("aix/") || entry.name.startsWith("win/x86/")) {
+                            throw new GradleException("Exotic/32-bit architecture was not stripped from zstd-jni: ${entry.name}")
+                        }
+                        if (entry.name == "win/amd64/libzstd-jni-${zstdVersion}.dll") hasWinAmd64 = true
+                        if (entry.name == "linux/amd64/libzstd-jni-${zstdVersion}.so") hasLinuxAmd64 = true
+                        if (entry.name == "darwin/aarch64/libzstd-jni-${zstdVersion}.dylib") hasDarwinAarch64 = true
+                    }
+                    if (!hasWinAmd64 || !hasLinuxAmd64 || !hasDarwinAarch64) {
+                        throw new GradleException("Required 64-bit native libraries missing from zstd-jni")
+                    }
+                } finally {
+                    zstdZip.close()
+                }
+            }
 
             def http2Path = "META-INF/jars/netty-codec-http2-${minecraftNettyVersion}.jar".toString()
             if (!nestedPaths.contains(http2Path) || archiveZip.getEntry(http2Path) == null) {
