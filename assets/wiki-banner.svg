@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="156" viewBox="0 0 1200 156" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">Just Enough Backups documentation wiki</title>
+  <desc id="desc">A link to the new JEB documentation with setup, command, configuration, storage, and restore guides.</desc>
+  <defs>
+    <linearGradient id="surface" x1="0" y1="0" x2="1200" y2="156" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F5F9FC"/>
+      <stop offset="1" stop-color="#E8F0F5"/>
+    </linearGradient>
+    <linearGradient id="icon" x1="34" y1="44" x2="98" y2="108" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6689A1"/>
+      <stop offset="1" stop-color="#3C617B"/>
+    </linearGradient>
+    <pattern id="grid" width="22" height="22" patternUnits="userSpaceOnUse">
+      <path d="M22 0H0V22" stroke="#6689A1" stroke-opacity=".09"/>
+    </pattern>
+    <filter id="shadow" x="0" y="0" width="1200" height="156" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#263D4D" flood-opacity=".07"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#shadow)">
+    <rect x="8" y="8" width="1184" height="140" rx="20" fill="url(#surface)"/>
+    <rect x="8.5" y="8.5" width="1183" height="139" rx="19.5" stroke="#B9CAD6"/>
+    <path d="M900 9H1170C1182.15 9 1192 18.8497 1192 31V125C1192 137.15 1182.15 147 1170 147H900V9Z" fill="url(#grid)"/>
+    <circle cx="1094" cy="78" r="68" fill="#8BA9BC" fill-opacity=".08"/>
+  </g>
+
+  <rect x="34" y="45" width="64" height="64" rx="17" fill="url(#icon)"/>
+  <path d="M47 62C55 59 62 60 66 64V92C61 89 54 89 47 92V62Z" stroke="#F7FAFC" stroke-width="2.2" stroke-linejoin="round"/>
+  <path d="M85 62C77 59 70 60 66 64V92C71 89 78 89 85 92V62Z" stroke="#F7FAFC" stroke-width="2.2" stroke-linejoin="round"/>
+  <path d="M51 69H61M51 75H61M72 69H81M72 75H81" stroke="#D8E5ED" stroke-width="1.6" stroke-linecap="round"/>
+
+  <rect x="122" y="29" width="157" height="22" rx="11" fill="#DDE8EF"/>
+  <circle cx="137" cy="40" r="3" fill="#4D748F"/>
+  <text x="147" y="44" fill="#466B83" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="9" font-weight="700" letter-spacing="1">NEW · OFFICIAL WIKI</text>
+
+  <text x="122" y="81" fill="#1D2C36" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="25" font-weight="700" letter-spacing="-.45">The JEB documentation is here</text>
+  <text x="122" y="108" fill="#536B7B" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="14" font-weight="400">Setup, commands, configuration, remote storage, and safe restores.</text>
+
+  <g opacity=".82">
+    <rect x="846" y="36" width="43" height="57" rx="8" fill="#F8FBFD" stroke="#B9CAD6"/>
+    <path d="M856 50H879M856 58H875M856 66H879M856 74H872" stroke="#8BA2B2" stroke-width="1.8" stroke-linecap="round"/>
+    <rect x="875" y="47" width="39" height="50" rx="7" fill="#EAF1F5" stroke="#A8BDC9"/>
+    <path d="M884 61H904M884 68H901M884 75H904M884 82H897" stroke="#7794A7" stroke-width="1.8" stroke-linecap="round"/>
+  </g>
+
+  <rect x="975" y="56" width="183" height="40" rx="20" fill="#3D617A"/>
+  <text x="997" y="81" fill="#FFFFFF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="12" font-weight="650">Explore the wiki</text>
+  <path d="M1120 76H1136M1130 70L1136 76L1130 82" stroke="#FFFFFF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

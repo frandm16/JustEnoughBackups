@@ -3,6 +3,7 @@ import { h } from 'vue'
 import './custom.css'
 import GitHubStars from './components/GitHubStars.vue'
 import NavDownload from './components/NavDownload.vue'
+import ImageLightbox from './components/ImageLightbox.vue'
 
 export default {
   extends: DefaultTheme,
@@ -11,7 +12,8 @@ export default {
       'nav-bar-content-after': () => [
         h(GitHubStars),
         h(NavDownload)
-      ]
+      ],
+      'layout-bottom': () => h(ImageLightbox)
     })
   }
 }

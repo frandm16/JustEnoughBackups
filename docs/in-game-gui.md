@@ -4,7 +4,7 @@ Just Enough Backups includes a fully interactive client-side user interface. You
 
 ---
 
-## 1. Backup Management Menu <kbd>B</kbd>
+## 1. Backup Management Menu
 
 Press <kbd>B</kbd> to open the **Backup Browser**:
 
@@ -21,7 +21,7 @@ Press <kbd>B</kbd> to open the **Backup Browser**:
 
 ---
 
-## 2. In-Game Configuration Screen <kbd>N</kbd>
+## 2. In-Game Configuration Screen
 
 Press <kbd>N</kbd> or click the config button in [Mod Menu](https://modrinth.com/mod/modmenu):
 

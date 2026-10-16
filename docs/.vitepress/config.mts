@@ -66,8 +66,8 @@ export default defineConfig({
       }
     },
     footer: {
-      message: 'Released under the MIT License.',
-      copyright: 'Copyright © 2026 FranDM'
+      message: '<span class="footer-brand"><img src="/icon.png" alt="" /><strong>Just Enough Backups</strong></span><span class="footer-tagline">Reliable world backups for Fabric servers.</span><span class="footer-links"><a href="/getting-started">Documentation</a><a href="https://github.com/frandm16/JustEnoughBackups" target="_blank" rel="noopener noreferrer">GitHub</a><a href="https://modrinth.com/mod/justenoughbackups-jeb" target="_blank" rel="noopener noreferrer">Modrinth</a></span>',
+      copyright: 'Released under the MIT License · Copyright © 2026 FranDM'
     }
   }
 })
