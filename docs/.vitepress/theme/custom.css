@@ -1,0 +1,413 @@
+/* Documentation pages use a quiet blue-gray accent; the landing page keeps its purple identity. */
+:root {
+  --vp-c-brand-1: #486b84;
+  --vp-c-brand-2: #365b76;
+  --vp-c-brand-3: #294a63;
+  --vp-c-brand-soft: rgba(72, 107, 132, 0.12);
+  --vp-nav-bg-color: rgba(255, 255, 255, 0.94);
+  --jeb-action-text: #ffffff;
+  --jeb-action-hover: #365b76;
+}
+
+.dark {
+  --vp-c-brand-1: #a9c5d8;
+  --vp-c-brand-2: #c2d7e5;
+  --vp-c-brand-3: #8eafc6;
+  --vp-c-brand-soft: rgba(169, 197, 216, 0.14);
+  --vp-nav-bg-color: rgba(26, 26, 27, 0.94);
+  --jeb-action-text: #18212a;
+  --jeb-action-hover: #c2d7e5;
+}
+
+/* Center the three primary links independently from the left search and right actions. */
+.VPNavBar {
+  border-bottom: 1px solid var(--vp-c-divider);
+}
+
+.VPNavBarMenuLink {
+  font-weight: 500;
+}
+
+.VPNavBarMenuLink:hover,
+.VPNavBarMenuLink.active {
+  color: var(--vp-c-brand-1);
+}
+
+.VPNavBar .content-body {
+  position: static !important;
+}
+
+.VPNavBarMenu {
+  position: fixed;
+  top: 0;
+  left: 50vw;
+  transform: translateX(-50%);
+  align-items: center;
+  height: var(--vp-nav-height);
+  margin: 0;
+  gap: clamp(1.1rem, 2.2vw, 2rem);
+  z-index: 20;
+}
+
+.VPNavBar .search {
+  order: 10;
+  flex: 0 0 40px;
+  flex-grow: 0;
+  width: 40px;
+  margin-left: auto;
+  margin-right: 0;
+  padding-left: 0 !important;
+}
+
+.VPNavBarSearch .DocSearch-Button {
+  justify-content: center;
+  padding: 0;
+  width: 40px;
+  border-color: transparent;
+  border-radius: 8px;
+  background: transparent;
+}
+
+.VPNavBarSearch .DocSearch-Button:hover {
+  border-color: var(--vp-c-divider);
+  background: var(--vp-c-bg-soft);
+}
+
+.VPNavBarSearch .DocSearch-Button-Placeholder,
+.VPNavBarSearch .DocSearch-Button-Keys {
+  display: none !important;
+}
+
+.VPNavBarSearch .DocSearch-Button .DocSearch-Search-Icon {
+  margin-right: 0;
+  width: 18px;
+  height: 18px;
+}
+
+@media (min-width: 768px) {
+  .VPNavBarMenu {
+    display: flex;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1279px) {
+  .VPNavBar .search {
+    flex-basis: 40px;
+    width: 40px;
+  }
+}
+
+@media (min-width: 1280px) {
+  .VPNavBarMenu {
+    gap: clamp(1.25rem, 2.5vw, 2.5rem);
+  }
+}
+
+.nav-download-wrapper {
+  order: 40;
+  margin-left: 0.75rem;
+}
+
+.nav-stars-wrapper {
+  order: 20;
+  margin-left: 0.5rem;
+}
+
+.nav-stars-wrapper::before {
+  content: "";
+  display: block;
+  width: 1px;
+  height: 24px;
+  margin-right: 0.5rem;
+  background: var(--vp-c-divider);
+}
+
+.VPNavBarAppearance {
+  order: 30;
+  margin-left: 0.35rem;
+}
+
+.VPNavBarAppearance .VPSwitchAppearance {
+  width: 48px;
+  height: 26px;
+  border-radius: 13px;
+}
+
+.VPNavBarAppearance .VPSwitchAppearance .check,
+.VPNavBarAppearance .VPSwitchAppearance .icon {
+  width: 22px;
+  height: 22px;
+}
+
+.VPNavBarAppearance .VPSwitchAppearance .icon [class^='vpi-'] {
+  top: 4px;
+  left: 4px;
+  width: 14px;
+  height: 14px;
+}
+
+.dark .VPNavBarAppearance .VPSwitchAppearance .check {
+  transform: translateX(22px) !important;
+}
+
+@media (max-width: 767px) {
+  .nav-stars-wrapper {
+    display: none;
+  }
+}
+
+.nav-download-btn:focus-visible,
+.nav-download-menu a:focus-visible {
+  outline: 2px solid var(--vp-c-brand-1);
+  outline-offset: 3px;
+}
+
+.VPHome .VPHomeHero .name .clip {
+  background: linear-gradient(120deg, #d50ffb 25%, #a813e2 85%);
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.VPHome .VPButton.brand {
+  color: var(--jeb-action-text);
+  background-color: var(--vp-c-brand-1);
+  border-color: var(--vp-c-brand-1);
+}
+
+.VPHome .VPButton.brand:hover {
+  background-color: var(--jeb-action-hover);
+  border-color: var(--jeb-action-hover);
+}
+
+/* Image-free landing page: use a centered typographic hero and quiet feature cards. */
+.VPHomeHero {
+  background-image: radial-gradient(ellipse at 50% 12%, var(--vp-c-brand-soft), transparent 64%);
+}
+
+.VPHomeHero .container {
+  max-width: 1000px;
+  text-align: center;
+}
+
+.VPHomeHero .main {
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.VPHomeHero .main::before {
+  content: 'SERVER-SIDE BACKUPS FOR FABRIC';
+  display: inline-flex;
+  align-items: center;
+  margin: 0 auto 1.4rem;
+  padding: 0.45rem 0.8rem;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 999px;
+  background: var(--vp-c-bg);
+  color: var(--vp-c-brand-1);
+  font-size: 0.7rem;
+  font-weight: 650;
+  letter-spacing: 0.1em;
+}
+
+.VPHomeHero .heading {
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.VPHomeHero .name {
+  width: auto;
+  max-width: 100%;
+  white-space: normal;
+  line-height: 1.16;
+  padding: 0.08em 0.12em 0.12em;
+  font-size: clamp(2.2rem, 6vw, 4.4rem);
+  letter-spacing: -0.035em;
+}
+
+.VPHomeHero .text {
+  max-width: none;
+  color: var(--vp-c-text-1);
+  line-height: 1.12;
+  font-size: clamp(1.8rem, 4vw, 3.25rem);
+  font-weight: 650;
+  letter-spacing: -0.045em;
+}
+
+.VPHomeHero .tagline {
+  max-width: 48rem;
+  margin: 0 auto;
+  padding-top: 1.2rem;
+  line-height: 1.7;
+  font-size: clamp(1rem, 1.7vw, 1.2rem);
+}
+
+.VPHomeHero .actions {
+  justify-content: center;
+  padding-top: 1.75rem;
+}
+
+.VPHomeFeatures .VPFeature {
+  border-color: var(--vp-c-divider);
+  border-radius: 14px;
+  background: var(--vp-c-bg);
+}
+
+.VPHomeFeatures .VPFeature .box {
+  min-height: 166px;
+}
+
+.VPHomeFeatures .VPFeature .title {
+  letter-spacing: -0.015em;
+}
+
+/* Small documentation diagrams stay readable on narrow screens and in dark mode. */
+.doc-flow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px minmax(0, 1fr) 28px minmax(0, 1fr);
+  align-items: stretch;
+  gap: 0.5rem;
+  margin: 1.5rem 0 2rem;
+}
+
+.doc-flow-step {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 12px;
+  background: var(--vp-c-bg-soft);
+}
+
+.doc-flow-step strong {
+  color: var(--vp-c-text-1);
+  font-size: 0.95rem;
+}
+
+.doc-flow-step > span:last-child {
+  color: var(--vp-c-text-2);
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
+
+.doc-flow-index {
+  color: var(--vp-c-brand-1);
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+}
+
+.doc-flow-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--vp-c-brand-1);
+  font-size: 1.15rem;
+}
+
+.doc-chain-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 1.25rem 0 2rem;
+}
+
+.doc-chain-row {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 12px;
+  background: var(--vp-c-bg-soft);
+}
+
+.doc-chain-label {
+  color: var(--vp-c-brand-1);
+  font-size: 0.75rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.doc-chain-track {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.doc-chain-fork {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.doc-chain-node {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+  color: var(--vp-c-text-1);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.doc-chain-node small {
+  color: var(--vp-c-text-2);
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
+.doc-chain-arrow {
+  flex: 0 0 auto;
+  color: var(--vp-c-brand-1);
+}
+
+.doc-restore-flow {
+  grid-template-columns: minmax(0, 1fr) 20px minmax(0, 1fr) 20px minmax(0, 1fr) 20px minmax(0, 1fr);
+  gap: 0.6rem;
+}
+
+.doc-restore-flow .doc-flow-step {
+  padding: 0.9rem;
+}
+
+@media (max-width: 720px) {
+  .doc-flow,
+  .doc-restore-flow {
+    grid-template-columns: 1fr;
+    gap: 0.4rem;
+  }
+
+  .doc-flow-arrow {
+    min-height: 1rem;
+    transform: rotate(90deg);
+  }
+
+  .doc-chain-row {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+
+  .doc-chain-track {
+    gap: 0.4rem;
+    flex-wrap: wrap;
+  }
+
+  .doc-chain-fork {
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .doc-chain-node {
+    font-size: 0.78rem;
+  }
+
+  .doc-chain-node small {
+    font-size: 0.68rem;
+  }
+}
