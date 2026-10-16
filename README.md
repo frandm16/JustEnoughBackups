@@ -1,4 +1,10 @@
 <p align="center">
+  <a href="https://jeb.frandm.dev">
+    <img src="assets/wiki-banner.svg" alt="New official documentation wiki for Just Enough Backups — explore setup, commands, configuration, storage, and restore guides." width="100%" />
+  </a>
+</p>
+
+<p align="center">
   <img src="assets/banner.png" alt="Just Enough Backups" />
 </p>
 
