@@ -4,6 +4,7 @@ import './custom.css'
 import GitHubStars from './components/GitHubStars.vue'
 import NavDownload from './components/NavDownload.vue'
 import ImageLightbox from './components/ImageLightbox.vue'
+import OutboundLinkTracking from './components/OutboundLinkTracking.vue'
 
 export default {
   extends: DefaultTheme,
@@ -13,7 +14,7 @@ export default {
         h(GitHubStars),
         h(NavDownload)
       ],
-      'layout-bottom': () => h(ImageLightbox)
+      'layout-bottom': () => [h(ImageLightbox), h(OutboundLinkTracking)]
     })
   }
 }
