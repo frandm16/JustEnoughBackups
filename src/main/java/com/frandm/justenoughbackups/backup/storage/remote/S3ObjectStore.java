@@ -13,6 +13,7 @@ import software.amazon.awssdk.http.nio.netty.SdkEventLoopGroup;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3AsyncClient;
 import software.amazon.awssdk.services.s3.S3Configuration;
+import software.amazon.awssdk.services.s3.multipart.MultipartConfiguration;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.CopyObjectRequest;
 import software.amazon.awssdk.services.s3.model.UploadPartCopyRequest;
@@ -77,14 +78,16 @@ final class S3ObjectStore implements RemoteObjectStore {
                 .httpClientBuilder(NettyNioAsyncHttpClient.builder()
                         .eventLoopGroupBuilder(SdkEventLoopGroup.builder().numberOfThreads(2))
                         .maxConcurrency(16)
-                        .maxPendingConnectionAcquires(64)
                         .connectionTimeout(Duration.ofSeconds(15))
                         .connectionAcquisitionTimeout(Duration.ofSeconds(60))
                         .readTimeout(Duration.ofSeconds(45))
                         .writeTimeout(Duration.ofSeconds(45)))
                 .asyncConfiguration(configuration -> configuration.advancedOption(
                         SdkAdvancedAsyncClientOption.FUTURE_COMPLETION_EXECUTOR, completionExecutor))
-                .multipartEnabled(true);
+                .multipartEnabled(true)
+                .multipartConfiguration(MultipartConfiguration.builder()
+                        .thresholdInBytes(SINGLE_COPY_LIMIT_BYTES)
+                        .build());
         if (!config.s3Endpoint.isBlank()) {
             try {
                 URI endpoint = URI.create(config.s3Endpoint.trim());
@@ -187,7 +190,6 @@ final class S3ObjectStore implements RemoteObjectStore {
                 .bucket(bucket).key(targetKey).build()).join().uploadId();
         List<CompletedPart> completedParts = new ArrayList<>();
         try {
-            String encodedSource = encodeCopySource(bucket + "/" + sourceKey);
             int partNumber = 1;
             for (long firstByte = 0; firstByte < size; firstByte += COPY_PART_SIZE_BYTES) {
                 long lastByte = Math.min(size - 1L, firstByte + COPY_PART_SIZE_BYTES - 1L);
@@ -195,7 +197,6 @@ final class S3ObjectStore implements RemoteObjectStore {
                         .sourceBucket(bucket).sourceKey(sourceKey)
                         .destinationBucket(bucket).destinationKey(targetKey).uploadId(uploadId)
                         .partNumber(partNumber)
-                        .copySource(encodedSource)
                         .copySourceRange("bytes=" + firstByte + "-" + lastByte)
                         .build()).join();
                 completedParts.add(CompletedPart.builder().partNumber(partNumber)
@@ -215,11 +216,6 @@ final class S3ObjectStore implements RemoteObjectStore {
             }
             throw failure;
         }
-    }
-
-    private static String encodeCopySource(String source) {
-        return java.net.URLEncoder.encode(source, java.nio.charset.StandardCharsets.UTF_8)
-                .replace("+", "%20").replace("%2F", "/");
     }
 
     @Override
