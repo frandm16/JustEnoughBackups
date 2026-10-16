@@ -207,7 +207,7 @@
   "screen.justenoughbackups.config.keep_partial.tooltip": "Maximum number of partial backups to keep. Required base backups are protected.",
 "screen.justenoughbackups.config.keep_differential.tooltip": "Maximum number of differential backups to keep. Required full backups are protected.",
 "screen.justenoughbackups.config.max_total_size_mb.tooltip": "Maximum total size in MB for this world's backup folder. 0 disables the size limit. \nCount-based retention and dependency protection still apply.",
-  "screen.justenoughbackups.config.minimum_free_space_reserve_mb.tooltip": "Extra disk space in MB that must remain free before a backup starts. \nThe pre-check requires world size x2 plus this reserve.",
+  "screen.justenoughbackups.config.minimum_free_space_reserve_mb.tooltip": "Extra disk space in MB that must remain free before a backup starts. The pre-check estimates compressed size from included files and the latest Full backup. Same file system: about 2x the estimate plus this reserve. Separate temporary and backup file systems: the estimate plus this reserve on each.",
   "screen.justenoughbackups.config.thread_count.tooltip": "Number of parallel threads used for file hashing, ZIP extraction, and restore operations.\nHigher values speed up large worlds but increase CPU usage. Defaults to CPU cores minus two.\nCaution: Excessive values may impact overall system performance.",
   "screen.justenoughbackups.config.compression_method.tooltip": "DEFLATED preserves the current ZIP method. ZSTANDARD creates ZIP entries using Zstandard method 93; restorations require Zstandard support.",
   "screen.justenoughbackups.config.deflate_compression_level.tooltip": "Deflate level from 1 (faster) to 9 (smaller). Applies only when compression method is DEFLATED.",

@@ -48,3 +48,9 @@ logs/
 .claude/
 CLAUDE.md
 /META-INF/
+
+# Node & VitePress
+node_modules/
+docs/.vitepress/dist/
+docs/.vitepress/cache/
+
