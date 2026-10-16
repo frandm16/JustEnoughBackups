@@ -6,7 +6,13 @@ export default defineConfig({
   base: '/',
   head: [
     ['link', { rel: 'icon', type: 'image/png', href: '/icon.png?v=20261016' }],
-    ['meta', { name: 'theme-color', content: '#486b84' }]
+    ['meta', { name: 'theme-color', content: '#486b84' }],
+    ['script', {
+      defer: '',
+      src: 'https://stats.frandm.dev/script.js',
+      'data-website-id': '7f1ef7cf-e296-450d-822c-492c71c8126d',
+      'data-domains': 'jeb.frandm.dev'
+    }]
   ],
   themeConfig: {
     logo: '/icon.png?v=20261016',
