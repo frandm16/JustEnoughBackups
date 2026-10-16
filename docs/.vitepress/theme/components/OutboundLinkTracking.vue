@@ -6,11 +6,23 @@ type UmamiTracker = {
 }
 
 const slugify = (value: string) => value
+  .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
   .toLowerCase()
   .normalize('NFD')
   .replace(/[\u0300-\u036f]/g, '')
   .replace(/[^a-z0-9]+/g, '-')
   .replace(/^-|-$/g, '')
+
+const canonicalize = (value: string) => {
+  const slug = slugify(value)
+  const aliases: Record<string, string> = {
+    'justenoughbackups': 'just-enough-backups',
+    'justenoughbackups-jeb': 'just-enough-backups',
+    'modmenu': 'mod-menu',
+    '7-zip': '7zip'
+  }
+  return aliases[slug] || slug
+}
 
 const trackOutboundLink = (event: MouseEvent) => {
   if (!(event.target instanceof Element)) return
@@ -37,14 +49,14 @@ const trackOutboundLink = (event: MouseEvent) => {
         ? 'landing'
         : 'content'
 
-  const host = slugify(destination.hostname.replace(/^www\./, '').split('.')[0]).slice(0, 12) || 'external'
+  const host = canonicalize(destination.hostname.replace(/^www\./, '').split('.')[0]).slice(0, 16) || 'external'
   const pathSegments = destination.pathname.split('/').filter(Boolean)
-  const target = slugify(pathSegments[pathSegments.length - 1] || '')
-    || slugify(link.innerText)
+  const target = canonicalize(pathSegments[pathSegments.length - 1] || '')
+    || canonicalize(link.innerText)
     || 'home'
-  const prefix = `outbound-${host}-`
-  const suffix = `-${area}`
-  const eventName = `${prefix}${target.slice(0, 50 - prefix.length - suffix.length)}${suffix}`
+  const eventName = target === host
+    ? `${host}-${area}`
+    : `${host}-${target.slice(0, 50 - host.length - area.length - 2)}-${area}`
 
   tracker?.track(eventName)
 }
