@@ -30,12 +30,12 @@
   <path d="M85 62C77 59 70 60 66 64V92C71 89 78 89 85 92V62Z" stroke="#F7FAFC" stroke-width="2.2" stroke-linejoin="round"/>
   <path d="M51 69H61M51 75H61M72 69H81M72 75H81" stroke="#D8E5ED" stroke-width="1.6" stroke-linecap="round"/>
 
-  <rect x="122" y="29" width="157" height="22" rx="11" fill="#DDE8EF"/>
+  <rect x="122" y="27" width="188" height="26" rx="13" fill="#DDE8EF"/>
   <circle cx="137" cy="40" r="3" fill="#4D748F"/>
-  <text x="147" y="44" fill="#466B83" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="9" font-weight="700" letter-spacing="1">NEW · OFFICIAL WIKI</text>
+  <text x="147" y="44" fill="#36576D" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="11" font-weight="750" letter-spacing=".8">NEW · OFFICIAL WIKI</text>
 
-  <text x="122" y="81" fill="#1D2C36" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="25" font-weight="700" letter-spacing="-.45">The JEB documentation is here</text>
-  <text x="122" y="108" fill="#536B7B" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="14" font-weight="400">Setup, commands, configuration, remote storage, and safe restores.</text>
+  <text x="122" y="82" fill="#172630" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="29" font-weight="750" letter-spacing="-.35">The JEB documentation is here</text>
+  <text x="122" y="112" fill="#354D5D" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17" font-weight="500">Setup, commands, configuration, remote storage, and safe restores.</text>
 
   <g opacity=".82">
     <rect x="846" y="36" width="43" height="57" rx="8" fill="#F8FBFD" stroke="#B9CAD6"/>
@@ -45,6 +45,6 @@
   </g>
 
   <rect x="975" y="56" width="183" height="40" rx="20" fill="#3D617A"/>
-  <text x="997" y="81" fill="#FFFFFF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="12" font-weight="650">Explore the wiki</text>
+  <text x="997" y="81" fill="#FFFFFF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="13" font-weight="700">Explore the wiki</text>
   <path d="M1120 76H1136M1130 70L1136 76L1130 82" stroke="#FFFFFF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
