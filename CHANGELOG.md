@@ -17,7 +17,7 @@ All notable changes to this project are documented in this file.
 
 ### Fixed
 
-- Reduced distributed mod JAR size from ~100MB to ~11MB by pruning unused architecture native binaries in `zstd-jni` (retaining standard 64-bit platforms: Windows x64, Linux x64, macOS ARM64/x64) and aligning Netty/Commons dependencies with Minecraft runtime.
+- Reduced distributed mod JAR size from ~18MB to ~10MB by pruning unused architecture native binaries in `zstd-jni` (retaining standard 64-bit platforms: Windows x64, Linux x64, macOS ARM64/x64) and aligning Netty/Commons dependencies with Minecraft runtime.
 - Input fields in configuration and backup management screens now properly lose focus when clicking outside.
 - Pressing ESC in the backup management screen now properly closes modal confirmation dialogs (restore and delete modals).
 - Prevented integer overflow in progress percentage calculation for backups larger than 2GB.
