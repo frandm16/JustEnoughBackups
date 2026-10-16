@@ -708,17 +708,16 @@ public final class JEBConfigScreen extends Screen {
     }
 
     private Rect tabRect(ConfigTab tab) {
-        int areaX = ScreenChrome.OUTER;
-        int areaW = Math.max(1, width - ScreenChrome.OUTER * 2);
+        int availableWidth = width - ScreenChrome.OUTER * 2;
+        int areaW = Math.max(1, (availableWidth * 3) / 4);
+        int areaX = (width - areaW) / 2;
         int gap = 4;
         List<ConfigTab> tabs = visibleTabs();
         int tabCount = tabs.size();
         int tabW = Math.max(1, (areaW - gap * (tabCount - 1)) / tabCount);
-        int totalW = tabW * tabCount + gap * (tabCount - 1);
-        int x = areaX + (areaW - totalW) / 2;
-        int index = tabs.indexOf(tab);
-        int tabX = x + index * (tabW + gap);
-        int actualWidth = index == tabCount - 1 ? areaX + areaW - tabX : tabW;
+        int index = Math.max(0, tabs.indexOf(tab));
+        int tabX = areaX + index * (tabW + gap);
+        int actualWidth = Math.max(1, index == tabCount - 1 ? areaX + areaW - tabX : tabW);
         return new Rect(tabX, TAB_Y, actualWidth, TAB_H);
     }
 
