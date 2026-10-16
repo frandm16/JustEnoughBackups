@@ -47,3 +47,4 @@ run/
 logs/
 .claude/
 CLAUDE.md
+/META-INF/
