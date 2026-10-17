@@ -26,7 +26,6 @@ def isIncludedInMod = { artifact ->
     if (id.group == "commons-io" && artifact.name == "commons-io") return false
     if (id.group == "commons-codec" && artifact.name == "commons-codec") return false
     if (id.group == "org.apache.commons" && artifact.name == "commons-lang3") return false
-    if (id.group == "org.apache.commons" && artifact.name == "commons-compress") return false
     return true
 }
 
