@@ -2,7 +2,19 @@
 
 All notable changes to this project are documented in this file.
 
-## 1.2.0.8+26.3 - 16/10/2026
+## 1.2.0.10+26.3 - 18/10/2026
+
+### Added
+
+- Configurable backup watchdog timeout (`watchdogTimeoutSeconds`, default: 300 seconds; valid range: 30–86400 seconds).
+
+### Fixed
+
+- Backup watchdog now tracks explicit activity during parallel ZIP writing and backup publication copying, reducing false timeouts during active work.
+- Parallel ZIP progress now transitions explicitly into the writing phase instead of relying solely on expected input-byte totals.
+- Cross-filesystem backup publication now stages and validates the copied archive before moving it into the final backup path.
+
+## 1.2.0.9+26.3 - 16/10/2026
 
 ### Added
 

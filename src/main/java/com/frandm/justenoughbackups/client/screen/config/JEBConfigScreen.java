@@ -202,6 +202,7 @@ public final class JEBConfigScreen extends Screen {
             case KEEP_DIFFERENTIAL -> () -> state.working.retention.differential;
             case MAX_TOTAL_SIZE_MB -> () -> state.working.retention.maxTotalSizeMb;
             case MINIMUM_FREE_SPACE_RESERVE_MB -> () -> state.working.minimumFreeSpaceReserveMb;
+            case WATCHDOG_TIMEOUT_SECONDS -> () -> state.working.watchdogTimeoutSeconds;
             case THREAD_COUNT -> () -> state.working.threadCount;
             case DEFLATE_COMPRESSION_LEVEL -> () -> state.working.deflateCompressionLevel;
             case ZSTD_COMPRESSION_LEVEL -> () -> state.working.zstdCompressionLevel;
@@ -226,6 +227,7 @@ public final class JEBConfigScreen extends Screen {
             case KEEP_DIFFERENTIAL -> value -> state.working.retention.differential = value;
             case MAX_TOTAL_SIZE_MB -> value -> state.working.retention.maxTotalSizeMb = value;
             case MINIMUM_FREE_SPACE_RESERVE_MB -> value -> state.working.minimumFreeSpaceReserveMb = value;
+            case WATCHDOG_TIMEOUT_SECONDS -> value -> state.working.watchdogTimeoutSeconds = value;
             case THREAD_COUNT -> value -> state.working.threadCount = value;
             case DEFLATE_COMPRESSION_LEVEL -> value -> state.working.deflateCompressionLevel = value;
             case ZSTD_COMPRESSION_LEVEL -> value -> state.working.zstdCompressionLevel = value;
@@ -936,6 +938,7 @@ public final class JEBConfigScreen extends Screen {
             case KEEP_DIFFERENTIAL -> parseInt(input).ifPresent(value -> state.working.retention.differential = value);
             case MAX_TOTAL_SIZE_MB -> parseInt(input).ifPresent(value -> state.working.retention.maxTotalSizeMb = value);
             case MINIMUM_FREE_SPACE_RESERVE_MB -> parseInt(input).ifPresent(value -> state.working.minimumFreeSpaceReserveMb = value);
+            case WATCHDOG_TIMEOUT_SECONDS -> parseInt(input).ifPresent(value -> state.working.watchdogTimeoutSeconds = value);
             case THREAD_COUNT -> parseInt(input).ifPresent(value -> state.working.threadCount = value);
             case PERMISSION_LEVEL -> parseInt(input).ifPresent(value -> state.working.commandPermissionLevel = value);
             case BACKUP_DIRECTORY -> state.working.backupDirectory = input;

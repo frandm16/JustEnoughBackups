@@ -51,6 +51,7 @@ final class ConfigScreenState {
                 working.retention.differential = defaults.retention.differential;
                 working.retention.maxTotalSizeMb = defaults.retention.maxTotalSizeMb;
                 working.minimumFreeSpaceReserveMb = defaults.minimumFreeSpaceReserveMb;
+                working.watchdogTimeoutSeconds = defaults.watchdogTimeoutSeconds;
                 working.compressionMethod = defaults.compressionMethod;
                 working.deflateCompressionLevel = defaults.deflateCompressionLevel;
                 working.zstdCompressionLevel = defaults.zstdCompressionLevel;

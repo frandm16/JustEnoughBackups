@@ -25,6 +25,7 @@ final class ConfigValidator {
         validateInt(errors, ConfigFieldId.KEEP_DIFFERENTIAL, state.working.retention.differential, 0, Integer.MAX_VALUE, "screen.justenoughbackups.config.error.differential_min");
         validateInt(errors, ConfigFieldId.MAX_TOTAL_SIZE_MB, state.working.retention.maxTotalSizeMb, 0, Integer.MAX_VALUE, "screen.justenoughbackups.config.error.max_total_size_mb_min");
         validateInt(errors, ConfigFieldId.MINIMUM_FREE_SPACE_RESERVE_MB, state.working.minimumFreeSpaceReserveMb, 0, Integer.MAX_VALUE, "screen.justenoughbackups.config.error.minimum_free_space_reserve_mb_min");
+        validateInt(errors, ConfigFieldId.WATCHDOG_TIMEOUT_SECONDS, state.working.watchdogTimeoutSeconds, 30, 86_400, "screen.justenoughbackups.config.error.watchdog_timeout_seconds_range");
         validateInt(errors, ConfigFieldId.THREAD_COUNT, state.working.threadCount, 1, Math.max(1, Runtime.getRuntime().availableProcessors()), "screen.justenoughbackups.config.error.thread_count_range");
         validateInt(errors, ConfigFieldId.DEFLATE_COMPRESSION_LEVEL, state.working.deflateCompressionLevel, 1, 9, "screen.justenoughbackups.config.error.deflate_level_range");
         validateInt(errors, ConfigFieldId.ZSTD_COMPRESSION_LEVEL, state.working.zstdCompressionLevel, 1, 22, "screen.justenoughbackups.config.error.zstd_level_range");
@@ -80,6 +81,7 @@ final class ConfigValidator {
         validateRawInt(errors, state, ConfigFieldId.KEEP_DIFFERENTIAL, 0, Integer.MAX_VALUE);
         validateRawInt(errors, state, ConfigFieldId.MAX_TOTAL_SIZE_MB, 0, Integer.MAX_VALUE);
         validateRawInt(errors, state, ConfigFieldId.MINIMUM_FREE_SPACE_RESERVE_MB, 0, Integer.MAX_VALUE);
+        validateRawInt(errors, state, ConfigFieldId.WATCHDOG_TIMEOUT_SECONDS, 30, 86_400);
         validateRawInt(errors, state, ConfigFieldId.THREAD_COUNT, 1, Math.max(1, Runtime.getRuntime().availableProcessors()));
         validateRawInt(errors, state, ConfigFieldId.DEFLATE_COMPRESSION_LEVEL, 1, 9);
         validateRawInt(errors, state, ConfigFieldId.ZSTD_COMPRESSION_LEVEL, 1, 22);

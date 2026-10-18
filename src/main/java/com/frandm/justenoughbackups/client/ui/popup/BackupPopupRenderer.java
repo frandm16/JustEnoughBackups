@@ -42,16 +42,20 @@ public final class BackupPopupRenderer {
         drawText(graphics, font, popup, progressLine, x, textY + 11, dimensions.width(), popup.textColorArgb());
     }
 
-    private static String detail(BackupProgressPayload progress, BackupConfig.Popup popup) {
+    static String detail(BackupProgressPayload progress, BackupConfig.Popup popup) {
         String template = switch (progress.state()) {
-            case STARTED, RUNNING -> progress.phase() == BackupProgressPhase.SCANNING ? popup.scanningText : popup.runningText;
+            case STARTED, RUNNING -> switch (progress.phase()) {
+                case SCANNING -> popup.scanningText;
+                case COMPRESSING -> "Compressing backup";
+                default -> popup.runningText;
+            };
             case COMPLETED -> popup.completedText;
             case FAILED -> popup.failedText;
         };
         return applyTemplate(template, progress);
     }
 
-    private static String progressLine(BackupProgressPayload progress) {
+    static String progressLine(BackupProgressPayload progress) {
         if (progress.state() == BackupProgressState.FAILED) {
             return "Backup failed";
         }
@@ -61,11 +65,14 @@ public final class BackupPopupRenderer {
         if (progress.phase() == BackupProgressPhase.WRITING) {
             return BackupProgressFormat.formatBytes(progress.bytesWritten()) + " written";
         }
+        if (progress.phase() == BackupProgressPhase.COMPRESSING) {
+            return "Compressing entries";
+        }
 
         String action = switch (progress.phase()) {
             case SCANNING -> " scanned";
             case COPYING -> " copied";
-            case COMPRESSING -> " copied";
+            case COMPRESSING -> " compressing";
             case UPLOADING -> " uploaded";
             case DOWNLOADING -> " downloaded";
             case VERIFYING -> " verified";

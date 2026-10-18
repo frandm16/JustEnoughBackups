@@ -98,7 +98,7 @@ public final class BackupService {
             BackupWatchdog watchdog = new BackupWatchdog(progress -> {
                 lastProgress.set(progress);
                 BackupProgressBroadcaster.broadcast(server, progress);
-            });
+            }, config.watchdogTimeoutSeconds);
             watchdog.start();
             try {
                 lastProgress.set(initialProgress(type, reason));

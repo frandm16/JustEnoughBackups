@@ -32,6 +32,7 @@ final class ConfigFieldSpecs {
             ConfigFieldSpec.textField(ConfigFieldId.EXCLUDED_PATHS, 512),
             ConfigFieldSpec.intField(ConfigFieldId.MAX_TOTAL_SIZE_MB, 0, Integer.MAX_VALUE),
             ConfigFieldSpec.intField(ConfigFieldId.MINIMUM_FREE_SPACE_RESERVE_MB, 0, Integer.MAX_VALUE),
+            ConfigFieldSpec.intField(ConfigFieldId.WATCHDOG_TIMEOUT_SECONDS, 30, 86_400),
             ConfigFieldSpec.intField(ConfigFieldId.PERMISSION_LEVEL, 0, 4),
             ConfigFieldSpec.of(ConfigFieldId.MESSAGE_CHANNEL),
             ConfigFieldSpec.of(ConfigFieldId.INTEGRITY_MODE),

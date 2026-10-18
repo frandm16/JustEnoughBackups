@@ -39,6 +39,7 @@ public final class BackupConfig {
     public BackupIntegrityMode integrityMode = BackupIntegrityMode.STRICT;
     public boolean includeSummaryFile = false;
     public int minimumFreeSpaceReserveMb = 512;
+    public int watchdogTimeoutSeconds = 300;
     public int threadCount = Math.max(1, Runtime.getRuntime().availableProcessors() - 2);
     public BackupCompressionMethod compressionMethod = BackupCompressionMethod.DEFLATED;
     public int deflateCompressionLevel = 6;
@@ -115,6 +116,7 @@ public final class BackupConfig {
         copy.integrityMode = integrityMode;
         copy.includeSummaryFile = includeSummaryFile;
         copy.minimumFreeSpaceReserveMb = minimumFreeSpaceReserveMb;
+        copy.watchdogTimeoutSeconds = watchdogTimeoutSeconds;
         copy.threadCount = threadCount;
         copy.compressionMethod = compressionMethod;
         copy.deflateCompressionLevel = deflateCompressionLevel;
@@ -185,7 +187,7 @@ public final class BackupConfig {
         return Path.of("config", "justenoughbackups.json");
     }
 
-    private void normalize() {
+    void normalize() {
         if (backupMode == null) {
             backupMode = BackupType.FULL;
         }
@@ -228,6 +230,7 @@ public final class BackupConfig {
             tempBackupDirectory = "";
         }
         minimumFreeSpaceReserveMb = Math.max(0, minimumFreeSpaceReserveMb);
+        watchdogTimeoutSeconds = Math.clamp(watchdogTimeoutSeconds, 30, 86_400);
         threadCount = Math.clamp(threadCount, 1, Math.max(1, Runtime.getRuntime().availableProcessors()));
         if (compressionMethod == null) compressionMethod = BackupCompressionMethod.DEFLATED;
         deflateCompressionLevel = Math.clamp(deflateCompressionLevel, 1, 9);

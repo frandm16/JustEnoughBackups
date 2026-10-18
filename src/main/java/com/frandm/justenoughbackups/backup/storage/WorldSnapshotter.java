@@ -11,7 +11,6 @@ import com.frandm.justenoughbackups.backup.progress.BackupProgressState;
 import com.frandm.justenoughbackups.config.BackupConfig;
 
 import java.io.IOException;
-import java.io.OutputStream;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
@@ -23,6 +22,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
 import java.util.regex.Pattern;
+import java.util.function.LongConsumer;
 
 public final class WorldSnapshotter {
     private static final Pattern TRANSIENT_LEVEL_FILE = Pattern.compile("^level\\d+\\.dat$");
@@ -42,8 +42,9 @@ public final class WorldSnapshotter {
     ) throws IOException {
         List<String> excludedPaths = BackupConfig.get().excludedPaths;
         SnapshotTotals totals;
+        LongConsumer activity = ignored -> progressListener.onActivity();
         try {
-            totals = scanTotals(worldPath, excludedPaths);
+            totals = scanTotals(worldPath, excludedPaths, activity);
         } catch (IOException exception) {
             progressListener.onProgress(new BackupProgress("", type, reason, BackupProgressPhase.SCANNING,
                     0L, 0L, 0, 0, BackupProgressState.FAILED));
@@ -54,7 +55,9 @@ public final class WorldSnapshotter {
         boolean hashContents = true;
         try {
             Map<String, BackupManifest.FileState> snapshot = snapshot(worldPath, (file, attrs) -> {
-                BackupManifest.FileState state = hashContents ? readFileState(file, attrs) : statFileState(attrs);
+                BackupManifest.FileState state = hashContents
+                        ? readFileState(file, attrs, bytes -> progress.activity())
+                        : statFileState(attrs);
                 progress.fileScanned(attrs.size());
                 return state;
             }, excludedPaths);
@@ -163,11 +166,12 @@ public final class WorldSnapshotter {
         return sortedSnapshot;
     }
 
-    private static SnapshotTotals scanTotals(Path worldPath, List<String> excludedPaths) throws IOException {
+    private static SnapshotTotals scanTotals(Path worldPath, List<String> excludedPaths, LongConsumer activity) throws IOException {
         long[] totals = new long[2];
         Files.walkFileTree(worldPath, new SimpleFileVisitor<>() {
             @Override
             public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
+                activity.accept(0L);
                 return shouldSkip(worldPath.relativize(dir), excludedPaths)
                         ? FileVisitResult.SKIP_SUBTREE
                         : FileVisitResult.CONTINUE;
@@ -175,6 +179,7 @@ public final class WorldSnapshotter {
 
             @Override
             public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
+                activity.accept(0L);
                 if (!shouldSkip(worldPath.relativize(file), excludedPaths)) {
                     totals[0] += attrs.size();
                     totals[1]++;
@@ -223,10 +228,15 @@ public final class WorldSnapshotter {
     }
 
     private static BackupManifest.FileState readFileState(Path file, BasicFileAttributes attrs) throws IOException {
+        return readFileState(file, attrs, ignored -> {
+        });
+    }
+
+    private static BackupManifest.FileState readFileState(Path file, BasicFileAttributes attrs, LongConsumer activity) throws IOException {
         return new BackupManifest.FileState(
                 attrs.size(),
                 attrs.lastModifiedTime().toMillis(),
-                sha256(file)
+                sha256(file, activity)
         );
     }
 
@@ -238,11 +248,15 @@ public final class WorldSnapshotter {
         );
     }
 
-    private static String sha256(Path file) throws IOException {
+    private static String sha256(Path file, LongConsumer activity) throws IOException {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             try (DigestInputStream input = new DigestInputStream(Files.newInputStream(file), digest)) {
-                input.transferTo(OutputStream.nullOutputStream());
+                byte[] buffer = new byte[1024 * 1024];
+                int read;
+                while ((read = input.read(buffer)) != -1) {
+                    activity.accept(read);
+                }
             }
             return toHex(digest.digest());
         } catch (NoSuchAlgorithmException exception) {
@@ -283,6 +297,10 @@ public final class WorldSnapshotter {
             this.reason = reason;
             this.totals = totals;
             this.listener = listener;
+        }
+
+        private void activity() {
+            listener.onActivity();
         }
 
         private void fileScanned(long bytes) {

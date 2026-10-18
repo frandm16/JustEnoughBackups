@@ -11,6 +11,16 @@ public final class RemoteUploadProgressListener implements BackupProgressListene
     }
 
     @Override
+    public void onActivity() {
+        delegate.onActivity();
+    }
+
+    @Override
+    public void commit(CommitAction action) throws java.io.IOException {
+        delegate.commit(action);
+    }
+
+    @Override
     public synchronized void onProgress(BackupProgress progress) {
         if (progress.phase() == BackupProgressPhase.UPLOADING) {
             uploadStarted = true;

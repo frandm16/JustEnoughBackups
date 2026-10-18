@@ -31,7 +31,7 @@ import java.io.Reader;
 import java.io.UncheckedIOException;
 import java.nio.file.FileStore;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -654,6 +654,11 @@ public final class BackupStorage {
             if (config.compressionMethod == BackupCompressionMethod.DEFLATED) {
                 zipOut.setLevel(config.deflateCompressionLevel);
             }
+            boolean parallelDeflated = config.compressionMethod == BackupCompressionMethod.DEFLATED
+                    && !streaming && threadCount > 1 && toWrite.size() > 1;
+            if (!parallelDeflated) {
+                progress.beginWritingPhase();
+            }
             if (config.compressionMethod == BackupCompressionMethod.ZSTANDARD) {
                 if (threadCount <= 1 || toWrite.size() <= 1) {
                     writeEntriesZstandardSerially(worldPath, scratchDirectory, zipOut, toWrite, manifest, status, finalSnapshot, config, progress);
@@ -671,7 +676,9 @@ public final class BackupStorage {
             writeSummaryAndMetadata(zipOut, manifest, status, includeSummaryFile);
         }
 
-        progress.complete();
+        if (streaming) {
+            progress.complete();
+        }
         return status;
     }
 
@@ -993,11 +1000,16 @@ public final class BackupStorage {
                 });
             }
             try {
+                progress.beginCompressionPhase();
                 Future<?> compression = writeExecutor.submit(() -> {
                     creator.writeTo(zipOut);
                     return null;
                 });
                 while (!compression.isDone()) {
+                    if (ABORTED.get() || Thread.currentThread().isInterrupted()) {
+                        compression.cancel(true);
+                        throw new IOException("Backup was aborted.");
+                    }
                     progress.keepAlive();
                     Thread.sleep(200L);
                 }
@@ -1141,7 +1153,14 @@ public final class BackupStorage {
                     progressListener
             );
             enforceSpaceLimitBeforePublish(backupDir, manifests, tempBackupFile, manifest, config);
-            moveCompletedBackup(tempBackupFile, backupFile);
+            moveCompletedBackup(tempBackupFile, backupFile, progressListener);
+            try {
+                progressListener.onProgress(new BackupProgress(manifest.id, manifest.type, manifest.reason,
+                        BackupProgressPhase.WRITING, status.totalBytes, status.totalBytes, status.files.size(), status.files.size(),
+                        BackupProgressState.RUNNING));
+            } catch (RuntimeException progressFailure) {
+                WorldBackupMod.LOGGER.warn("Backup was published, but the final progress callback failed.", progressFailure);
+            }
             return status;
         } catch (IOException | RuntimeException exception) {
             Files.deleteIfExists(tempBackupFile);
@@ -1163,23 +1182,62 @@ public final class BackupStorage {
         }
     }
 
-    private static void moveCompletedBackup(Path tempBackupFile, Path backupFile) throws IOException {
-        try {
-            Files.move(
-                    tempBackupFile,
-                    backupFile,
-                    StandardCopyOption.ATOMIC_MOVE,
-                    StandardCopyOption.REPLACE_EXISTING
-            );
-            return;
-        } catch (IOException _) {
-        }
+    private static void moveCompletedBackup(Path tempBackupFile, Path backupFile, BackupProgressListener progressListener) throws IOException {
+        moveCompletedBackup(tempBackupFile, backupFile, progressListener, Files::move);
+    }
 
+    @FunctionalInterface
+    interface BackupMover {
+        Path move(Path source, Path target) throws IOException;
+    }
+
+    static void moveCompletedBackup(Path tempBackupFile, Path backupFile, BackupProgressListener progressListener, BackupMover mover) throws IOException {
         try {
-            Files.move(tempBackupFile, backupFile, StandardCopyOption.REPLACE_EXISTING);
-        } catch (IOException exception) {
-            Files.copy(tempBackupFile, backupFile, StandardCopyOption.REPLACE_EXISTING);
-            Files.deleteIfExists(tempBackupFile);
+            progressListener.commit(() -> mover.move(tempBackupFile, backupFile));
+            return;
+        } catch (FileAlreadyExistsException collision) {
+            throw collision;
+        } catch (IOException moveFailure) {
+            if (Files.exists(backupFile)) {
+                throw moveFailure;
+            }
+            Path stagingFile = Files.createTempFile(backupFile.getParent(), ".jeb-publish-", ".tmp");
+            try {
+                long total = Files.size(tempBackupFile);
+                long copied = 0L;
+                try (InputStream input = Files.newInputStream(tempBackupFile);
+                     OutputStream output = Files.newOutputStream(stagingFile, java.nio.file.StandardOpenOption.TRUNCATE_EXISTING)) {
+                    byte[] buffer = new byte[1024 * 1024];
+                    int read;
+                    while ((read = input.read(buffer)) != -1) {
+                        if (ABORTED.get() || Thread.currentThread().isInterrupted()) {
+                            throw new IOException("Backup publication was aborted.");
+                        }
+                        output.write(buffer, 0, read);
+                        copied += read;
+                        progressListener.onActivity();
+                    }
+                    output.flush();
+                }
+                if (copied != total) {
+                    throw new IOException("Published backup copy size did not match source size.");
+                }
+                progressListener.commit(() -> mover.move(stagingFile, backupFile));
+            } catch (IOException | RuntimeException exception) {
+                try {
+                    Files.deleteIfExists(stagingFile);
+                } catch (IOException cleanupFailure) {
+                    exception.addSuppressed(cleanupFailure);
+                }
+                exception.addSuppressed(moveFailure);
+                throw exception;
+            }
+            try {
+                Files.deleteIfExists(stagingFile);
+                Files.deleteIfExists(tempBackupFile);
+            } catch (IOException cleanupFailure) {
+                WorldBackupMod.LOGGER.warn("Backup was published, but temporary file cleanup failed.", cleanupFailure);
+            }
         }
     }
 
@@ -1606,6 +1664,8 @@ public final class BackupStorage {
         private final java.util.concurrent.atomic.AtomicLong lastUpdateMillis = new java.util.concurrent.atomic.AtomicLong();
         private volatile int lastPercent = -1;
         private volatile BackupProgressPhase lastPhase = BackupProgressPhase.COPYING;
+        private volatile boolean writingPhase;
+        private volatile boolean compressionPhase;
 
         private ProgressTracker(
                 String backupId,
@@ -1625,11 +1685,19 @@ public final class BackupStorage {
 
         private void bytesRead(long bytes) {
             bytesRead.addAndGet(bytes);
+            if (bytes > 0L) {
+                listener.onActivity();
+            }
             emit(BackupProgressState.RUNNING, false);
         }
 
         private void bytesWritten(long bytes) {
             bytesWritten.addAndGet(bytes);
+            if (bytes > 0L) {
+                writingPhase = true;
+                compressionPhase = false;
+                listener.onActivity();
+            }
             emit(BackupProgressState.RUNNING, false);
         }
 
@@ -1640,6 +1708,16 @@ public final class BackupStorage {
 
         private void keepAlive() {
             emit(BackupProgressState.RUNNING, false);
+        }
+
+        private void beginWritingPhase() {
+            writingPhase = true;
+            emit(BackupProgressState.RUNNING, true);
+        }
+
+        private void beginCompressionPhase() {
+            compressionPhase = true;
+            emit(BackupProgressState.RUNNING, true);
         }
 
         private void complete() {
@@ -1663,14 +1741,18 @@ public final class BackupStorage {
             BackupProgressPhase phase;
             long written;
             long total;
-            if (read < totalInputBytes) {
+            if (writingPhase) {
+                phase = BackupProgressPhase.WRITING;
+                written = bytesWritten.get();
+                total = Math.max(written, totalInputBytes);
+            } else if (compressionPhase) {
+                phase = BackupProgressPhase.COMPRESSING;
+                written = 0L;
+                total = 0L;
+            } else {
                 phase = BackupProgressPhase.COPYING;
                 written = read;
                 total = totalInputBytes;
-            } else {
-                phase = BackupProgressPhase.WRITING;
-                written = bytesWritten.get();
-                total = written;
             }
 
             int percent = total <= 0L ? 0 : (int) Math.min(100L, (written * 100L) / total);

@@ -17,6 +17,7 @@ public enum ConfigFieldId {
     KEEP_DIFFERENTIAL("screen.justenoughbackups.config.keep_differential", ConfigTab.BACKUPS, ConfigControlType.INT),
     MAX_TOTAL_SIZE_MB("screen.justenoughbackups.config.max_total_size_mb", ConfigTab.BACKUPS, ConfigControlType.INT),
     MINIMUM_FREE_SPACE_RESERVE_MB("screen.justenoughbackups.config.minimum_free_space_reserve_mb", ConfigTab.BACKUPS, ConfigControlType.INT),
+    WATCHDOG_TIMEOUT_SECONDS("screen.justenoughbackups.config.watchdog_timeout_seconds", ConfigTab.BACKUPS, ConfigControlType.INT),
     THREAD_COUNT("screen.justenoughbackups.config.thread_count", ConfigTab.BACKUPS, ConfigControlType.INT),
     COMPRESSION_METHOD("screen.justenoughbackups.config.compression_method", ConfigTab.BACKUPS, ConfigControlType.ENUM),
     DEFLATE_COMPRESSION_LEVEL("screen.justenoughbackups.config.deflate_compression_level", ConfigTab.BACKUPS, ConfigControlType.INT),
