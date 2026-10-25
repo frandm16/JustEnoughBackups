@@ -2,6 +2,7 @@ import DefaultTheme from 'vitepress/theme'
 import { h } from 'vue'
 import './custom.css'
 import GitHubStars from './components/GitHubStars.vue'
+import DownloadCount from './components/DownloadCount.vue'
 import NavDownload from './components/NavDownload.vue'
 import ImageLightbox from './components/ImageLightbox.vue'
 import OutboundLinkTracking from './components/OutboundLinkTracking.vue'
@@ -14,6 +15,7 @@ export default {
         h(GitHubStars),
         h(NavDownload)
       ],
+      'home-hero-actions-after': () => h(DownloadCount),
       'layout-bottom': () => [h(ImageLightbox), h(OutboundLinkTracking)]
     })
   }
