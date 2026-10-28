@@ -263,7 +263,7 @@ public final class BackupStorage {
                 try { output.close(); } catch (IOException ignored) { }
                 throw new java.util.concurrent.CompletionException(exception);
             }
-        });
+        }, BackupThreadPool.getExecutor());
         try (input) {
             java.util.concurrent.atomic.AtomicLong uploadedBytes = new java.util.concurrent.atomic.AtomicLong();
             java.util.concurrent.atomic.AtomicLong lastUploadUpdate = new java.util.concurrent.atomic.AtomicLong();
