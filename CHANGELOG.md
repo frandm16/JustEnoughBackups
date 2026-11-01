@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented in this file.
 
+## 1.2.0.11+26.3 - 02/11/2026
+
+### Fixed
+
+- Root backup metadata entries (`justenoughbackups.data`, `manifest.json`, `justenoughbackups-status.json`, and `summary.txt`) are now excluded during world snapshotting, preventing manually unzipped archives in world directories from polluting subsequent backups.
+- In-game restore verification now ignores mod metadata files when validating restored snapshots, allowing existing backups that captured `justenoughbackups.data` to be restored successfully.
+- Restore integrity mode now prioritizes the active server configuration (`BackupConfig.integrityMode`), allowing `VERY_PERMISSIVE` mode to be applied during recovery of backups created under `STRICT` mode.
+
 ## 1.2.0.10+26.3 - 18/10/2026
 
 ### Added

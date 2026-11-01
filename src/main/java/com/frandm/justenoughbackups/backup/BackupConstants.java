@@ -14,6 +14,20 @@ public final class BackupConstants {
     public static final String RESTORE_OLD_PREFIX = ".justenoughbackups-old-";
     public static final String RESTORE_INTENT_PREFIX = ".justenoughbackups-intent-";
 
+    public static boolean isInternalBackupEntry(String name) {
+        if (name == null || name.isBlank()) return false;
+        String normalized = name.replace('\\', '/');
+        return DATA_ENTRY.equalsIgnoreCase(normalized)
+                || MANIFEST_ENTRY.equalsIgnoreCase(normalized)
+                || STATUS_ENTRY.equalsIgnoreCase(normalized);
+    }
+
+    public static boolean isMetadataEntry(String name) {
+        if (name == null || name.isBlank()) return false;
+        String normalized = name.replace('\\', '/');
+        return isInternalBackupEntry(normalized) || SUMMARY_ENTRY.equalsIgnoreCase(normalized);
+    }
+
     private BackupConstants() {
     }
 }

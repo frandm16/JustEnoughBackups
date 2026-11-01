@@ -220,7 +220,7 @@ public final class WorldSnapshotter {
         return "session.lock".equals(fileName)
                 || TRANSIENT_LEVEL_FILE.matcher(fileName).matches()
                 || fileName.endsWith(".lock")
-                || BackupConstants.SUMMARY_ENTRY.equals(fileName);
+                || BackupConstants.isMetadataEntry(normalizedRelative);
     }
 
     private static String normalizeRelativePath(Path path) {

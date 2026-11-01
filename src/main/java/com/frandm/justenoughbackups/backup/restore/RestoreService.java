@@ -80,7 +80,7 @@ public final class RestoreService {
         }
         pruneToSnapshot(staging, target.snapshot);
 
-        BackupIntegrityMode integrityMode = target.integrityMode == null ? BackupConfig.get().integrityMode : target.integrityMode;
+        BackupIntegrityMode integrityMode = resolveIntegrityMode(target);
         boolean strict = hasStatusForChain(backupDir, chain);
         Map<String, BackupManifest.FileState> snapshot = Map.copyOf(target.snapshot);
 
@@ -137,7 +137,7 @@ public final class RestoreService {
             BackupStatus status = entry.status();
             if (status == null) strict = false;
             else if (!status.completed || status.brokenFiles != null && !status.brokenFiles.isEmpty()) {
-                BackupIntegrityMode mode = manifest.integrityMode == null ? BackupConfig.get().integrityMode : manifest.integrityMode;
+                BackupIntegrityMode mode = resolveIntegrityMode(manifest);
                 if (mode != BackupIntegrityMode.VERY_PERMISSIVE)
                     throw new IOException("Backup integrity status is incomplete or damaged: " + manifest.id);
                 strict = false;
@@ -178,7 +178,7 @@ public final class RestoreService {
         }
         if (!targetHasSummary) Files.deleteIfExists(staging.resolve(BackupConstants.SUMMARY_ENTRY));
         pruneToSnapshot(staging, target.snapshot);
-        BackupIntegrityMode integrityMode = target.integrityMode == null ? BackupConfig.get().integrityMode : target.integrityMode;
+        BackupIntegrityMode integrityMode = resolveIntegrityMode(target);
         Map<String, BackupManifest.FileState> snapshot = Map.copyOf(target.snapshot);
         verifyRestoreSnapshot(staging, integrityMode, strict, snapshot);
         RestoreJournal.write(new RestoreIntent(RestoreIntent.CURRENT_VERSION, backupId, normalizedWorld, staging,
@@ -494,7 +494,7 @@ public final class RestoreService {
             @Override
             public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
                 String relativeName = targetDir.relativize(file).toString().replace('\\', '/');
-                if (!expectedFiles.contains(relativeName) && !BackupConstants.SUMMARY_ENTRY.equals(relativeName)) {
+                if (!expectedFiles.contains(relativeName) && !BackupConstants.isMetadataEntry(relativeName)) {
                     makeDeletable(file);
                     deleteWithRetry(file);
                 }
@@ -519,6 +519,18 @@ public final class RestoreService {
         try (var stream = Files.list(dir)) {
             return stream.findAny().isEmpty();
         }
+    }
+
+    private static BackupIntegrityMode resolveIntegrityMode(BackupManifest manifest) {
+        BackupIntegrityMode configMode = BackupConfig.get().integrityMode;
+        if (configMode == BackupIntegrityMode.VERY_PERMISSIVE
+                || (manifest != null && manifest.integrityMode == BackupIntegrityMode.VERY_PERMISSIVE)) {
+            return BackupIntegrityMode.VERY_PERMISSIVE;
+        }
+        if (configMode != null) {
+            return configMode;
+        }
+        return manifest != null && manifest.integrityMode != null ? manifest.integrityMode : BackupIntegrityMode.STRICT;
     }
 
     private static void verifyRestoreSnapshot(
@@ -549,12 +561,14 @@ public final class RestoreService {
         Map<String, BackupManifest.FileState> actualSnapshot = WorldSnapshotter.snapshot(
                 dir, BackupType.FULL, "Restore verify", BackupProgressListener.noop());
         Set<String> missingFiles = new HashSet<>(expectedSnapshot.keySet());
+        missingFiles.removeIf(BackupConstants::isMetadataEntry);
         missingFiles.removeAll(actualSnapshot.keySet());
         if (!missingFiles.isEmpty()) {
             throw new IOException("Restored world is missing files: " + missingFiles);
         }
 
         Set<String> extraFiles = new HashSet<>(actualSnapshot.keySet());
+        extraFiles.removeIf(BackupConstants::isMetadataEntry);
         extraFiles.removeAll(expectedSnapshot.keySet());
         if (!extraFiles.isEmpty()) {
             throw new IOException("Restored world has unexpected files: " + extraFiles);
@@ -565,6 +579,9 @@ public final class RestoreService {
         verifySnapshotFileList(dir, expectedSnapshot);
         Map<String, BackupManifest.FileState> actualSnapshot = WorldSnapshotter.snapshot(dir);
         for (Map.Entry<String, BackupManifest.FileState> entry : expectedSnapshot.entrySet()) {
+            if (BackupConstants.isMetadataEntry(entry.getKey())) {
+                continue;
+            }
             BackupManifest.FileState expected = entry.getValue();
             BackupManifest.FileState actual = actualSnapshot.get(entry.getKey());
             if (actual == null || (expected.sha256 != null && !expected.sha256.equals(actual.sha256))) {
@@ -580,7 +597,7 @@ public final class RestoreService {
                 return false;
             }
             if (!status.completed || !status.brokenFiles.isEmpty()) {
-                BackupIntegrityMode mode = manifest.integrityMode == null ? BackupConfig.get().integrityMode : manifest.integrityMode;
+                BackupIntegrityMode mode = resolveIntegrityMode(manifest);
                 if (mode != BackupIntegrityMode.VERY_PERMISSIVE) {
                     throw new IOException("Backup integrity status is incomplete or damaged: " + manifest.id);
                 }
