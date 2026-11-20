@@ -298,9 +298,8 @@ public final class McaIntegrityValidator {
             }
 
             long chunkStart = (long) sectorOffset * SECTOR_BYTES;
-            long chunkEnd = chunkStart + ((long) sectorCount * SECTOR_BYTES);
-            if (chunkEnd > fileLength) {
-                errors.add(String.format(Locale.ROOT, "Chunk sector range [%d..%d] exceeds file size %d for index %d in %s", sectorOffset, sectorOffset + sectorCount, fileLength, i, relativePath));
+            if (chunkStart + 5L > fileLength) {
+                errors.add(String.format(Locale.ROOT, "Chunk header at sector %d exceeds file size %d for index %d in %s", sectorOffset, fileLength, i, relativePath));
                 continue;
             }
 
@@ -312,8 +311,18 @@ public final class McaIntegrityValidator {
                     | (chunkHead[3] & 0xFF);
             byte compressionByte = chunkHead[4];
 
-            if (payloadLength <= 1 || payloadLength > sectorCount * SECTOR_BYTES - 4) {
+            if (payloadLength <= 1) {
                 errors.add(String.format(Locale.ROOT, "Invalid chunk payload length %d for index %d in %s", payloadLength, i, relativePath));
+                continue;
+            }
+
+            if ((long) payloadLength > (long) sectorCount * SECTOR_BYTES - 4L) {
+                errors.add(String.format(Locale.ROOT, "Chunk payload length %d exceeds allocated sectors %d for index %d in %s", payloadLength, sectorCount, i, relativePath));
+                continue;
+            }
+
+            if (chunkStart + 4L + payloadLength > fileLength) {
+                errors.add(String.format(Locale.ROOT, "Chunk payload at sector %d (length %d) exceeds file size %d for index %d in %s", sectorOffset, payloadLength, fileLength, i, relativePath));
                 continue;
             }
 
