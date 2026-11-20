@@ -2,10 +2,16 @@
 
 All notable changes to this project are documented in this file.
 
-## 1.2.0.11+26.3 - 02/11/2026
+## 1.2.0.11+26.3 - 20/11/2026
+
+### Added
+
+- Added Anvil region integrity validation (`McaIntegrityValidator`) that verifies sector allocation bounds, payload lengths, and cross-references chunk table indices against internal NBT coordinates (`xPos`/`zPos` for terrain chunks and `Position` for entity chunks).
 
 ### Fixed
 
+- Fixed misplaced chunk records and structure corruption caused by concurrent chunk saving during live backups: world chunk storage (`chunkMap`) and point-of-interest storage (`poiManager`) are now fully synchronized and flushed before freezing and reading world files.
+- Backups containing mismatched chunk coordinates or corrupted MCA sectors are now detected and rejected during backup creation and restore staging under `STRICT` integrity mode, preventing corrupted archives from overwriting world structures after a restore.
 - Root backup metadata entries (`justenoughbackups.data`, `manifest.json`, `justenoughbackups-status.json`, and `summary.txt`) are now excluded during world snapshotting, preventing manually unzipped archives in world directories from polluting subsequent backups.
 - In-game restore verification now ignores mod metadata files when validating restored snapshots, allowing existing backups that captured `justenoughbackups.data` to be restored successfully.
 - Restore integrity mode now prioritizes the active server configuration (`BackupConfig.integrityMode`), allowing `VERY_PERMISSIVE` mode to be applied during recovery of backups created under `STRICT` mode.
