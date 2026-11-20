@@ -75,6 +75,7 @@ public final class BackupService {
         WorldSavingState previousWorldSavingState = null;
         try {
             server.saveEverything(true, true, true);
+            flushAllWorldStorage(server);
             server.setAutoSave(false);
             savingDisabled = true;
             previousWorldSavingState = WorldSavingState.captureAndDisable(server);
@@ -336,6 +337,7 @@ public final class BackupService {
         Path backupDir;
         try {
             server.saveEverything(true, true, true);
+            flushAllWorldStorage(server);
             worldPath = server.getWorldPath(LevelResource.ROOT);
             backupDir = BackupPaths.worldBackupDir(server);
         } catch (RuntimeException | Error exception) {
@@ -477,6 +479,21 @@ public final class BackupService {
         }
         String message = current.getMessage();
         return message == null || message.isBlank() ? current.getClass().getSimpleName() : message;
+    }
+
+    private static void flushAllWorldStorage(MinecraftServer server) {
+        for (net.minecraft.server.level.ServerLevel level : server.getAllLevels()) {
+            try {
+                level.getChunkSource().chunkMap.synchronize(true).join();
+            } catch (RuntimeException e) {
+                WorldBackupMod.LOGGER.warn("Failed to synchronize chunk map for level {}", level.dimension().identifier(), e);
+            }
+            try {
+                level.getPoiManager().flushAll();
+            } catch (RuntimeException e) {
+                WorldBackupMod.LOGGER.warn("Failed to flush POI manager for level {}", level.dimension().identifier(), e);
+            }
+        }
     }
 
     private static void restoreSaving(MinecraftServer server, boolean previousAutoSave, WorldSavingState previousWorldSavingState) {

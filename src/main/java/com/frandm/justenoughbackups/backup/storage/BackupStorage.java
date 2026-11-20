@@ -305,6 +305,12 @@ public final class BackupStorage {
             if (cause instanceof IOException io) throw io;
             throw new IOException("Remote archive creation failed.", cause);
         }
+        if (config.integrityMode == BackupIntegrityMode.STRICT) {
+            var report = com.frandm.justenoughbackups.backup.integrity.McaIntegrityValidator.validateWorldDirectory(worldPath, config.excludedPaths);
+            if (!report.isValid()) {
+                throw new IOException("Remote backup integrity validation failed:\n" + report.formatErrors());
+            }
+        }
         List<BackupManifest> manifests = new ArrayList<>(existing);
         manifests.add(manifest);
         return new BackupCreation(manifest, List.copyOf(manifests), status);
@@ -1152,6 +1158,7 @@ public final class BackupStorage {
                     config,
                     progressListener
             );
+            validateBackupArchiveIntegrity(tempBackupFile, status, config.integrityMode);
             enforceSpaceLimitBeforePublish(backupDir, manifests, tempBackupFile, manifest, config);
             moveCompletedBackup(tempBackupFile, backupFile, progressListener);
             try {
@@ -1165,6 +1172,27 @@ public final class BackupStorage {
         } catch (IOException | RuntimeException exception) {
             Files.deleteIfExists(tempBackupFile);
             throw exception;
+        }
+    }
+
+    private static void validateBackupArchiveIntegrity(Path tempBackupFile, BackupStatus status, BackupIntegrityMode integrityMode) throws IOException {
+        if (integrityMode == BackupIntegrityMode.VERY_PERMISSIVE) {
+            return;
+        }
+        var report = com.frandm.justenoughbackups.backup.integrity.McaIntegrityValidator.validateZipArchive(tempBackupFile);
+        if (!report.isValid()) {
+            for (var misplaced : report.misplacedChunks()) {
+                status.brokenFiles.add(new BackupStatus.BrokenFile(misplaced.relativePath(), misplaced.formatMessage()));
+            }
+            for (String error : report.errors()) {
+                status.brokenFiles.add(new BackupStatus.BrokenFile(tempBackupFile.getFileName().toString(), error));
+            }
+            if (integrityMode == BackupIntegrityMode.STRICT) {
+                status.completed = false;
+                throw new IOException("Backup archive failed MCA integrity validation:\n" + report.formatErrors());
+            }
+            WorldBackupMod.LOGGER.warn("Backup archive has MCA integrity warnings, but continuing under mode {}:\n{}",
+                    integrityMode, report.formatErrors());
         }
     }
 

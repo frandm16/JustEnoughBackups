@@ -542,8 +542,12 @@ public final class RestoreService {
         try {
             if (strict) {
                 verifySnapshotContent(dir, snapshot);
+                verifyMcaIntegrity(dir, integrityMode);
             } else {
                 verifySnapshotFileList(dir, snapshot);
+                if (integrityMode == BackupIntegrityMode.STRICT) {
+                    verifyMcaIntegrity(dir, integrityMode);
+                }
             }
         } catch (IOException exception) {
             if (integrityMode == BackupIntegrityMode.VERY_PERMISSIVE) {
@@ -554,6 +558,20 @@ public final class RestoreService {
                 return;
             }
             throw exception;
+        }
+    }
+
+    private static void verifyMcaIntegrity(Path dir, BackupIntegrityMode integrityMode) throws IOException {
+        if (integrityMode == BackupIntegrityMode.VERY_PERMISSIVE) {
+            return;
+        }
+        var report = com.frandm.justenoughbackups.backup.integrity.McaIntegrityValidator.validateWorldDirectory(dir, List.of());
+        if (!report.isValid()) {
+            if (integrityMode == BackupIntegrityMode.STRICT) {
+                throw new IOException("Restored world failed MCA region integrity check:\n" + report.formatErrors());
+            }
+            WorldBackupMod.LOGGER.warn("Restored world has MCA region integrity warnings, continuing under mode {}:\n{}",
+                    integrityMode, report.formatErrors());
         }
     }
 
