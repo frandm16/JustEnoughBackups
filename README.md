@@ -272,3 +272,5 @@ Rename uses the same sanitization rules as manual creation to keep naming behavi
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
+
+> **⚠️ Note:** This project is under active development and may contain bugs.
