@@ -253,6 +253,11 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
             backups.clear();
             backups.addAll(payload.backups());
             backups.sort(Comparator.comparing((BackupUiBackup backup) -> value(backup.createdAt())).reversed());
+            long totalBytes = 0L;
+            for (BackupUiBackup backup : backups) {
+                totalBytes += backup.includedBytes();
+            }
+            cachedTotalBytesText = formatBytes(totalBytes);
         }
         refreshFilteredList();
     }
@@ -296,6 +301,8 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
         graphics.horizontalLine(ScreenChrome.OUTER, width - ScreenChrome.OUTER, contentTop() - 4, PANEL_BORDER);
     }
 
+    private String cachedTotalBytesText = "0 B";
+
     private void renderBottomFooter(GuiGraphicsExtractor graphics) {
         int footerY = height - 18;
         int statusDotColor = statusOk ? STATUS_OK_COLOR : STATUS_NOT_OK_COLOR;
@@ -303,9 +310,8 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
         graphics.fill(ScreenChrome.OUTER, footerY + 2, ScreenChrome.OUTER + 5, footerY + 7, statusDotColor);
         graphics.text(font, status, ScreenChrome.OUTER + 10, footerY, statusDotColor, true);
 
-        long totalBytes = backups.stream().mapToLong(BackupUiBackup::includedBytes).sum();
         String summary = filteredItems.size() == backups.size()
-                ? filteredItems.size() + " backups (" + formatBytes(totalBytes) + ")"
+                ? filteredItems.size() + " backups (" + cachedTotalBytesText + ")"
                 : filteredItems.size() + "/" + backups.size() + " backups";
 
         graphics.text(font, summary, width - ScreenChrome.OUTER - font.width(summary), footerY, TEXT_MUTED, true);
@@ -1253,10 +1259,8 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
             return text;
         }
         String suffix = "...";
-        while (!text.isEmpty() && font.width(text + suffix) > maxWidth) {
-            text = text.substring(0, text.length() - 1);
-        }
-        return text + suffix;
+        int allowed = Math.max(0, maxWidth - font.width(suffix));
+        return font.plainSubstrByWidth(text, allowed) + suffix;
     }
 
     private static String value(String value) {
@@ -1272,17 +1276,7 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
     }
 
     private static String formatBytes(long bytes) {
-        if (bytes < 1024L) {
-            return bytes + " B";
-        }
-        double value = bytes;
-        String[] units = {"KB", "MB", "GB", "TB"};
-        int unit = -1;
-        while (value >= 1024.0D && unit < units.length - 1) {
-            value /= 1024.0D;
-            unit++;
-        }
-        return String.format(Locale.ROOT, "%.1f %s", value, units[unit]);
+        return com.frandm.justenoughbackups.backup.progress.BackupProgressFormat.formatBytes(bytes);
     }
 
     private boolean matches(BackupUiBackup backup, String needle) {

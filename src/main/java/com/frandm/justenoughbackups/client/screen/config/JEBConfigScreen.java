@@ -607,14 +607,15 @@ public final class JEBConfigScreen extends Screen {
         }
     }
 
+    private static final List<ConfigTab> DEDICATED_TABS = List.of(ConfigTab.HUD, ConfigTab.PREVIEW);
+    private static final List<ConfigTab> ALL_TABS = List.of(ConfigTab.values());
+
     private boolean isDedicatedServer() {
         return minecraft.level != null && !minecraft.hasSingleplayerServer();
     }
 
     private List<ConfigTab> visibleTabs() {
-        return isDedicatedServer()
-                ? List.of(ConfigTab.HUD, ConfigTab.PREVIEW)
-                : List.of(ConfigTab.values());
+        return isDedicatedServer() ? DEDICATED_TABS : ALL_TABS;
     }
 
     private void renderTabs(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
@@ -798,7 +799,6 @@ public final class JEBConfigScreen extends Screen {
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         int next = Math.clamp(state.currentScroll() - (int) Math.signum(scrollY) * (ROW_H + ROW_GAP), 0, maxScroll());
         state.setCurrentScroll(next);
-        rebuildRows();
         return true;
     }
 
@@ -1151,7 +1151,7 @@ public final class JEBConfigScreen extends Screen {
         int color = state.selectedColor.argb(state.working.popup);
         state.selectedColor.set(state.working.popup, ConfigColor.format(channel.apply(color, value)));
         state.rawInputs.put(colorFieldId(state.selectedColor), state.selectedColor.get(state.working.popup));
-        rebuildRows();
+        validationErrors = validateVisibleTabs();
     }
 
     private ConfigFieldId colorFieldId(ConfigColorTarget target) {
@@ -1279,10 +1279,25 @@ public final class JEBConfigScreen extends Screen {
         return Component.translatable(enabled ? "screen.justenoughbackups.config.toggle.on" : "screen.justenoughbackups.config.toggle.off");
     }
 
+    private String cachedTooltipText;
+    private int cachedTooltipMaxWidth = -1;
+    private List<String> cachedTooltipLines = List.of();
+    private int cachedTooltipWidth;
+
     private void drawTooltipBox(GuiGraphicsExtractor graphics, String tooltip, int mouseX, int mouseY) {
         int maxTextWidth = Math.max(80, Math.min(320, width - 24));
-        List<String> lines = wrapTooltip(tooltip, maxTextWidth);
-        int tooltipW = lines.stream().mapToInt(font::width).max().orElse(0) + 12;
+        if (!tooltip.equals(cachedTooltipText) || maxTextWidth != cachedTooltipMaxWidth) {
+            cachedTooltipText = tooltip;
+            cachedTooltipMaxWidth = maxTextWidth;
+            cachedTooltipLines = wrapTooltip(tooltip, maxTextWidth);
+            int maxW = 0;
+            for (String line : cachedTooltipLines) {
+                maxW = Math.max(maxW, font.width(line));
+            }
+            cachedTooltipWidth = maxW + 12;
+        }
+        List<String> lines = cachedTooltipLines;
+        int tooltipW = cachedTooltipWidth;
         int tooltipH = lines.size() * 11 + 8;
         int x = Math.clamp(mouseX + 12, 6, Math.max(6, width - tooltipW - 6));
         int y = Math.clamp(mouseY + 12, 6, Math.max(6, height - tooltipH - 6));
@@ -1323,10 +1338,8 @@ public final class JEBConfigScreen extends Screen {
             return value;
         }
         String suffix = "...";
-        while (!value.isEmpty() && font.width(value + suffix) > maxWidth) {
-            value = value.substring(0, value.length() - 1);
-        }
-        return value + suffix;
+        int allowed = Math.max(0, maxWidth - font.width(suffix));
+        return font.plainSubstrByWidth(value, allowed) + suffix;
     }
 
     private int maxLengthFor(ConfigFieldId fieldId) {
