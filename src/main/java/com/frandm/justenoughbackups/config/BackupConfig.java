@@ -167,12 +167,28 @@ public final class BackupConfig {
 
     private static void save(BackupConfig config) {
         Path configFile = configFile();
+        Path parent = configFile.getParent();
+        Path tempFile = null;
         try {
-            Files.createDirectories(configFile.getParent());
-            try (Writer writer = Files.newBufferedWriter(configFile)) {
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
+            tempFile = Files.createTempFile(parent, "justenoughbackups-", ".json.tmp");
+            try (Writer writer = Files.newBufferedWriter(tempFile)) {
                 GSON.toJson(config, writer);
             }
+            try {
+                Files.move(tempFile, configFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+            } catch (java.nio.file.AtomicMoveNotSupportedException exception) {
+                Files.move(tempFile, configFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
         } catch (IOException exception) {
+            if (tempFile != null) {
+                try {
+                    Files.deleteIfExists(tempFile);
+                } catch (IOException ignored) {
+                }
+            }
             WorldBackupMod.LOGGER.error("Failed to write Just Enough Backups config.", exception);
         }
     }
