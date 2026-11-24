@@ -15,8 +15,8 @@ import net.minecraft.network.chat.Component;
 public final class PopupPreviewScreen extends Screen {
     public static final int LINE_COLOR = 0x65BCBCBC;
     private static final int SNAP_DISTANCE = 6;
-    private static final int GUIDE_SEGMENT = 1;
-    private static final int GUIDE_GAP = 2;
+    private static final int GUIDE_SEGMENT = 6;
+    private static final int GUIDE_GAP = 6;
 
     private final JEBConfigScreen parent;
     private final BackupConfig.Popup popup;
@@ -40,8 +40,6 @@ public final class PopupPreviewScreen extends Screen {
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-        graphics.fill(0, 0, width, height, 0x00000000);
-
         drawVerticalGuide(graphics, width / 3, LINE_COLOR);
         drawVerticalGuide(graphics, 2 * width / 3, LINE_COLOR);
         drawHorizontalGuide(graphics, height / 3, LINE_COLOR);
