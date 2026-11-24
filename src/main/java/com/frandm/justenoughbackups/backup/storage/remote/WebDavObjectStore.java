@@ -30,8 +30,7 @@ final class WebDavObjectStore implements RemoteObjectStore {
     private final int maxRetries;
     private final Duration controlRequestTimeout;
     private final java.util.Set<String> createdCollections = java.util.concurrent.ConcurrentHashMap.newKeySet();
-    private final HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(20))
-            .followRedirects(HttpClient.Redirect.NEVER).build();
+    private final HttpClient client;
 
     WebDavObjectStore(BackupConfig.RemoteStorage config) throws IOException {
         this(config, CONTROL_REQUEST_TIMEOUT);
@@ -56,7 +55,14 @@ final class WebDavObjectStore implements RemoteObjectStore {
         maxRetries = Math.clamp(config.maxRetries, 0, 10);
         authorization = username.isBlank() && password.isBlank() ? ""
                 : "Basic " + Base64.getEncoder().encodeToString((username + ":" + password).getBytes(StandardCharsets.UTF_8));
-        root = discoverCanonicalRoot(initial);
+        client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(20))
+                .followRedirects(HttpClient.Redirect.NEVER).build();
+        try {
+            root = discoverCanonicalRoot(initial);
+        } catch (RuntimeException exception) {
+            client.close();
+            throw exception;
+        }
     }
 
     private URI discoverCanonicalRoot(URI initial) {
