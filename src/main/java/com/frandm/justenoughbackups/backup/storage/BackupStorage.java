@@ -208,8 +208,6 @@ public final class BackupStorage {
             List<BackupManifest> existing, com.frandm.justenoughbackups.backup.storage.remote.RemoteBackupCatalog catalog,
             BackupProgressListener listener
     ) throws IOException {
-        Path backupDir = config.resolveBackupRoot().resolve(worldDirectoryName);
-        Files.createDirectories(backupDir);
         Map<String, BackupManifest.FileState> snapshot = WorldSnapshotter.snapshot(worldPath, requestedType, reason, listener);
         BackupType type = requestedType;
         BackupManifest base = type == BackupType.FULL ? null : findBaseManifest(existing, type, config);
@@ -221,7 +219,7 @@ public final class BackupStorage {
 
         String timestamp = LocalDateTime.now().format(BackupConstants.FILE_TIME);
         String id = type.commandName() + "-" + timestamp + "-" + java.util.UUID.randomUUID().toString().substring(0, 8);
-        String zipName = resolveBackupFileName(backupDir, requestedName, id + ".zip");
+        String zipName = resolveRemoteBackupFileName(existing, requestedName, id + ".zip");
         BackupManifest manifest = new BackupManifest();
         manifest.id = id;
         manifest.type = type;
@@ -277,11 +275,15 @@ public final class BackupStorage {
         java.io.PipedInputStream input = new java.io.PipedInputStream(4 * 1024 * 1024);
         java.io.PipedOutputStream output = new java.io.PipedOutputStream(input);
         BackupProgressListener remoteProgress = new RemoteUploadProgressListener(listener);
+        java.util.concurrent.atomic.AtomicReference<Thread> producerThread = new java.util.concurrent.atomic.AtomicReference<>();
         java.util.concurrent.CompletableFuture<BackupStatus> statusFuture = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+            producerThread.set(Thread.currentThread());
             try { return writeBackupZipToStream(worldPath, scratch, output, manifest, manifest.includedFiles, snapshot, config, remoteProgress); }
             catch (Throwable exception) {
                 try { output.close(); } catch (IOException ignored) { }
                 throw new java.util.concurrent.CompletionException(exception);
+            } finally {
+                producerThread.set(null);
             }
         }, BackupThreadPool.getExecutor());
         try (input) {
@@ -314,7 +316,15 @@ public final class BackupStorage {
                     BackupProgressState.COMPLETED));
         } catch (IOException | RuntimeException exception) {
             try { output.close(); } catch (IOException ignored) { }
+            Thread producer = producerThread.get();
+            if (producer != null) {
+                producer.interrupt();
+            }
             statusFuture.cancel(true);
+            try {
+                statusFuture.get(5L, TimeUnit.SECONDS);
+            } catch (Exception ignored) {
+            }
             throw exception;
         }
         BackupStatus status;
@@ -1525,6 +1535,19 @@ public final class BackupStorage {
         String fileName = sanitizeBackupFileName(requestedName);
         if (Files.exists(backupDir.resolve(fileName))) {
             throw new IOException("Backup already exists: " + fileName);
+        }
+        return fileName;
+    }
+
+    private static String resolveRemoteBackupFileName(List<BackupManifest> existing, String requestedName, String fallbackFileName) throws IOException {
+        if (requestedName == null || requestedName.isBlank()) {
+            return fallbackFileName;
+        }
+        String fileName = sanitizeBackupFileName(requestedName);
+        for (BackupManifest manifest : existing) {
+            if (manifest != null && fileName.equalsIgnoreCase(manifest.zipFileName)) {
+                throw new IOException("Backup already exists: " + fileName);
+            }
         }
         return fileName;
     }
