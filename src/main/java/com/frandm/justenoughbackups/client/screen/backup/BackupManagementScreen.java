@@ -1002,6 +1002,23 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
         selectedBackupId = backupId;
         detailScroll = 0;
 
+        boolean found = false;
+        for (BackupListItem item : filteredItems) {
+            if (item.backup().id().equals(backupId)) {
+                found = true;
+                break;
+            }
+        }
+        if (!found && itemsById.containsKey(backupId)) {
+            filter = "";
+            filterType = BackupFilterType.ALL;
+            if (searchBox != null) {
+                searchBox.setValue("");
+            }
+            refreshFilteredList();
+            selectedBackupId = backupId;
+        }
+
         for (int i = 0; i < filteredItems.size(); i++) {
             if (filteredItems.get(i).backup().id().equals(backupId)) {
                 int cardTop = i * (CARD_HEIGHT + CARD_GAP);
