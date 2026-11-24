@@ -1146,12 +1146,16 @@ public final class BackupStorage {
         }
 
         ZipArchiveEntry entry = new ZipArchiveEntry(relativeName.replace('\\', '/'));
-        zipOut.putArchiveEntry(entry);
         HashingCountingInputStream in = new HashingCountingInputStream(file, relativeName, progress::bytesRead, null);
+        boolean entryOpened = false;
         try {
+            zipOut.putArchiveEntry(entry);
+            entryOpened = true;
             in.transferTo(zipOut);
         } finally {
-            zipOut.closeArchiveEntry();
+            if (entryOpened) {
+                zipOut.closeArchiveEntry();
+            }
             in.close();
         }
         ReadResult result = in.result();
