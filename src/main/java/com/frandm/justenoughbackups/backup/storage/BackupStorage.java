@@ -1492,7 +1492,10 @@ public final class BackupStorage {
     }
 
     public static void deleteBackup(Path backupDir, String backupId) throws IOException {
-        BackupManifest manifest = findById(backupDir, backupId);
+        deleteBackup(backupDir, findById(backupDir, backupId));
+    }
+
+    public static void deleteBackup(Path backupDir, BackupManifest manifest) throws IOException {
         Files.delete(backupDir.resolve(manifest.zipFileName));
     }
 

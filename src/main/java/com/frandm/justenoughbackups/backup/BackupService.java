@@ -306,15 +306,21 @@ public final class BackupService {
                 return;
             }
         }
-        List<BackupManifest> manifests = BackupStorage.readManifests(BackupPaths.worldBackupDir(server));
-        BackupManifest dependent = manifests.stream()
-                .filter(manifest -> Objects.equals(manifest.baseBackupId, backupId))
-                .findFirst()
-                .orElse(null);
-        if (dependent != null) {
-            throw new IOException("Required by backup: " + BackupStorage.displayName(dependent));
+        Path backupDir = BackupPaths.worldBackupDir(server);
+        List<BackupManifest> manifests = BackupStorage.readManifests(backupDir);
+        BackupManifest target = null;
+        for (BackupManifest manifest : manifests) {
+            if (Objects.equals(manifest.baseBackupId, backupId)) {
+                throw new IOException("Required by backup: " + BackupStorage.displayName(manifest));
+            }
+            if (Objects.equals(manifest.id, backupId)) {
+                target = manifest;
+            }
         }
-        BackupStorage.deleteBackup(BackupPaths.worldBackupDir(server), backupId);
+        if (target == null) {
+            throw new IOException("Backup not found: " + backupId);
+        }
+        BackupStorage.deleteBackup(backupDir, target);
     }
 
     public static CompletableFuture<PendingRestore> restoreBackupByName(MinecraftServer server, String backupName) {
