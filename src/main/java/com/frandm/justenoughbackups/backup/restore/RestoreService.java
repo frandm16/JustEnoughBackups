@@ -71,44 +71,53 @@ public final class RestoreService {
         deleteRecursively(oldWorld);
         Files.createDirectories(container);
         Files.createDirectories(staging);
-        for (BackupManifest manifest : chain) {
-            BackupStorage.extractBackup(backupDir.resolve(manifest.zipFileName), staging, backupId, reason, progressListener);
+        try {
+            for (BackupManifest manifest : chain) {
+                BackupStorage.extractBackup(backupDir.resolve(manifest.zipFileName), staging, backupId, reason, progressListener);
+            }
+            Path targetBackupFile = backupDir.resolve(target.zipFileName);
+            if (!BackupStorage.hasSummaryFile(targetBackupFile)) {
+                Files.deleteIfExists(staging.resolve(BackupConstants.SUMMARY_ENTRY));
+            }
+            pruneToSnapshot(staging, target.snapshot);
+
+            BackupIntegrityMode integrityMode = resolveIntegrityMode(target);
+            boolean strict = hasStatusForChain(backupDir, chain);
+            Map<String, BackupManifest.FileState> snapshot = Map.copyOf(target.snapshot);
+
+            verifyRestoreSnapshot(staging, integrityMode, strict, snapshot);
+
+            RestoreJournal.write(new RestoreIntent(
+                    RestoreIntent.CURRENT_VERSION,
+                    backupId,
+                    normalizedWorld,
+                    staging,
+                    oldWorld,
+                    RestoreIntent.RestoreState.PREPARED,
+                    integrityMode,
+                    strict,
+                    snapshot
+            ));
+            WorldBackupMod.LOGGER.warn("Restore {} prepared from request {}. It will be applied when the server stops.", backupId, requestedName);
+            return new PendingRestore(
+                    backupId,
+                    backupDir,
+                    normalizedWorld,
+                    staging,
+                    target.worldName == null ? backupDir.getFileName().toString() : target.worldName,
+                    target.worldDirectoryName == null ? backupDir.getFileName().toString() : target.worldDirectoryName,
+                    integrityMode,
+                    strict,
+                    snapshot
+            );
+        } catch (IOException | RuntimeException failure) {
+            try {
+                deleteRecursively(staging);
+            } catch (IOException cleanup) {
+                failure.addSuppressed(cleanup);
+            }
+            throw failure;
         }
-        Path targetBackupFile = backupDir.resolve(target.zipFileName);
-        if (!BackupStorage.hasSummaryFile(targetBackupFile)) {
-            Files.deleteIfExists(staging.resolve(BackupConstants.SUMMARY_ENTRY));
-        }
-        pruneToSnapshot(staging, target.snapshot);
-
-        BackupIntegrityMode integrityMode = resolveIntegrityMode(target);
-        boolean strict = hasStatusForChain(backupDir, chain);
-        Map<String, BackupManifest.FileState> snapshot = Map.copyOf(target.snapshot);
-
-        verifyRestoreSnapshot(staging, integrityMode, strict, snapshot);
-
-        RestoreJournal.write(new RestoreIntent(
-                RestoreIntent.CURRENT_VERSION,
-                backupId,
-                normalizedWorld,
-                staging,
-                oldWorld,
-                RestoreIntent.RestoreState.PREPARED,
-                integrityMode,
-                strict,
-                snapshot
-        ));
-        WorldBackupMod.LOGGER.warn("Restore {} prepared from request {}. It will be applied when the server stops.", backupId, requestedName);
-        return new PendingRestore(
-                backupId,
-                backupDir,
-                normalizedWorld,
-                staging,
-                target.worldName == null ? backupDir.getFileName().toString() : target.worldName,
-                target.worldDirectoryName == null ? backupDir.getFileName().toString() : target.worldDirectoryName,
-                integrityMode,
-                strict,
-                snapshot
-        );
     }
 
     public static PendingRestore prepareRemoteRestore(
