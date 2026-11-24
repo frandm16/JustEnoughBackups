@@ -77,16 +77,38 @@ final class WebDavObjectStore implements RemoteObjectStore {
                         if (!normalized.endsWith("/")) normalized += "/";
                         URI next = URI.create(normalized);
                         validateUri(next);
+                        if (!sameOrigin(current, next)) {
+                            break;
+                        }
                         current = next;
                         continue;
                     }
                 }
+                break;
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
                 break;
             } catch (Exception ignored) {
                 break;
             }
         }
         return current;
+    }
+
+    private static boolean sameOrigin(URI left, URI right) {
+        if (left.getScheme() == null || right.getScheme() == null || left.getHost() == null || right.getHost() == null) {
+            return false;
+        }
+        return left.getScheme().equalsIgnoreCase(right.getScheme())
+                && left.getHost().equalsIgnoreCase(right.getHost())
+                && effectivePort(left) == effectivePort(right);
+    }
+
+    private static int effectivePort(URI uri) {
+        if (uri.getPort() != -1) {
+            return uri.getPort();
+        }
+        return "https".equalsIgnoreCase(uri.getScheme()) ? 443 : 80;
     }
 
     private static void validateUri(URI uri) throws IOException {
