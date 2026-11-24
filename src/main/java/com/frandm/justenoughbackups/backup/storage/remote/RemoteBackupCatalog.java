@@ -226,6 +226,7 @@ public final class RemoteBackupCatalog implements AutoCloseable {
         }
         for (RemoteObjectStore.ObjectInfo object : store.list(worldPrefix + "archives/")) {
             if (!referencedArchives.contains(object.key()) && object.lastModified() != null
+                    && !object.lastModified().equals(java.time.Instant.EPOCH)
                     && object.lastModified().isBefore(cutoff)) {
                 store.delete(object.key());
                 removed++;
@@ -258,15 +259,20 @@ public final class RemoteBackupCatalog implements AutoCloseable {
             throw new IOException("Invalid world directory name.");
         }
         String cleaned = value.trim().replace('\\', '/').replaceAll("^/+|/+$", "");
-        if (cleaned.contains("..")) {
+        if (cleaned.isEmpty() || cleaned.contains("..")) {
             throw new IOException("Invalid remote object name.");
         }
         return cleaned + "/";
     }
 
-    private static String cleanPrefix(String value) {
+    private static String cleanPrefix(String value) throws IOException {
         if (value == null || value.isBlank()) return "";
-        return value.trim().replace('\\', '/').replaceAll("^/+|/+$", "") + "/";
+        String cleaned = value.trim().replace('\\', '/').replaceAll("^/+|/+$", "");
+        if (cleaned.isEmpty()) return "";
+        if (cleaned.contains("..")) {
+            throw new IOException("Invalid remote storage prefix.");
+        }
+        return cleaned + "/";
     }
 
     private static MessageDigest sha256() {
