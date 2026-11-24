@@ -115,7 +115,6 @@ public final class BackupCommand {
         for (NextBackupStatus status : statuses) {
             if (status.ready()) {
                 sendLocal(source, BackupMessages.withTitle(ServerTranslations.component("message.justenoughbackups.next_ready")));
-                return 1;
             } else {
                 sendLocal(source, BackupMessages.withTitle(ServerTranslations.component("message.justenoughbackups.next_waiting",
                         status.type().commandName(), formatDuration(status.remainingMillis()))));
@@ -157,10 +156,11 @@ public final class BackupCommand {
 
     private static Component formatBackup(BackupManifest manifest) {
         String base = manifest.baseBackupId == null ? "none" : manifest.baseBackupId;
+        int fileCount = manifest.includedFiles == null ? 0 : manifest.includedFiles.size();
         return BackupMessages.withTitle(ServerTranslations.component("message.justenoughbackups.backup_entry",
                 manifest.id,
                 manifest.type.commandName(),
-                String.valueOf(manifest.includedFiles.size()),
+                String.valueOf(fileCount),
                 base,
                 manifest.createdAt));
     }
