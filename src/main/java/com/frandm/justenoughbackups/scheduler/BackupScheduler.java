@@ -49,9 +49,17 @@ public final class BackupScheduler {
             resetTimer();
             playersSeenSinceLastBackup = hasOnlinePlayers(server);
             if (config.backupOnServerStart) {
-                if (shouldRunStartupBackup(server, config)) {
-                    runLifecycleBackup(server, config, "startup", false);
-                }
+                CompletableFuture.supplyAsync(() -> shouldRunStartupBackup(server, config),
+                                com.frandm.justenoughbackups.backup.parallel.BackupThreadPool.getExecutor())
+                        .thenAccept(shouldRun -> {
+                            if (shouldRun && server.isRunning()) {
+                                server.execute(() -> {
+                                    if (server.isRunning()) {
+                                        runLifecycleBackup(server, config, "startup", false);
+                                    }
+                                });
+                            }
+                        });
             }
         });
 

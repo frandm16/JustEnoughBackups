@@ -79,23 +79,30 @@ public final class BackupCommand {
         return 1;
     }
 
-    private static int list(CommandSourceStack source) {
-        try {
-            List<BackupManifest> backups = BackupService.listBackups(source.getServer());
-            if (backups.isEmpty()) {
-                sendLocal(source, BackupMessages.withTitle(ServerTranslations.component("message.justenoughbackups.no_backups")));
-                return 1;
-            }
+    private static volatile List<String> cachedSuggestions = List.of();
+    private static volatile long cachedSuggestionsAtNanos;
 
-            sendLocal(source, BackupMessages.withTitle(ServerTranslations.component("message.justenoughbackups.backup_count", String.valueOf(backups.size()))));
-            backups.stream()
-                    .forEach(manifest -> sendLocal(source, formatBackup(manifest)));
-            return backups.size();
-        } catch (IOException exception) {
-            WorldBackupMod.LOGGER.error("Failed to list backups.", exception);
-            sendLocal(source, BackupMessages.withTitle(ServerTranslations.component("message.justenoughbackups.list_failed")));
-            return 0;
-        }
+    private static int list(CommandSourceStack source) {
+        net.minecraft.server.MinecraftServer server = source.getServer();
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                List<BackupManifest> backups = BackupService.listBackups(server);
+                server.execute(() -> {
+                    if (backups.isEmpty()) {
+                        sendLocal(source, BackupMessages.withTitle(ServerTranslations.component("message.justenoughbackups.no_backups")));
+                        return;
+                    }
+                    sendLocal(source, BackupMessages.withTitle(ServerTranslations.component("message.justenoughbackups.backup_count", String.valueOf(backups.size()))));
+                    for (BackupManifest manifest : backups) {
+                        sendLocal(source, formatBackup(manifest));
+                    }
+                });
+            } catch (IOException exception) {
+                WorldBackupMod.LOGGER.error("Failed to list backups.", exception);
+                server.execute(() -> sendLocal(source, BackupMessages.withTitle(ServerTranslations.component("message.justenoughbackups.list_failed"))));
+            }
+        }, com.frandm.justenoughbackups.backup.parallel.BackupThreadPool.getExecutor());
+        return 1;
     }
 
     private static int next(CommandSourceStack source) {
@@ -185,15 +192,24 @@ public final class BackupCommand {
             CommandSourceStack source,
             com.mojang.brigadier.suggestion.SuggestionsBuilder builder
     ) {
-        try {
-            List<String> suggestions = BackupService.listBackups(source.getServer()).stream()
-                    .map(BackupStorage::displayName)
-                    .filter(displayName -> !displayName.isBlank())
-                    .toList();
-            return SharedSuggestionProvider.suggest(suggestions, builder);
-        } catch (IOException exception) {
-            WorldBackupMod.LOGGER.warn("Failed to suggest backups for restore command.", exception);
-            return builder.buildFuture();
+        long now = System.nanoTime();
+        if (now - cachedSuggestionsAtNanos < 5_000_000_000L && !cachedSuggestions.isEmpty()) {
+            return SharedSuggestionProvider.suggest(cachedSuggestions, builder);
         }
+        net.minecraft.server.MinecraftServer server = source.getServer();
+        return java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+            try {
+                List<String> suggestions = BackupService.listBackups(server).stream()
+                        .map(BackupStorage::displayName)
+                        .filter(displayName -> !displayName.isBlank())
+                        .toList();
+                cachedSuggestions = suggestions;
+                cachedSuggestionsAtNanos = System.nanoTime();
+                return SharedSuggestionProvider.suggest(suggestions, builder).join();
+            } catch (IOException exception) {
+                WorldBackupMod.LOGGER.warn("Failed to suggest backups for restore command.", exception);
+                return builder.build();
+            }
+        }, com.frandm.justenoughbackups.backup.parallel.BackupThreadPool.getExecutor());
     }
 }

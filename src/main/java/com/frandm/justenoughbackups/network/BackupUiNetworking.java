@@ -3,6 +3,7 @@ package com.frandm.justenoughbackups.network;
 import com.frandm.justenoughbackups.WorldBackupMod;
 import com.frandm.justenoughbackups.backup.BackupPermissions;
 import com.frandm.justenoughbackups.backup.BackupService;
+import com.frandm.justenoughbackups.backup.parallel.BackupThreadPool;
 import com.frandm.justenoughbackups.backup.storage.BackupStorage;
 import com.frandm.justenoughbackups.text.ServerTranslations;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
@@ -12,6 +13,7 @@ import net.minecraft.server.level.ServerPlayer;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 public final class BackupUiNetworking {
     private BackupUiNetworking() {
@@ -36,34 +38,44 @@ public final class BackupUiNetworking {
 
         try {
             switch (payload.action()) {
-                case LIST -> sendList(server, player, payload, true, "text.justenoughbackups.backup_ui.refreshed");
+                case LIST -> sendListAsync(server, player, payload, true, "text.justenoughbackups.backup_ui.refreshed");
                 case CREATE -> createBackup(payload, server, player);
-                case RENAME -> {
-                    BackupService.renameBackup(server, payload.backupId(), payload.value());
-                    sendList(server, player, payload, true, "text.justenoughbackups.backup_ui.renamed");
-                }
-                case DELETE -> {
-                    BackupService.deleteBackup(server, payload.backupId());
-                    sendList(server, player, payload, true, "text.justenoughbackups.backup_ui.deleted");
-                }
+                case RENAME -> CompletableFuture.runAsync(() -> {
+                    try {
+                        BackupService.renameBackup(server, payload.backupId(), payload.value());
+                        sendListOnCurrentThread(server, player, payload, true, "text.justenoughbackups.backup_ui.renamed");
+                    } catch (IOException | RuntimeException exception) {
+                        WorldBackupMod.LOGGER.warn("Backup UI action failed: {}", payload.action(), exception);
+                        sendFailureOnCurrentThread(server, player, payload, "text.justenoughbackups.backup_ui.failed", exception);
+                    }
+                }, BackupThreadPool.getExecutor());
+                case DELETE -> CompletableFuture.runAsync(() -> {
+                    try {
+                        BackupService.deleteBackup(server, payload.backupId());
+                        sendListOnCurrentThread(server, player, payload, true, "text.justenoughbackups.backup_ui.deleted");
+                    } catch (IOException | RuntimeException exception) {
+                        WorldBackupMod.LOGGER.warn("Backup UI action failed: {}", payload.action(), exception);
+                        sendFailureOnCurrentThread(server, player, payload, "text.justenoughbackups.backup_ui.failed", exception);
+                    }
+                }, BackupThreadPool.getExecutor());
                 case RESTORE -> restoreBackup(payload, server, player);
             }
-        } catch (IOException | RuntimeException exception) {
+        } catch (RuntimeException exception) {
             WorldBackupMod.LOGGER.warn("Backup UI action failed: {}", payload.action(), exception);
-            sendFailure(server, player, payload, "text.justenoughbackups.backup_ui.failed", exception);
+            sendFailureAsync(server, player, payload, "text.justenoughbackups.backup_ui.failed", exception);
         }
     }
 
     private static void createBackup(BackupUiRequestPayload payload, MinecraftServer server, ServerPlayer player) {
         var future = BackupService.createBackup(server, payload.backupType(), "manual", payload.value());
-        future.thenAccept(manifest -> server.execute(() -> sendList(server, player, payload, true, "message.justenoughbackups.backup_completed", BackupStorage.displayName(manifest))))
+        future.thenAccept(manifest -> sendListAsync(server, player, payload, true, "message.justenoughbackups.backup_completed", BackupStorage.displayName(manifest)))
                 .exceptionally(exception -> {
                     WorldBackupMod.LOGGER.error("Backup UI create failed.", exception);
-                    server.execute(() -> sendFailure(server, player, payload, "text.justenoughbackups.backup_ui.backup_failed", exception));
+                    sendFailureAsync(server, player, payload, "text.justenoughbackups.backup_ui.backup_failed", exception);
                     return null;
                 });
         if (!future.isDone()) {
-            sendList(server, player, payload, true, "message.justenoughbackups.backup_started", "manual", payload.backupType().commandName());
+            sendListAsync(server, player, payload, true, "message.justenoughbackups.backup_started", "manual", payload.backupType().commandName());
         }
     }
 
@@ -75,21 +87,26 @@ public final class BackupUiNetworking {
                 }))
                 .exceptionally(exception -> {
                     WorldBackupMod.LOGGER.error("Backup UI restore failed.", exception);
-                    server.execute(() -> sendFailure(server, player, payload, "text.justenoughbackups.backup_ui.restore_failed", exception));
+                    sendFailureAsync(server, player, payload, "text.justenoughbackups.backup_ui.restore_failed", exception);
                     return null;
                 });
-        sendList(server, player, payload, true, "message.justenoughbackups.restore_started", payload.backupId());
+        sendListAsync(server, player, payload, true, "message.justenoughbackups.restore_started", payload.backupId());
     }
 
-    private static void sendList(MinecraftServer server, ServerPlayer player, BackupUiRequestPayload request, boolean success, String messageKey, String... args) {
+    private static void sendListAsync(MinecraftServer server, ServerPlayer player, BackupUiRequestPayload request, boolean success, String messageKey, String... args) {
+        CompletableFuture.runAsync(() -> sendListOnCurrentThread(server, player, request, success, messageKey, args), BackupThreadPool.getExecutor());
+    }
+
+    private static void sendListOnCurrentThread(MinecraftServer server, ServerPlayer player, BackupUiRequestPayload request, boolean success, String messageKey, String... args) {
         try {
             List<BackupUiBackup> backups = BackupService.listBackupSummaries(server).stream()
                     .map(BackupUiBackup::new)
                     .filter(backup -> isSendable(backup, server))
                     .toList();
-            send(player, request, true, success, messageKey, List.of(args), backups);
-        } catch (IOException exception) {
-            sendFailure(player, request, "text.justenoughbackups.backup_ui.failed", exception);
+            List<String> messageArgs = List.of(args);
+            server.execute(() -> send(player, request, true, success, messageKey, messageArgs, backups));
+        } catch (IOException | RuntimeException exception) {
+            server.execute(() -> sendFailure(player, request, "text.justenoughbackups.backup_ui.failed", exception));
         }
     }
 
@@ -105,15 +122,19 @@ public final class BackupUiNetworking {
         }
     }
 
-    private static void sendFailure(MinecraftServer server, ServerPlayer player, BackupUiRequestPayload request, String defaultMessageKey, Throwable throwable) {
+    private static void sendFailureAsync(MinecraftServer server, ServerPlayer player, BackupUiRequestPayload request, String defaultMessageKey, Throwable throwable) {
+        CompletableFuture.runAsync(() -> sendFailureOnCurrentThread(server, player, request, defaultMessageKey, throwable), BackupThreadPool.getExecutor());
+    }
+
+    private static void sendFailureOnCurrentThread(MinecraftServer server, ServerPlayer player, BackupUiRequestPayload request, String defaultMessageKey, Throwable throwable) {
         try {
             List<BackupUiBackup> backups = BackupService.listBackupSummaries(server).stream()
                     .map(BackupUiBackup::new)
                     .filter(backup -> isSendable(backup, server))
                     .toList();
-            sendFailure(player, request, defaultMessageKey, throwable, backups);
+            server.execute(() -> sendFailure(player, request, defaultMessageKey, throwable, backups));
         } catch (IOException | RuntimeException exception) {
-            sendFailure(player, request, defaultMessageKey, exception, List.of());
+            server.execute(() -> sendFailure(player, request, defaultMessageKey, exception, List.of()));
         }
     }
 
