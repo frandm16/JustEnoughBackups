@@ -999,6 +999,7 @@ public final class BackupStorage {
         ACTIVE_PARALLEL_EXECUTORS.add(compressExecutor);
         ACTIVE_PARALLEL_EXECUTORS.add(writeExecutor);
         Map<String, ReadResult> results = new ConcurrentHashMap<>();
+        Map<String, IOException> failedFiles = new ConcurrentHashMap<>();
         try {
             ParallelScatterZipCreator creator = new ParallelScatterZipCreator(
                     compressExecutor,
@@ -1006,18 +1007,27 @@ public final class BackupStorage {
                     config.deflateCompressionLevel
             );
             for (String relativeName : files) {
+                Path file = worldPath.resolve(relativeName);
+                if (!Files.isRegularFile(file)) {
+                    handleBrokenFile(status, relativeName, new IOException("Included file is missing: " + file), config.integrityMode);
+                    continue;
+                }
                 ZipArchiveEntry entry = new ZipArchiveEntry(relativeName.replace('\\', '/'));
                 entry.setMethod(ZipMethod.DEFLATED.getCode());
                 creator.addArchiveEntry(entry, () -> {
                     try {
                         return new HashingCountingInputStream(
-                                worldPath.resolve(relativeName),
+                                file,
                                 relativeName,
                                 progress::bytesRead,
                                 results
                         );
                     } catch (IOException exception) {
-                        throw new UncheckedIOException(exception);
+                        if (config.integrityMode == BackupIntegrityMode.STRICT) {
+                            throw new UncheckedIOException(exception);
+                        }
+                        failedFiles.put(relativeName, exception);
+                        return InputStream.nullInputStream();
                     }
                 });
             }
@@ -1046,6 +1056,11 @@ public final class BackupStorage {
                 throw new IOException("Failed during parallel compression", exception.getCause());
             }
             for (String relativeName : files) {
+                IOException failure = failedFiles.get(relativeName);
+                if (failure != null) {
+                    handleBrokenFile(status, relativeName, failure, config.integrityMode);
+                    continue;
+                }
                 ReadResult result = results.get(relativeName);
                 if (result != null) {
                     recordWrittenFile(manifest, status, finalSnapshot, progress, result);
