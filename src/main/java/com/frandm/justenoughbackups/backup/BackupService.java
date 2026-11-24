@@ -111,6 +111,7 @@ public final class BackupService {
                         List<BackupManifest> remoteManifests = catalog.list().stream().map(RemoteBackupCatalog.CatalogEntry::manifest).toList();
                         creation = createRemoteBackupWithRetries(worldPath, worldName, worldDirectoryName, config,
                                 type, reason, requestedName, isSafetyBackup, remoteManifests, catalog, watchdog.listener());
+                        watchdog.stop();
                         try { catalog.applyRetention(config); }
                         catch (IOException retentionFailure) {
                             WorldBackupMod.LOGGER.error("Remote backup succeeded, but remote retention could not be completed.", retentionFailure);
@@ -125,10 +126,10 @@ public final class BackupService {
                 } else {
                     creation = BackupStorage.createBackupWithManifests(worldPath, worldName, worldDirectoryName,
                             config, type, reason, requestedName, isSafetyBackup, watchdog.listener());
+                    watchdog.stop();
                     RetentionPolicy.apply(worldDirectoryName, config, creation.manifests());
                 }
                 BackupManifest manifest = creation.manifest();
-                watchdog.stop();
                 broadcastTerminal(server, manifest, creation.status());
                 WorldBackupMod.LOGGER.info("Backup created: {}", manifest.id);
                 BackupMessages.broadcastBackupCompleted(server, manifest);

@@ -176,8 +176,13 @@ public final class McaIntegrityValidator {
     }
 
     public static ValidationReport validateZipArchive(Path zipFile) throws IOException {
+        return validateZipArchive(zipFile, () -> {});
+    }
+
+    public static ValidationReport validateZipArchive(Path zipFile, Runnable onActivity) throws IOException {
         List<MisplacedChunk> misplaced = new ArrayList<>();
         List<String> errors = new ArrayList<>();
+        Runnable heartbeat = onActivity == null ? () -> {} : onActivity;
         try (ZipFile zip = new ZipFile(zipFile.toFile())) {
             Enumeration<ZipArchiveEntry> entries = zip.getEntries();
             while (entries.hasMoreElements()) {
@@ -187,6 +192,7 @@ public final class McaIntegrityValidator {
                 }
                 String name = entry.getName();
                 if (isMcaFile(name)) {
+                    heartbeat.run();
                     try (InputStream in = zip.getInputStream(entry)) {
                         byte[] bytes = in.readAllBytes();
                         ValidationReport entryReport = validateBytes(bytes, name);
@@ -195,6 +201,7 @@ public final class McaIntegrityValidator {
                     } catch (Exception e) {
                         errors.add("Failed to read " + name + " from ZIP " + zipFile.getFileName() + ": " + e.getMessage());
                     }
+                    heartbeat.run();
                 }
             }
         }
@@ -202,8 +209,13 @@ public final class McaIntegrityValidator {
     }
 
     public static ValidationReport validateWorldDirectory(Path worldPath, List<String> excludedPaths) throws IOException {
+        return validateWorldDirectory(worldPath, excludedPaths, () -> {});
+    }
+
+    public static ValidationReport validateWorldDirectory(Path worldPath, List<String> excludedPaths, Runnable onActivity) throws IOException {
         List<MisplacedChunk> misplaced = new ArrayList<>();
         List<String> errors = new ArrayList<>();
+        Runnable heartbeat = onActivity == null ? () -> {} : onActivity;
         if (!Files.isDirectory(worldPath)) {
             return new ValidationReport(List.of(), List.of());
         }
@@ -211,6 +223,7 @@ public final class McaIntegrityValidator {
         Files.walkFileTree(worldPath, new SimpleFileVisitor<>() {
             @Override
             public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
+                heartbeat.run();
                 Path relative = worldPath.relativize(dir);
                 if (shouldSkip(relative, excludedPaths)) {
                     return FileVisitResult.SKIP_SUBTREE;
@@ -229,10 +242,12 @@ public final class McaIntegrityValidator {
         });
 
         for (Path file : mcaFiles) {
+            heartbeat.run();
             String relativeName = worldPath.relativize(file).toString().replace('\\', '/');
             ValidationReport fileReport = validateFile(file, relativeName);
             misplaced.addAll(fileReport.misplacedChunks());
             errors.addAll(fileReport.errors());
+            heartbeat.run();
         }
 
         return new ValidationReport(Collections.unmodifiableList(misplaced), Collections.unmodifiableList(errors));

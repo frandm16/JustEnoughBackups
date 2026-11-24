@@ -257,7 +257,8 @@ public final class BackupStorage {
 
         List<BackupStatus.BrokenFile> preUploadMcaWarnings = new ArrayList<>();
         if (config.integrityMode != BackupIntegrityMode.VERY_PERMISSIVE) {
-            var report = com.frandm.justenoughbackups.backup.integrity.McaIntegrityValidator.validateWorldDirectory(worldPath, config.excludedPaths);
+            var report = com.frandm.justenoughbackups.backup.integrity.McaIntegrityValidator.validateWorldDirectory(
+                    worldPath, config.excludedPaths, listener::onActivity);
             if (!report.isValid()) {
                 if (config.integrityMode == BackupIntegrityMode.STRICT) {
                     throw new IOException("Remote backup integrity validation failed:\n" + report.formatErrors());
@@ -1208,7 +1209,7 @@ public final class BackupStorage {
                     config,
                     progressListener
             );
-            validateBackupArchiveIntegrity(tempBackupFile, status, config.integrityMode);
+            validateBackupArchiveIntegrity(tempBackupFile, status, config.integrityMode, progressListener);
             enforceSpaceLimitBeforePublish(backupDir, manifests, tempBackupFile, manifest, config);
             moveCompletedBackup(tempBackupFile, backupFile, progressListener);
             try {
@@ -1225,11 +1226,17 @@ public final class BackupStorage {
         }
     }
 
-    private static void validateBackupArchiveIntegrity(Path tempBackupFile, BackupStatus status, BackupIntegrityMode integrityMode) throws IOException {
+    private static void validateBackupArchiveIntegrity(
+            Path tempBackupFile,
+            BackupStatus status,
+            BackupIntegrityMode integrityMode,
+            BackupProgressListener progressListener
+    ) throws IOException {
         if (integrityMode == BackupIntegrityMode.VERY_PERMISSIVE) {
             return;
         }
-        var report = com.frandm.justenoughbackups.backup.integrity.McaIntegrityValidator.validateZipArchive(tempBackupFile);
+        var report = com.frandm.justenoughbackups.backup.integrity.McaIntegrityValidator.validateZipArchive(
+                tempBackupFile, progressListener::onActivity);
         if (!report.isValid()) {
             for (var misplaced : report.misplacedChunks()) {
                 status.brokenFiles.add(new BackupStatus.BrokenFile(misplaced.relativePath(), misplaced.formatMessage()));
