@@ -58,6 +58,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -756,12 +757,13 @@ public final class BackupStorage {
         ExecutorService compressExecutor = newCompressExecutor(threadCount);
         ACTIVE_PARALLEL_EXECUTORS.add(compressExecutor);
         Queue<Future<ZstdTaskResult>> window = new ArrayDeque<>();
+        Set<Path> createdTempFiles = ConcurrentHashMap.newKeySet();
         try {
             for (String relativeName : files) {
-                if (ABORTED.get()) {
+                if (ABORTED.get() || Thread.currentThread().isInterrupted()) {
                     throw new IOException("Backup was aborted.");
                 }
-                window.add(compressExecutor.submit(() -> compressZstandardEntry(worldPath, tempDir, relativeName, config, progress)));
+                window.add(compressExecutor.submit(() -> compressZstandardEntry(worldPath, tempDir, relativeName, config, progress, createdTempFiles)));
                 while (window.size() >= maxInFlight) {
                     Future<ZstdTaskResult> future = window.poll();
                     writeZstdResultToZip(zipOut, getFutureResult(future, progress), manifest, status, finalSnapshot, config, progress);
@@ -775,15 +777,28 @@ public final class BackupStorage {
             ACTIVE_PARALLEL_EXECUTORS.remove(compressExecutor);
             compressExecutor.shutdownNow();
             for (Future<ZstdTaskResult> future : window) {
-                future.cancel(true);
-                if (future.isDone()) {
+                if (future.isDone() && !future.isCancelled()) {
                     try {
                         ZstdTaskResult res = future.get();
                         if (res != null && res.compressedFile != null) {
                             Files.deleteIfExists(res.compressedFile);
+                            createdTempFiles.remove(res.compressedFile);
                         }
                     } catch (Exception ignored) {
                     }
+                } else {
+                    future.cancel(true);
+                }
+            }
+            try {
+                compressExecutor.awaitTermination(5L, TimeUnit.SECONDS);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+            for (Path tempFile : createdTempFiles) {
+                try {
+                    Files.deleteIfExists(tempFile);
+                } catch (IOException ignored) {
                 }
             }
         }
@@ -812,9 +827,10 @@ public final class BackupStorage {
             Path tempDir,
             String relativeName,
             BackupConfig config,
-            ProgressTracker progress
+            ProgressTracker progress,
+            Set<Path> createdTempFiles
     ) {
-        if (ABORTED.get()) {
+        if (ABORTED.get() || Thread.currentThread().isInterrupted()) {
             return new ZstdTaskResult(relativeName, null, null, 0, null, 0, 0, 0, new IOException("Backup was aborted."));
         }
         Path source = worldPath.resolve(relativeName);
@@ -837,7 +853,7 @@ public final class BackupStorage {
                     byte[] buffer = new byte[64 * 1024];
                     int read;
                     while ((read = in.read(buffer)) >= 0) {
-                        if (ABORTED.get()) {
+                        if (ABORTED.get() || Thread.currentThread().isInterrupted()) {
                             throw new IOException("Backup was aborted.");
                         }
                         if (read == 0) continue;
@@ -862,13 +878,14 @@ public final class BackupStorage {
                 );
             } else {
                 compressedFile = Files.createTempFile(tempDir, ".jeb-zstd-", ".tmp");
+                createdTempFiles.add(compressedFile);
                 try (InputStream in = Files.newInputStream(source);
                      OutputStream fileOut = Files.newOutputStream(compressedFile);
                      ZstdOutputStream zstd = new ZstdOutputStream(fileOut, config.zstdCompressionLevel)) {
                     byte[] buffer = new byte[64 * 1024];
                     int read;
                     while ((read = in.read(buffer)) >= 0) {
-                        if (ABORTED.get()) {
+                        if (ABORTED.get() || Thread.currentThread().isInterrupted()) {
                             throw new IOException("Backup was aborted.");
                         }
                         if (read == 0) continue;
@@ -897,6 +914,8 @@ public final class BackupStorage {
                 try {
                     Files.deleteIfExists(compressedFile);
                 } catch (IOException ignored) {
+                } finally {
+                    createdTempFiles.remove(compressedFile);
                 }
             }
             return new ZstdTaskResult(relativeName, null, null, 0, null, 0, 0, 0, exception);
