@@ -17,27 +17,28 @@ import net.minecraft.world.level.storage.LevelResource;
 
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.ConcurrentHashMap;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 
 public final class BackupScheduler {
     private static long ticksUntilNextCheck = 20L;
-    private static final EnumMap<BackupType, Long> lastBackupMillis =
-            new EnumMap<>(BackupType.class);
+    private static final Map<BackupType, Long> lastBackupMillis =
+            new ConcurrentHashMap<>();
 
     private static final List<BackupType> SCHEDULE_PRIORITY = List.of(
             BackupType.FULL,
             BackupType.DIFFERENTIAL,
             BackupType.PARTIAL
     );
-    private static boolean playersSeenSinceLastBackup = false;
-    private static boolean automaticWarningSent = false;
+    private static volatile boolean playersSeenSinceLastBackup = false;
+    private static volatile boolean automaticWarningSent = false;
 
     private BackupScheduler() {
     }
@@ -63,10 +64,9 @@ public final class BackupScheduler {
             }
         });
 
-        // stopping server
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
             BackupConfig config = BackupConfig.get();
-            if (config.backupOnServerStop) {
+            if (config.backupOnServerStop && !hasPendingRestore(server) && !BackupService.isBackupRunning()) {
                 runLifecycleBackup(server, config, "shutdown", true);
             }
         });
@@ -95,6 +95,14 @@ public final class BackupScheduler {
             }
 
             lastBackupMillis.put(dueType, now);
+            for (BackupType other : SCHEDULE_PRIORITY) {
+                if (other != dueType && StartupBackupPolicy.satisfiesRequestedType(other, dueType)) {
+                    BackupConfig.ScheduledBackup otherSchedule = config.automaticSchedule.forType(other);
+                    if (otherSchedule.enabled && remainingMillis(other, otherSchedule, now) == 0L) {
+                        lastBackupMillis.put(other, now);
+                    }
+                }
+            }
             resetWarnings();
             if (config.pauseAutomaticBackupsWithoutPlayers && !playersSeenSinceLastBackup) {
                 return;
@@ -203,6 +211,17 @@ public final class BackupScheduler {
             } catch (CompletionException exception) {
                 WorldBackupMod.LOGGER.error("{} backup did not complete during shutdown.", reason, exception);
             }
+        }
+    }
+
+    private static boolean hasPendingRestore(MinecraftServer server) {
+        try {
+            Path worldPath = server.getWorldPath(LevelResource.ROOT).toAbsolutePath().normalize();
+            Path worldParent = worldPath.getParent();
+            return worldParent != null
+                    && com.frandm.justenoughbackups.backup.restore.RestoreJournal.read(worldParent, worldPath).isPresent();
+        } catch (IOException | RuntimeException exception) {
+            return false;
         }
     }
 
