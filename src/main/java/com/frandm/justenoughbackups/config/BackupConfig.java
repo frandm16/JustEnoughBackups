@@ -208,6 +208,9 @@ public final class BackupConfig {
             backupMode = BackupType.FULL;
         }
 
+        if (automaticIntervalMinutes < 1) {
+            automaticIntervalMinutes = 60;
+        }
         if (automaticSchedule == null) {
             automaticSchedule = new AutomaticSchedule();
 
