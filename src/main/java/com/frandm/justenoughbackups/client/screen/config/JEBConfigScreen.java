@@ -761,7 +761,7 @@ public final class JEBConfigScreen extends Screen {
         if (draggingChannel != null) {
             ConfigRow row = rowForChannel(draggingChannel);
             if (row != null) {
-                setChannelFromMouse(controlRect(row, rowScreenY(row), controlWidth(row.w)), draggingChannel, event.x());
+                setChannelFromMouse(controlRect(row, rowScreenY(row), controlsWidthForRow(row)), draggingChannel, event.x());
             }
             return true;
         }
