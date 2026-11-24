@@ -619,15 +619,19 @@ public final class RestoreService {
     }
 
     private static void verifySnapshotFileList(Path dir, Map<String, BackupManifest.FileState> expectedSnapshot) throws IOException {
-        Map<String, BackupManifest.FileState> actualSnapshot = WorldSnapshotter.snapshot(dir, List.of());
+        Set<String> actualFiles = WorldSnapshotter.listFilePaths(dir, List.of());
+        verifySnapshotKeySet(actualFiles, expectedSnapshot);
+    }
+
+    private static void verifySnapshotKeySet(Set<String> actualFiles, Map<String, BackupManifest.FileState> expectedSnapshot) throws IOException {
         Set<String> missingFiles = new HashSet<>(expectedSnapshot.keySet());
         missingFiles.removeIf(BackupConstants::isMetadataEntry);
-        missingFiles.removeAll(actualSnapshot.keySet());
+        missingFiles.removeAll(actualFiles);
         if (!missingFiles.isEmpty()) {
             throw new IOException("Restored world is missing files: " + missingFiles);
         }
 
-        Set<String> extraFiles = new HashSet<>(actualSnapshot.keySet());
+        Set<String> extraFiles = new HashSet<>(actualFiles);
         extraFiles.removeIf(BackupConstants::isMetadataEntry);
         extraFiles.removeAll(expectedSnapshot.keySet());
         if (!extraFiles.isEmpty()) {
@@ -636,8 +640,8 @@ public final class RestoreService {
     }
 
     private static void verifySnapshotContent(Path dir, Map<String, BackupManifest.FileState> expectedSnapshot) throws IOException {
-        verifySnapshotFileList(dir, expectedSnapshot);
         Map<String, BackupManifest.FileState> actualSnapshot = WorldSnapshotter.snapshot(dir, List.of());
+        verifySnapshotKeySet(actualSnapshot.keySet(), expectedSnapshot);
         for (Map.Entry<String, BackupManifest.FileState> entry : expectedSnapshot.entrySet()) {
             if (BackupConstants.isMetadataEntry(entry.getKey())) {
                 continue;

@@ -38,6 +38,15 @@ public final class WorldSnapshotter {
         return snapshot(worldPath, WorldSnapshotter::readFileState, excludedPaths);
     }
 
+    public static java.util.Set<String> listFilePaths(Path worldPath, List<String> excludedPaths) throws IOException {
+        List<FileEntryTask> entries = walkEntries(worldPath, excludedPaths, ignored -> {}).entries();
+        java.util.Set<String> paths = new java.util.HashSet<>(entries.size());
+        for (FileEntryTask entry : entries) {
+            paths.add(entry.relativeName());
+        }
+        return paths;
+    }
+
     public static Map<String, BackupManifest.FileState> snapshot(
             Path worldPath,
             BackupType type,
