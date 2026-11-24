@@ -1282,7 +1282,7 @@ public final class BackupStorage {
     }
 
     private static void moveCompletedBackup(Path tempBackupFile, Path backupFile, BackupProgressListener progressListener) throws IOException {
-        moveCompletedBackup(tempBackupFile, backupFile, progressListener, Files::move);
+        moveCompletedBackup(tempBackupFile, backupFile, progressListener, (source, target) -> Files.move(source, target, StandardCopyOption.ATOMIC_MOVE));
     }
 
     @FunctionalInterface
@@ -1321,7 +1321,13 @@ public final class BackupStorage {
                 if (copied != total) {
                     throw new IOException("Published backup copy size did not match source size.");
                 }
-                progressListener.commit(() -> mover.move(stagingFile, backupFile));
+                progressListener.commit(() -> {
+                    try {
+                        mover.move(stagingFile, backupFile);
+                    } catch (java.nio.file.AtomicMoveNotSupportedException fallback) {
+                        Files.move(stagingFile, backupFile);
+                    }
+                });
             } catch (IOException | RuntimeException exception) {
                 try {
                     Files.deleteIfExists(stagingFile);
