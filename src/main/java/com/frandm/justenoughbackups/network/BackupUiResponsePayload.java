@@ -51,7 +51,10 @@ public record BackupUiResponsePayload(
         boolean success = buffer.readBoolean();
         String messageText = buffer.readUtf();
         int size = buffer.readInt();
-        List<BackupUiBackup> backups = new java.util.ArrayList<>(size);
+        if (size < 0 || size > 10_000) {
+            throw new IllegalArgumentException("Invalid backup list size: " + size);
+        }
+        List<BackupUiBackup> backups = new java.util.ArrayList<>(Math.min(size, 256));
         for (int i = 0; i < size; i++) {
             backups.add(BackupUiBackup.read(buffer));
         }
