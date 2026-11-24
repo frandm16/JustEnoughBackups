@@ -214,8 +214,12 @@ public final class RestoreService {
         }
 
         ArrayDeque<BackupManifest> chain = new ArrayDeque<>();
+        Set<String> visited = new HashSet<>();
         BackupManifest current = target;
         while (current != null) {
+            if (!visited.add(current.id)) {
+                throw new IOException("Cyclic backup chain detected at: " + current.id);
+            }
             Path zipFile = backupDir.resolve(current.zipFileName);
             if (!Files.isRegularFile(zipFile)) {
                 throw new IOException("Missing backup file: " + zipFile);

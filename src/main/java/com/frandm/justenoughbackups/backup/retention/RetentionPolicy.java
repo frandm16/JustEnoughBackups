@@ -136,8 +136,8 @@ public final class RetentionPolicy {
             BackupManifest current = byId.get(id);
             while (current != null && current.baseBackupId != null) {
                 current = byId.get(current.baseBackupId);
-                if (current != null) {
-                    required.add(current.id);
+                if (current == null || !required.add(current.id)) {
+                    break;
                 }
             }
         }
