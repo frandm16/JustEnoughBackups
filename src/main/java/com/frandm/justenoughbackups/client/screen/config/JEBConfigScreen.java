@@ -374,8 +374,11 @@ public final class JEBConfigScreen extends Screen {
                 rebuildRows();
                 return true;
             }
-            focusField(spec.id(), state.rawInputs.getOrDefault(spec.id(), String.valueOf(getter.getAsInt())));
-            return true;
+            if (field.contains(mouseX, mouseY)) {
+                focusField(spec.id(), state.rawInputs.getOrDefault(spec.id(), String.valueOf(getter.getAsInt())));
+                return true;
+            }
+            return false;
         });
         return y + ROW_H + ROW_GAP;
     }
@@ -385,9 +388,13 @@ public final class JEBConfigScreen extends Screen {
             Rect field = controlRect(row, screenY, controlsW);
             drawField(graphics, field, spec.id(), state.rawInputs.getOrDefault(spec.id(), value(getter.get())), mouseX, mouseY);
         }, (row, screenY, mouseX, mouseY) -> {
-            focusField(spec.id(), state.rawInputs.getOrDefault(spec.id(), value(getter.get())));
-            setter.accept(state.rawInputs.getOrDefault(spec.id(), value(getter.get())));
-            return true;
+            Rect field = controlRect(row, screenY, controlsW);
+            if (field.contains(mouseX, mouseY)) {
+                focusField(spec.id(), state.rawInputs.getOrDefault(spec.id(), value(getter.get())));
+                setter.accept(state.rawInputs.getOrDefault(spec.id(), value(getter.get())));
+                return true;
+            }
+            return false;
         });
         return y + ROW_H + ROW_GAP;
     }
@@ -653,11 +660,23 @@ public final class JEBConfigScreen extends Screen {
     private void drawField(GuiGraphicsExtractor graphics, Rect rect, boolean focused, String text, int mouseX, int mouseY) {
         graphics.fill(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h, focused ? 0xFF202020 : 0xFF151515);
         graphics.outline(rect.x, rect.y, rect.w, rect.h, focused ? 0xFFFFFFFF : rect.contains(mouseX, mouseY) ? 0xFF888888 : 0xFF555555);
-        String visible = trimToWidth(text, Math.max(8, rect.w - 8));
+        int maxW = Math.max(8, rect.w - 8);
+        int start = 0;
+        String visible;
+        if (focused) {
+            int cursor = Math.clamp(state.cursor, 0, text.length());
+            while (start < cursor && font.width(text.substring(start, cursor)) > maxW) {
+                start++;
+            }
+            visible = font.plainSubstrByWidth(text.substring(start), maxW);
+        } else {
+            visible = trimToWidth(text, maxW);
+        }
         int color = focused || !text.equals(Component.translatable("screen.justenoughbackups.config.excluded_paths.hint").getString()) ? 0xFFE0E0E0 : 0xFF888888;
         graphics.text(font, visible, rect.x + 4, rect.y + 6, color, true);
         if (focused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
-            int caretX = rect.x + 4 + font.width(text.substring(0, Math.min(state.cursor, text.length())));
+            int cursor = Math.clamp(state.cursor, start, text.length());
+            int caretX = rect.x + 4 + font.width(text.substring(start, cursor));
             graphics.fill(Math.min(caretX, rect.x + rect.w - 3), rect.y + 4, Math.min(caretX + 1, rect.x + rect.w - 2), rect.y + rect.h - 4, 0xFFFFFFFF);
         }
     }
