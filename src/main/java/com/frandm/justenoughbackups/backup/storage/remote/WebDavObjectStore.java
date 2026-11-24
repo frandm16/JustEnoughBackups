@@ -189,7 +189,7 @@ final class WebDavObjectStore implements RemoteObjectStore {
     public void put(String key, InputStream input) throws IOException {
         ensureParentCollections(key);
         HttpRequest.BodyPublisher publisher;
-        if (input instanceof java.io.ByteArrayInputStream || (input.markSupported() && input.available() > 0)) {
+        if (input instanceof java.io.ByteArrayInputStream) {
             byte[] data = input.readAllBytes();
             publisher = HttpRequest.BodyPublishers.ofByteArray(data);
         } else {
