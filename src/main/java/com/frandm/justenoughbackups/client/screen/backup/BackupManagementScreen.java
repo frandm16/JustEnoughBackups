@@ -453,8 +453,7 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
         int curY = y;
 
         int badgeW = 76;
-        int renameBtnW = 60;
-        int titleMaxW = w - badgeW - renameBtnW - 16;
+        int titleMaxW = w - badgeW - 12;
         graphics.text(font, Component.literal(trimToWidth(backup.displayName(), titleMaxW)), x, curY + 2, TEXT_COLOR, true);
 
         drawTypeBadge(graphics, x + w - badgeW, curY, badgeW, 16, backup.type());
@@ -791,11 +790,27 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
         int actionFooterH = 34;
         int actionY = bottom - actionFooterH;
 
-        int renameBtnW = 60;
-        Rect inlineRename = renameBtnInlineRect(rightX + rightW - 12 - renameBtnW, top + 10 - detailScroll);
-        if (inlineRename.contains(mx, my)) {
+        int btnY = actionY + (actionFooterH - 22) / 2;
+        Rect restoreRect = new Rect(rightX + 12, btnY, 90, 22);
+        if (restoreRect.contains(mx, my) && backup.restorable()) {
+            openRestoreStep1Modal(backup);
+            return true;
+        }
+
+        Rect renameRect = new Rect(restoreRect.x() + restoreRect.w() + 8, btnY, 80, 22);
+        if (renameRect.contains(mx, my)) {
             openRenameModal(backup);
             return true;
+        }
+
+        Rect deleteRect = new Rect(rightX + rightW - 12 - 80, btnY, 80, 22);
+        if (deleteRect.contains(mx, my) && backup.canDelete()) {
+            openDeleteModal(backup);
+            return true;
+        }
+
+        if (my < top || my >= actionY) {
+            return false;
         }
 
         if (selectedItem.base() != null) {
@@ -828,25 +843,6 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
                     return true;
                 }
             }
-        }
-
-        int btnY = actionY + (actionFooterH - 22) / 2;
-        Rect restoreRect = new Rect(rightX + 12, btnY, 90, 22);
-        if (restoreRect.contains(mx, my) && backup.restorable()) {
-            openRestoreStep1Modal(backup);
-            return true;
-        }
-
-        Rect renameRect = new Rect(restoreRect.x() + restoreRect.w() + 8, btnY, 80, 22);
-        if (renameRect.contains(mx, my)) {
-            openRenameModal(backup);
-            return true;
-        }
-
-        Rect deleteRect = new Rect(rightX + rightW - 12 - 80, btnY, 80, 22);
-        if (deleteRect.contains(mx, my) && backup.canDelete()) {
-            openDeleteModal(backup);
-            return true;
         }
 
         return false;
