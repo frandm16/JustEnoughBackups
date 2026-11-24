@@ -207,7 +207,7 @@ final class WebDavObjectStore implements RemoteObjectStore {
             if (createdCollections.contains(current)) continue;
             HttpRequest request = authorized(HttpRequest.newBuilder(objectUri(current + "/"))
                     .method("MKCOL", HttpRequest.BodyPublishers.noBody()), controlRequestTimeout).build();
-            HttpResponse<Void> response = send(request, HttpResponse.BodyHandlers.discarding());
+            HttpResponse<Void> response = sendRetryable(request, HttpResponse.BodyHandlers.discarding());
             if (!success(response.statusCode()) && response.statusCode() != 405 && response.statusCode() != 301) {
                 throw statusError("create WebDAV collection", response.statusCode(), response);
             }
@@ -242,7 +242,7 @@ final class WebDavObjectStore implements RemoteObjectStore {
                 .header("Destination", objectUri(targetKey).toString())
                 .header("Overwrite", "T")
                 .method("MOVE", HttpRequest.BodyPublishers.noBody()), controlRequestTimeout).build();
-        HttpResponse<Void> response = send(request, HttpResponse.BodyHandlers.discarding());
+        HttpResponse<Void> response = sendRetryable(request, HttpResponse.BodyHandlers.discarding());
         if (!success(response.statusCode())) throw statusError("move WebDAV object", response.statusCode(), response);
     }
 
@@ -284,20 +284,35 @@ final class WebDavObjectStore implements RemoteObjectStore {
     private <T> HttpResponse<T> sendRetryable(HttpRequest request, HttpResponse.BodyHandler<T> handler) throws IOException {
         IOException last = null;
         for (int attempt = 0; attempt <= maxRetries; attempt++) {
-            try { return send(request, handler); }
-            catch (IOException exception) {
+            try {
+                HttpResponse<T> response = send(request, handler);
+                int status = response.statusCode();
+                if ((status == 408 || status == 429 || status >= 500) && attempt < maxRetries) {
+                    if (response.body() instanceof InputStream stream) {
+                        try { stream.close(); } catch (IOException ignored) { }
+                    }
+                    sleepBeforeRetry(attempt);
+                    continue;
+                }
+                return response;
+            } catch (IOException exception) {
                 last = exception;
                 if (!RemoteStorageException.isRetryable(exception)) break;
                 if (attempt == maxRetries) break;
-                try { Thread.sleep(Math.min(200L << attempt, 3000L)); }
-                catch (InterruptedException interrupted) {
-                    Thread.currentThread().interrupt();
-                    throw new IOException("WebDAV retry interrupted.", interrupted);
-                }
+                sleepBeforeRetry(attempt);
             }
         }
         if (last != null) throw last;
         throw new IOException("WebDAV request failed without an attempt.");
+    }
+
+    private static void sleepBeforeRetry(int attempt) throws IOException {
+        try {
+            Thread.sleep(Math.min(200L << attempt, 3000L));
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new IOException("WebDAV retry interrupted.", interrupted);
+        }
     }
 
     private static IOException statusError(String action, int status) {
