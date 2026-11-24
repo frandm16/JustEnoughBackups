@@ -125,7 +125,7 @@ final class S3ObjectStore implements RemoteObjectStore {
                 token = response.nextContinuationToken();
             } while (token != null && !token.isBlank());
             return result;
-        } catch (CompletionException exception) {
+        } catch (RuntimeException exception) {
             throw ioFailure("Unable to list S3 backups", exception);
         }
     }
@@ -146,7 +146,7 @@ final class S3ObjectStore implements RemoteObjectStore {
         try {
             return client.getObject(GetObjectRequest.builder().bucket(bucket).key(key).build(),
                     software.amazon.awssdk.core.async.AsyncResponseTransformer.toBlockingInputStream()).join();
-        } catch (CompletionException exception) {
+        } catch (RuntimeException exception) {
             throw ioFailure("Unable to download S3 object", exception);
         }
     }
@@ -155,7 +155,7 @@ final class S3ObjectStore implements RemoteObjectStore {
     public void delete(String key) throws IOException {
         try {
             client.deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(key).build()).join();
-        } catch (CompletionException exception) {
+        } catch (RuntimeException exception) {
             throw ioFailure("Unable to delete S3 object", exception);
         }
     }
@@ -254,8 +254,8 @@ final class S3ObjectStore implements RemoteObjectStore {
             int status = serviceFailure.statusCode();
             return status == 429 || status >= 500;
         }
-        // Errores del cliente como pool de conexiones agotado son transitorios
-        if (findCause(failure, SdkClientException.class) != null) {
+        SdkClientException clientFailure = findCause(failure, SdkClientException.class);
+        if (clientFailure != null && clientFailure.retryable()) {
             return true;
         }
         return RemoteStorageException.isTransientNetworkFailure(failure);
