@@ -222,7 +222,7 @@ public final class BackupService {
                 files,
                 completed ? BackupProgressState.COMPLETED : BackupProgressState.FAILED
         ));
-        if (!completed) {
+        if (!completed || (status != null && status.brokenFiles != null && !status.brokenFiles.isEmpty())) {
             WorldBackupMod.LOGGER.warn("Backup {} was published with broken files: {}",
                     manifest.id, status.brokenFiles.size());
         }

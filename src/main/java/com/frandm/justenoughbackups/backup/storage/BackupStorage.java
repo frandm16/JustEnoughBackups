@@ -327,7 +327,6 @@ public final class BackupStorage {
         }
         if (!preUploadMcaWarnings.isEmpty()) {
             status.brokenFiles.addAll(preUploadMcaWarnings);
-            status.completed = false;
         }
         List<BackupManifest> manifests = new ArrayList<>(existing);
         manifests.add(manifest);
