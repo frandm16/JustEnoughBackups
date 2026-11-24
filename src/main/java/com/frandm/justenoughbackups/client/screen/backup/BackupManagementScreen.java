@@ -255,7 +255,6 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
             backups.sort(Comparator.comparing((BackupUiBackup backup) -> value(backup.createdAt())).reversed());
         }
         refreshFilteredList();
-        rebuildWidgets();
     }
 
     @Override
