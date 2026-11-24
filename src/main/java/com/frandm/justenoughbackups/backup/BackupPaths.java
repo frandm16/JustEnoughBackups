@@ -41,7 +41,8 @@ public final class BackupPaths {
     }
 
     public static String worldName(Path worldPath) {
-        Path fileName = worldPath.getFileName();
+        Path normalized = worldPath.toAbsolutePath().normalize();
+        Path fileName = normalized.getFileName();
         if (fileName == null) {
             WorldBackupMod.LOGGER.warn("Unable to resolve world folder name from world path. Using fallback {}.", DEFAULT_WORLD_NAME);
             return DEFAULT_WORLD_NAME;

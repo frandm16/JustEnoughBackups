@@ -276,8 +276,14 @@ public final class McaIntegrityValidator {
         if (!matcher.matches()) {
             return new ValidationReport(List.of(), List.of());
         }
-        int regionX = Integer.parseInt(matcher.group(1));
-        int regionZ = Integer.parseInt(matcher.group(2));
+        int regionX;
+        int regionZ;
+        try {
+            regionX = Integer.parseInt(matcher.group(1));
+            regionZ = Integer.parseInt(matcher.group(2));
+        } catch (NumberFormatException exception) {
+            return new ValidationReport(List.of(), List.of("Invalid region coordinates in filename: " + relativePath));
+        }
         McaType mcaType = detectType(relativePath);
 
         long fileLength = source.length();
