@@ -46,24 +46,34 @@ public final class RetentionPolicy {
     }
 
     public static List<BackupManifest> planRemote(List<BackupManifest> manifests, Map<String, Long> sizes, BackupConfig config) {
-        Set<String> protectedIds = requiredChainIds(manifests, config);
-        LinkedHashSet<String> deletions = new LinkedHashSet<>();
         List<BackupManifest> ordered = manifests.stream().sorted(Comparator.comparing(m -> m.createdAt)).toList();
+        Set<String> protectedIds = new HashSet<>(requiredChainIds(ordered, config));
+        LinkedHashSet<String> deletions = new LinkedHashSet<>();
         for (BackupManifest manifest : ordered) {
-            if (!protectedIds.contains(manifest.id) && isOverLimit(manifest, manifests, protectedIds, config)) {
+            if (!protectedIds.contains(manifest.id) && isOverLimit(manifest, ordered, protectedIds, config)) {
                 deletions.add(manifest.id);
             }
         }
         long cap = toCapBytes(config);
-        long total = manifests.stream()
+        long total = ordered.stream()
                 .filter(m -> !deletions.contains(m.id))
                 .mapToLong(m -> Math.max(0L, sizes.getOrDefault(m.id, 0L)))
                 .sum();
-        for (BackupManifest manifest : ordered) {
-            if (cap <= 0L || total <= cap) break;
-            if (protectedIds.contains(manifest.id) || deletions.contains(manifest.id)) continue;
-            deletions.add(manifest.id);
-            total -= Math.max(0L, sizes.getOrDefault(manifest.id, 0L));
+        if (cap > 0L && total > cap && !ordered.isEmpty()) {
+            Set<String> strictlyProtected = chainIdsFor(ordered, ordered.getLast().id);
+            boolean progressed = true;
+            while (total > cap && progressed) {
+                progressed = false;
+                for (BackupManifest manifest : ordered) {
+                    if (total <= cap) break;
+                    if (strictlyProtected.contains(manifest.id) || deletions.contains(manifest.id)) continue;
+                    if (isReferencedByRemaining(manifest.id, ordered, deletions)) continue;
+                    deletions.add(manifest.id);
+                    protectedIds.remove(manifest.id);
+                    total -= Math.max(0L, sizes.getOrDefault(manifest.id, 0L));
+                    progressed = true;
+                }
+            }
         }
         return ordered.stream().filter(m -> deletions.contains(m.id)).toList();
     }
@@ -86,7 +96,7 @@ public final class RetentionPolicy {
                 .sorted(Comparator.comparing(manifest -> manifest.createdAt))
                 .toList();
 
-        Set<String> protectedIds = requiredChainIds(manifestsForRules, config);
+        Set<String> protectedIds = new HashSet<>(requiredChainIds(manifestsForRules, config));
         LinkedHashSet<String> deletionIds = new LinkedHashSet<>();
         for (BackupEntry entry : entries) {
             if (protectedIds.contains(entry.id())) {
@@ -99,16 +109,27 @@ public final class RetentionPolicy {
 
         long capBytes = toCapBytes(config);
         long projectedBytes = projectedBytes(entries, deletionIds);
-        if (capBytes > 0L && projectedBytes > capBytes) {
-            for (BackupEntry entry : entries) {
-                if (projectedBytes <= capBytes) {
-                    break;
+        if (capBytes > 0L && projectedBytes > capBytes && !manifestsForRules.isEmpty()) {
+            String anchorId = pendingManifest != null ? pendingManifest.id : manifestsForRules.getLast().id;
+            Set<String> strictlyProtected = chainIdsFor(manifestsForRules, anchorId);
+            boolean progressed = true;
+            while (projectedBytes > capBytes && progressed) {
+                progressed = false;
+                for (BackupEntry entry : entries) {
+                    if (projectedBytes <= capBytes) {
+                        break;
+                    }
+                    if (strictlyProtected.contains(entry.id()) || deletionIds.contains(entry.id())) {
+                        continue;
+                    }
+                    if (isReferencedByRemaining(entry.id(), manifestsForRules, deletionIds)) {
+                        continue;
+                    }
+                    deletionIds.add(entry.id());
+                    protectedIds.remove(entry.id());
+                    projectedBytes -= entry.zipBytes();
+                    progressed = true;
                 }
-                if (protectedIds.contains(entry.id()) || deletionIds.contains(entry.id())) {
-                    continue;
-                }
-                deletionIds.add(entry.id());
-                projectedBytes -= entry.zipBytes();
             }
         }
 
@@ -143,6 +164,28 @@ public final class RetentionPolicy {
         }
 
         return required;
+    }
+
+    private static Set<String> chainIdsFor(List<BackupManifest> manifests, String rootId) {
+        Map<String, BackupManifest> byId = new LinkedHashMap<>();
+        for (BackupManifest manifest : manifests) {
+            byId.put(manifest.id, manifest);
+        }
+        Set<String> chain = new HashSet<>();
+        BackupManifest current = byId.get(rootId);
+        while (current != null && chain.add(current.id)) {
+            current = current.baseBackupId == null ? null : byId.get(current.baseBackupId);
+        }
+        return chain;
+    }
+
+    private static boolean isReferencedByRemaining(String candidateId, List<BackupManifest> manifests, Set<String> deletions) {
+        for (BackupManifest manifest : manifests) {
+            if (!deletions.contains(manifest.id) && candidateId.equals(manifest.baseBackupId)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static Set<String> newestIds(List<BackupManifest> manifests, BackupType type, int limit) {
