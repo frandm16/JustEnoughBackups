@@ -46,6 +46,13 @@ public final class BackupWatchdog {
     public void stop() {
         started.set(false);
         monitor.interrupt();
+        if (Thread.currentThread() != monitor && monitor.isAlive()) {
+            try {
+                monitor.join(2_000L);
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+            }
+        }
     }
 
 
@@ -82,14 +89,16 @@ public final class BackupWatchdog {
     }
 
     private void track(BackupProgress progress) {
-        lastProgress = progress;
-        long now = System.currentTimeMillis();
-        if (progress.bytesWritten() != previousBytes || progress.filesWritten() != previousFiles) {
-            lastAdvanceNanos = System.nanoTime();
-            lastHeartbeatMillis = now;
+        synchronized (commitLock) {
+            lastProgress = progress;
+            long now = System.currentTimeMillis();
+            if (progress.bytesWritten() != previousBytes || progress.filesWritten() != previousFiles) {
+                lastAdvanceNanos = System.nanoTime();
+                lastHeartbeatMillis = now;
+            }
+            previousBytes = progress.bytesWritten();
+            previousFiles = progress.filesWritten();
         }
-        previousBytes = progress.bytesWritten();
-        previousFiles = progress.filesWritten();
     }
 
     private void recordActivity() {
@@ -108,10 +117,17 @@ public final class BackupWatchdog {
             if (System.nanoTime() - lastAdvanceNanos > stallNanos) {
                 fire();
             } else if (now - lastHeartbeatMillis >= HEARTBEAT_MILLIS) {
-                BackupProgress progress = lastProgress;
-                if (progress != null) {
-                    lastHeartbeatMillis = now;
-                    delegate.onProgress(progress);
+                BackupProgress progressToEmit = null;
+                synchronized (commitLock) {
+                    if (started.get() && !committed && !fired.get() && now - lastHeartbeatMillis >= HEARTBEAT_MILLIS) {
+                        progressToEmit = lastProgress;
+                        if (progressToEmit != null) {
+                            lastHeartbeatMillis = now;
+                        }
+                    }
+                }
+                if (progressToEmit != null) {
+                    delegate.onProgress(progressToEmit);
                 }
             }
         }
