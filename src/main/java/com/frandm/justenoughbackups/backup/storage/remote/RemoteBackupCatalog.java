@@ -49,29 +49,64 @@ public final class RemoteBackupCatalog implements AutoCloseable {
                         RemoteObjectStore.ObjectInfo::key,
                         RemoteObjectStore.ObjectInfo::size,
                         (existing, replacement) -> replacement));
-        List<CatalogEntry> entries = new ArrayList<>();
-        for (RemoteObjectStore.ObjectInfo object : store.list(catalogPrefix)) {
-            if (!object.key().endsWith(".json")) continue;
-            CatalogEnvelope envelope;
-            try (InputStream in = store.get(object.key())) {
-                envelope = GSON.fromJson(new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8), CatalogEnvelope.class);
-            } catch (RuntimeException | IOException exception) {
-                continue;
+        List<RemoteObjectStore.ObjectInfo> sidecars = store.list(catalogPrefix).stream()
+                .filter(object -> object.key().endsWith(".json"))
+                .toList();
+        List<CatalogEntry> entries = new ArrayList<>(sidecars.size());
+        if (sidecars.size() <= 1) {
+            for (RemoteObjectStore.ObjectInfo object : sidecars) {
+                CatalogEntry entry = readCatalogEntry(object.key(), archives);
+                if (entry != null) {
+                    entries.add(entry);
+                }
             }
-            if (envelope == null || envelope.metadata == null || envelope.metadata.manifest == null) continue;
-            BackupManifest manifest = envelope.metadata.manifest;
-            if (manifest.id == null || manifest.id.isBlank() || manifest.createdAt == null
-                    || manifest.type == null || manifest.zipFileName == null || manifest.zipFileName.isBlank()) continue;
-            String archiveKey;
-            try { archiveKey = archiveKey(manifest.zipFileName); }
-            catch (IOException invalidName) { continue; }
-            Long archiveSize = archives.get(archiveKey);
-            if (archiveSize == null) continue;
-            manifest.archiveBytes = archiveSize;
-            entries.add(new CatalogEntry(manifest, envelope.metadata.status, envelope.sha256, archiveSize));
+        } else {
+            java.util.concurrent.Semaphore permits = new java.util.concurrent.Semaphore(8);
+            List<java.util.concurrent.CompletableFuture<CatalogEntry>> futures = new ArrayList<>(sidecars.size());
+            for (RemoteObjectStore.ObjectInfo object : sidecars) {
+                try {
+                    permits.acquire();
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException("Remote catalog listing interrupted.", interrupted);
+                }
+                futures.add(java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+                    try {
+                        return readCatalogEntry(object.key(), archives);
+                    } finally {
+                        permits.release();
+                    }
+                }, com.frandm.justenoughbackups.backup.parallel.BackupThreadPool.getExecutor()));
+            }
+            for (var future : futures) {
+                CatalogEntry entry = future.join();
+                if (entry != null) {
+                    entries.add(entry);
+                }
+            }
         }
         entries.sort(Comparator.comparing(entry -> entry.manifest().createdAt));
         return List.copyOf(entries);
+    }
+
+    private CatalogEntry readCatalogEntry(String key, java.util.Map<String, Long> archives) {
+        CatalogEnvelope envelope;
+        try (InputStream in = store.get(key)) {
+            envelope = GSON.fromJson(new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8), CatalogEnvelope.class);
+        } catch (RuntimeException | IOException exception) {
+            return null;
+        }
+        if (envelope == null || envelope.metadata == null || envelope.metadata.manifest == null) return null;
+        BackupManifest manifest = envelope.metadata.manifest;
+        if (manifest.id == null || manifest.id.isBlank() || manifest.createdAt == null
+                || manifest.type == null || manifest.zipFileName == null || manifest.zipFileName.isBlank()) return null;
+        String archiveKey;
+        try { archiveKey = archiveKey(manifest.zipFileName); }
+        catch (IOException invalidName) { return null; }
+        Long archiveSize = archives.get(archiveKey);
+        if (archiveSize == null) return null;
+        manifest.archiveBytes = archiveSize;
+        return new CatalogEntry(manifest, envelope.metadata.status, envelope.sha256, archiveSize);
     }
 
     public UploadInfo uploadAndPublish(BackupManifest manifest, BackupStatus status, InputStream archive) throws IOException {
