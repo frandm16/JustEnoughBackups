@@ -1588,11 +1588,7 @@ public final class BackupStorage {
     }
 
     private static String toHex(byte[] bytes) {
-        StringBuilder builder = new StringBuilder(bytes.length * 2);
-        for (byte value : bytes) {
-            builder.append(String.format(Locale.ROOT, "%02x", value));
-        }
-        return builder.toString();
+        return HexFormat.of().formatHex(bytes);
     }
 
     private static String rootMessage(Throwable throwable) {

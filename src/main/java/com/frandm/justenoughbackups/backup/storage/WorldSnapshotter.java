@@ -26,6 +26,7 @@ import java.util.function.LongConsumer;
 
 public final class WorldSnapshotter {
     private static final Pattern TRANSIENT_LEVEL_FILE = Pattern.compile("^level\\d+\\.dat$");
+    private static final ThreadLocal<byte[]> HASH_BUFFER = ThreadLocal.withInitial(() -> new byte[64 * 1024]);
 
     private WorldSnapshotter() {
     }
@@ -287,24 +288,16 @@ public final class WorldSnapshotter {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             try (DigestInputStream input = new DigestInputStream(Files.newInputStream(file), digest)) {
-                byte[] buffer = new byte[1024 * 1024];
+                byte[] buffer = HASH_BUFFER.get();
                 int read;
                 while ((read = input.read(buffer)) != -1) {
                     activity.accept(read);
                 }
             }
-            return toHex(digest.digest());
+            return java.util.HexFormat.of().formatHex(digest.digest());
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException("SHA-256 is not available.", exception);
         }
-    }
-
-    private static String toHex(byte[] bytes) {
-        StringBuilder builder = new StringBuilder(bytes.length * 2);
-        for (byte value : bytes) {
-            builder.append(String.format(Locale.ROOT, "%02x", value));
-        }
-        return builder.toString();
     }
 
     @FunctionalInterface
