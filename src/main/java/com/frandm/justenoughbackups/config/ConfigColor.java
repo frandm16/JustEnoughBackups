@@ -27,6 +27,13 @@ public final class ConfigColor {
         if (normalized.length() != 8) {
             return Optional.empty();
         }
+        for (int i = 0; i < 8; i++) {
+            char c = normalized.charAt(i);
+            boolean hex = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+            if (!hex) {
+                return Optional.empty();
+            }
+        }
 
         try {
             return Optional.of((int) Long.parseLong(normalized, 16));
