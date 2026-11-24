@@ -1077,6 +1077,7 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
                     String reqName = modalInputBox != null ? modalInputBox.getValue() : "";
                     closeModal();
                     BackupUiClient.createBackup(createSelectedType, reqName);
+                    minecraft.setScreenAndShow(null);
                     return true;
                 } else if (activeModal == ActiveModal.RENAME && modalTargetBackup != null) {
                     String newName = modalInputBox != null ? modalInputBox.getValue() : "";

@@ -11,7 +11,7 @@ public final class ScreenChrome {
 
     public static final int BG_COLOR = 0xCC050505;
     public static final int TITLE_COLOR = 0xFFFFFFFF;
-    public static final int LINE_COLOR = 0x00606060;
+    public static final int LINE_COLOR = 0x80606060;
     public static final int OUTLINE_COLOR = 0xFF333333;
     public static final int BUTTON_FILL = 0xFF3B3B3B;
     public static final int BUTTON_HOVER = 0xFF606060;
