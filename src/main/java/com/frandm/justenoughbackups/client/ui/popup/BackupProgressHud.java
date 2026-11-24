@@ -11,16 +11,23 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import java.util.Objects;
 
 public final class BackupProgressHud {
-    private static final long FINISHED_VISIBLE_MILLIS = 5_000L;
-    private static final long RUNNING_TIMEOUT_MILLIS = 3_000L;
-    private static volatile BackupProgressPayload current;
-    private static volatile long lastUpdateMillis;
+    private static final long FINISHED_VISIBLE_NANOS = 5_000_000_000L;
+    private static final long RUNNING_TIMEOUT_NANOS = 3_000_000_000L;
+    private static volatile HudEntry current;
+
+    private record HudEntry(BackupProgressPayload payload, long updatedAtNanos) {
+    }
 
     private BackupProgressHud() {
     }
 
+    public static void clear() {
+        current = null;
+    }
+
     public static void update(BackupProgressPayload payload) {
-        BackupProgressPayload previous = current;
+        HudEntry previousEntry = current;
+        BackupProgressPayload previous = previousEntry == null ? null : previousEntry.payload();
         if (previous != null
                 && (previous.state() == BackupProgressState.COMPLETED || previous.state() == BackupProgressState.FAILED)
                 && (payload.state() == BackupProgressState.STARTED || payload.state() == BackupProgressState.RUNNING)
@@ -28,24 +35,24 @@ public final class BackupProgressHud {
                 && Objects.equals(previous.backupId(), payload.backupId())) {
             return;
         }
-        current = payload;
-        lastUpdateMillis = System.currentTimeMillis();
+        current = new HudEntry(payload, System.nanoTime());
     }
 
     public static void render(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker) {
-        BackupProgressPayload progress = current;
+        HudEntry entry = current;
         BackupConfig.Popup popup = BackupConfig.get().popup;
-        if (progress == null || !popup.enabled) {
+        if (entry == null || !popup.enabled) {
             return;
         }
 
-        long age = System.currentTimeMillis() - lastUpdateMillis;
+        BackupProgressPayload progress = entry.payload();
+        long ageNanos = System.nanoTime() - entry.updatedAtNanos();
         if (progress.state() == BackupProgressState.RUNNING || progress.state() == BackupProgressState.STARTED) {
-            if (age > RUNNING_TIMEOUT_MILLIS) {
+            if (ageNanos > RUNNING_TIMEOUT_NANOS) {
                 current = null;
                 return;
             }
-        } else if (age > FINISHED_VISIBLE_MILLIS) {
+        } else if (ageNanos > FINISHED_VISIBLE_NANOS) {
             current = null;
             return;
         }
