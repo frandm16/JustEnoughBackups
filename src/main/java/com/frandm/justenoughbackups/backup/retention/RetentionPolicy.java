@@ -18,6 +18,9 @@ import java.util.Map;
 import java.util.Set;
 
 public final class RetentionPolicy {
+    private static final Comparator<BackupManifest> CREATED_AT_ORDER =
+            Comparator.comparing(manifest -> manifest.createdAt == null ? "" : manifest.createdAt);
+
     private RetentionPolicy() {
     }
 
@@ -46,7 +49,7 @@ public final class RetentionPolicy {
     }
 
     public static List<BackupManifest> planRemote(List<BackupManifest> manifests, Map<String, Long> sizes, BackupConfig config) {
-        List<BackupManifest> ordered = manifests.stream().sorted(Comparator.comparing(m -> m.createdAt)).toList();
+        List<BackupManifest> ordered = manifests.stream().sorted(CREATED_AT_ORDER).toList();
         Set<String> protectedIds = new HashSet<>(requiredChainIds(ordered, config));
         LinkedHashSet<String> deletions = new LinkedHashSet<>();
         for (BackupManifest manifest : ordered) {
@@ -84,7 +87,7 @@ public final class RetentionPolicy {
 
     private static RetentionDecision plan(Path backupDir, List<BackupManifest> manifests, BackupConfig config, BackupManifest pendingManifest, long pendingBytes) throws IOException {
         List<BackupManifest> orderedManifests = manifests.stream()
-                .sorted(Comparator.comparing(manifest -> manifest.createdAt))
+                .sorted(CREATED_AT_ORDER)
                 .toList();
         if (orderedManifests.isEmpty() && pendingManifest == null) {
             return new RetentionDecision(List.of(), Set.of(), 0L, 0L, false);
@@ -93,7 +96,7 @@ public final class RetentionPolicy {
         List<BackupEntry> entries = loadEntries(backupDir, orderedManifests, pendingManifest, pendingBytes);
         List<BackupManifest> manifestsForRules = entries.stream()
                 .map(BackupEntry::manifest)
-                .sorted(Comparator.comparing(manifest -> manifest.createdAt))
+                .sorted(CREATED_AT_ORDER)
                 .toList();
 
         Set<String> protectedIds = new HashSet<>(requiredChainIds(manifestsForRules, config));
@@ -196,7 +199,7 @@ public final class RetentionPolicy {
         Set<String> ids = new HashSet<>();
         manifests.stream()
                 .filter(manifest -> manifest.type == type)
-                .sorted(Comparator.comparing((BackupManifest manifest) -> manifest.createdAt).reversed())
+                .sorted(CREATED_AT_ORDER.reversed())
                 .limit(limit)
                 .forEach(manifest -> ids.add(manifest.id));
         return ids;
@@ -212,9 +215,10 @@ public final class RetentionPolicy {
             return true;
         }
 
+        String candidateCreatedAt = candidate.createdAt == null ? "" : candidate.createdAt;
         long newerOrSame = manifests.stream()
                 .filter(manifest -> manifest.type == candidate.type)
-                .filter(manifest -> protectedIds.contains(manifest.id) || manifest.createdAt.compareTo(candidate.createdAt) >= 0)
+                .filter(manifest -> protectedIds.contains(manifest.id) || (manifest.createdAt == null ? "" : manifest.createdAt).compareTo(candidateCreatedAt) >= 0)
                 .count();
         return newerOrSame > limit;
     }
@@ -227,7 +231,7 @@ public final class RetentionPolicy {
                         fileSize(backupDir.resolve(manifest.zipFileName)),
                         true
                 ))
-                .sorted(Comparator.comparing(entry -> entry.manifest().createdAt))
+                .sorted(Comparator.comparing(BackupEntry::manifest, CREATED_AT_ORDER))
                 .toList();
         if (pendingManifest == null) {
             return entries;
@@ -240,7 +244,7 @@ public final class RetentionPolicy {
                 Math.max(0L, pendingBytes),
                 false
         ));
-        combined.sort(Comparator.comparing(entry -> entry.manifest().createdAt));
+        combined.sort(Comparator.comparing(BackupEntry::manifest, CREATED_AT_ORDER));
         return combined;
     }
 

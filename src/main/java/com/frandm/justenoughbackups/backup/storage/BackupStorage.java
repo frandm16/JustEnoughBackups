@@ -1344,6 +1344,10 @@ public final class BackupStorage {
             WorldBackupMod.LOGGER.warn("Skipping backup with missing type in manifest: {}", backupFile);
             return null;
         }
+        if (manifest.createdAt == null || manifest.createdAt.isBlank()) {
+            WorldBackupMod.LOGGER.warn("Skipping backup with missing createdAt in manifest: {}", backupFile);
+            return null;
+        }
         return manifest;
     }
 
@@ -1606,7 +1610,7 @@ public final class BackupStorage {
             stream = stream.filter(m -> m.type == BackupType.FULL);
         }
 
-        return stream.max(Comparator.comparing(m -> m.createdAt)).orElse(null);
+        return stream.max(Comparator.comparing(m -> m.createdAt == null ? "" : m.createdAt)).orElse(null);
     }
 
     private static List<String> includedFiles(

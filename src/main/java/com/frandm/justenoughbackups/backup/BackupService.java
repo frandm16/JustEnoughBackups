@@ -182,14 +182,15 @@ public final class BackupService {
 
     public static List<BackupManifest> listBackups(MinecraftServer server) throws IOException {
         BackupConfig config = BackupConfig.get();
+        Comparator<BackupManifest> createdAtOrder = Comparator.comparing(manifest -> manifest.createdAt == null ? "" : manifest.createdAt);
         if (config.remoteStorage != null && config.remoteStorage.enabled) {
             try (RemoteBackupCatalog catalog = new RemoteBackupCatalog(config.remoteStorage, BackupPaths.worldDirectoryName(server, server.getWorldPath(LevelResource.ROOT)))) {
                 return catalog.list().stream().map(RemoteBackupCatalog.CatalogEntry::manifest)
-                        .sorted(Comparator.comparing(manifest -> manifest.createdAt)).toList();
+                        .sorted(createdAtOrder).toList();
             }
         }
         return BackupStorage.readManifests(BackupPaths.worldBackupDir(server)).stream()
-                .sorted(Comparator.comparing(manifest -> manifest.createdAt))
+                .sorted(createdAtOrder)
                 .toList();
     }
 
