@@ -55,7 +55,7 @@ public final class RestoreProgressTracker {
         emit(BackupProgressState.RUNNING, true);
     }
 
-    private void emit(BackupProgressState state, boolean force) {
+    private synchronized void emit(BackupProgressState state, boolean force) {
         long now = System.currentTimeMillis();
         long written = bytes.get();
         int percent = totalBytes <= 0L ? 100 : (int) Math.min(100L, (written * 100L) / totalBytes);
