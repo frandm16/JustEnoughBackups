@@ -147,10 +147,7 @@ public final class BackupService {
                 throw exception;
             } finally {
                 watchdog.stop();
-                restoreSaving(server, autoSaveToRestore, worldSavingStateToRestore);
-                if (resetLock) {
-                    BACKUP_RUNNING.set(false);
-                }
+                restoreSavingAndReleaseLock(server, autoSaveToRestore, worldSavingStateToRestore, resetLock);
             }
         });
     }
@@ -496,11 +493,38 @@ public final class BackupService {
         }
     }
 
-    private static void restoreSaving(MinecraftServer server, boolean previousAutoSave, WorldSavingState previousWorldSavingState) {
-        server.execute(() -> {
-            previousWorldSavingState.restore(server);
-            server.setAutoSave(previousAutoSave);
-        });
+    private static void restoreSavingAndReleaseLock(MinecraftServer server, boolean previousAutoSave, WorldSavingState previousWorldSavingState, boolean resetLock) {
+        if (!server.isRunning()) {
+            try {
+                server.execute(() -> {
+                    previousWorldSavingState.restore(server);
+                    server.setAutoSave(previousAutoSave);
+                });
+            } catch (RuntimeException ignored) {
+            } finally {
+                if (resetLock) {
+                    BACKUP_RUNNING.set(false);
+                }
+            }
+            return;
+        }
+        try {
+            server.execute(() -> {
+                try {
+                    previousWorldSavingState.restore(server);
+                    server.setAutoSave(previousAutoSave);
+                } finally {
+                    if (resetLock) {
+                        BACKUP_RUNNING.set(false);
+                    }
+                }
+            });
+        } catch (RuntimeException exception) {
+            if (resetLock) {
+                BACKUP_RUNNING.set(false);
+            }
+            throw exception;
+        }
     }
 
     private static void restoreSavingBestEffort(MinecraftServer server, boolean previousAutoSave, boolean savingDisabled, WorldSavingState previousWorldSavingState) {
