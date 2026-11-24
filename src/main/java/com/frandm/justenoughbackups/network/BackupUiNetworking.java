@@ -80,8 +80,8 @@ public final class BackupUiNetworking {
     }
 
     private static void restoreBackup(BackupUiRequestPayload payload, MinecraftServer server, ServerPlayer player) {
-        BackupService.restoreBackupById(server, payload.backupId())
-                .thenAccept(restore -> server.execute(() -> {
+        var future = BackupService.restoreBackupById(server, payload.backupId());
+        future.thenAccept(restore -> server.execute(() -> {
                     send(player, payload, true, true, "message.justenoughbackups.restore_prepared", List.of(restore.backupId()), List.of());
                     server.halt(false);
                 }))
@@ -90,7 +90,9 @@ public final class BackupUiNetworking {
                     sendFailureAsync(server, player, payload, "text.justenoughbackups.backup_ui.restore_failed", exception);
                     return null;
                 });
-        sendListAsync(server, player, payload, true, "message.justenoughbackups.restore_started", payload.backupId());
+        if (!future.isDone()) {
+            sendListAsync(server, player, payload, true, "message.justenoughbackups.restore_started", payload.backupId());
+        }
     }
 
     private static void sendListAsync(MinecraftServer server, ServerPlayer player, BackupUiRequestPayload request, boolean success, String messageKey, String... args) {
@@ -103,7 +105,7 @@ public final class BackupUiNetworking {
                     .map(BackupUiBackup::new)
                     .filter(backup -> isSendable(backup, server))
                     .toList();
-            List<String> messageArgs = List.of(args);
+            List<String> messageArgs = java.util.Arrays.stream(args).map(a -> a == null ? "" : a).toList();
             server.execute(() -> send(player, request, true, success, messageKey, messageArgs, backups));
         } catch (IOException | RuntimeException exception) {
             server.execute(() -> sendFailure(player, request, "text.justenoughbackups.backup_ui.failed", exception));
@@ -134,7 +136,8 @@ public final class BackupUiNetworking {
                     .toList();
             server.execute(() -> sendFailure(player, request, defaultMessageKey, throwable, backups));
         } catch (IOException | RuntimeException exception) {
-            server.execute(() -> sendFailure(player, request, defaultMessageKey, exception, List.of()));
+            WorldBackupMod.LOGGER.warn("Unable to refresh backup list after UI failure.", exception);
+            server.execute(() -> sendFailure(player, request, defaultMessageKey, throwable, List.of()));
         }
     }
 
