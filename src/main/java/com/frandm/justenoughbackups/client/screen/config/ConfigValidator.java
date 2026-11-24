@@ -11,7 +11,6 @@ import java.util.Optional;
 final class ConfigValidator {
     List<ValidationError> validate(ConfigScreenState state) {
         List<ValidationError> errors = new ArrayList<>();
-        validateInt(errors, ConfigFieldId.INTERVAL_MINUTES, state.working.automaticIntervalMinutes, 1, Integer.MAX_VALUE, "screen.justenoughbackups.config.error.interval_min");
         validateInt(errors, ConfigFieldId.AUTOMATIC_BACKUP_WARNING_MINUTES, state.working.automaticBackupWarningMinutes, 1, Integer.MAX_VALUE, "screen.justenoughbackups.config.error.warning_minutes_min");
         validateInt(errors, ConfigFieldId.AUTOMATIC_FULL_INTERVAL_MINUTES, state.working.automaticSchedule.full.intervalMinutes, 1, Integer.MAX_VALUE, "screen.justenoughbackups.config.error.interval_min");
         validateInt(errors, ConfigFieldId.AUTOMATIC_DIFFERENTIAL_INTERVAL_MINUTES, state.working.automaticSchedule.differential.intervalMinutes, 1, Integer.MAX_VALUE, "screen.justenoughbackups.config.error.interval_min");

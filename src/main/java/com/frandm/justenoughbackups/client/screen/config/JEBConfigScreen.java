@@ -78,9 +78,7 @@ public final class JEBConfigScreen extends Screen {
         PopupPositioning.applyRatios(font, state.working.popup, state.previewPayload(), width, height);
         buildRowsForTab(state.selectedTab);
         clampScroll();
-        validationErrors = validator.validate(state).stream()
-                .filter(error -> error.fieldId().tab() == state.selectedTab)
-                .toList();
+        validationErrors = validateVisibleTabs();
         clampPreviewPosition();
     }
 
@@ -970,7 +968,7 @@ public final class JEBConfigScreen extends Screen {
             default -> {
             }
         }
-        validationErrors = validator.validate(state);
+        validationErrors = validateVisibleTabs();
     }
 
     @Override
@@ -988,11 +986,18 @@ public final class JEBConfigScreen extends Screen {
     }
 
     private void saveAndClose() {
-        validationErrors = validator.validate(state);
+        validationErrors = validateVisibleTabs();
         if (validationErrors.isEmpty()) {
             BackupConfig.saveAndApply(state.working);
             minecraft.setScreenAndShow(parent);
         }
+    }
+
+    private List<ValidationError> validateVisibleTabs() {
+        List<ConfigTab> tabs = visibleTabs();
+        return validator.validate(state).stream()
+                .filter(error -> tabs.contains(error.fieldId().tab()))
+                .toList();
     }
 
     private void clearInputsForTab(ConfigTab tab) {
