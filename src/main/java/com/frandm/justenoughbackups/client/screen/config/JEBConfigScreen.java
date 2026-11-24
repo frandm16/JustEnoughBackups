@@ -933,6 +933,9 @@ public final class JEBConfigScreen extends Screen {
             case AUTOMATIC_FULL_INTERVAL_MINUTES -> parseInt(input).ifPresent(value -> state.working.automaticSchedule.full.intervalMinutes = value);
             case AUTOMATIC_PARTIAL_INTERVAL_MINUTES -> parseInt(input).ifPresent(value -> state.working.automaticSchedule.partial.intervalMinutes = value);
             case AUTOMATIC_DIFFERENTIAL_INTERVAL_MINUTES -> parseInt(input).ifPresent(value -> state.working.automaticSchedule.differential.intervalMinutes = value);
+            case STARTUP_FULL_MINIMUM_AGE -> parseInt(input).ifPresent(value -> state.working.startupBackupThreshold.fullMinutes = value);
+            case STARTUP_PARTIAL_MINIMUM_AGE -> parseInt(input).ifPresent(value -> state.working.startupBackupThreshold.partialMinutes = value);
+            case STARTUP_DIFFERENTIAL_MINIMUM_AGE -> parseInt(input).ifPresent(value -> state.working.startupBackupThreshold.differentialMinutes = value);
             case KEEP_FULL -> parseInt(input).ifPresent(value -> state.working.retention.full = value);
             case KEEP_PARTIAL -> parseInt(input).ifPresent(value -> state.working.retention.incremental = value);
             case KEEP_DIFFERENTIAL -> parseInt(input).ifPresent(value -> state.working.retention.differential = value);
@@ -940,6 +943,9 @@ public final class JEBConfigScreen extends Screen {
             case MINIMUM_FREE_SPACE_RESERVE_MB -> parseInt(input).ifPresent(value -> state.working.minimumFreeSpaceReserveMb = value);
             case WATCHDOG_TIMEOUT_SECONDS -> parseInt(input).ifPresent(value -> state.working.watchdogTimeoutSeconds = value);
             case THREAD_COUNT -> parseInt(input).ifPresent(value -> state.working.threadCount = value);
+            case DEFLATE_COMPRESSION_LEVEL -> parseInt(input).ifPresent(value -> state.working.deflateCompressionLevel = value);
+            case ZSTD_COMPRESSION_LEVEL -> parseInt(input).ifPresent(value -> state.working.zstdCompressionLevel = value);
+            case REMOTE_STORAGE_RETRIES -> parseInt(input).ifPresent(value -> state.working.remoteStorage.maxRetries = value);
             case PERMISSION_LEVEL -> parseInt(input).ifPresent(value -> state.working.commandPermissionLevel = value);
             case BACKUP_DIRECTORY -> state.working.backupDirectory = input;
             case TEMP_DIRECTORY -> state.working.tempBackupDirectory = input;
