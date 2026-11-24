@@ -125,8 +125,11 @@ public final class BackupScheduler {
                 try (RemoteBackupCatalog catalog = new RemoteBackupCatalog(config.remoteStorage, worldDirectoryName)) {
                     List<RemoteBackupCatalog.CatalogEntry> entries = catalog.list();
                     manifests = entries.stream().map(RemoteBackupCatalog.CatalogEntry::manifest).toList();
-                    remoteStatuses = entries.stream().collect(java.util.stream.Collectors.toMap(
-                            entry -> entry.manifest().id, RemoteBackupCatalog.CatalogEntry::status));
+                    Map<String, BackupStatus> statusMap = new java.util.HashMap<>();
+                    for (RemoteBackupCatalog.CatalogEntry entry : entries) {
+                        statusMap.put(entry.manifest().id, entry.status());
+                    }
+                    remoteStatuses = statusMap;
                 }
             } else {
                 manifests = BackupStorage.readManifests(BackupPaths.worldBackupDir(server));

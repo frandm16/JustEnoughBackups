@@ -185,7 +185,8 @@ public final class RemoteBackupCatalog implements AutoCloseable {
     public void applyRetention(BackupConfig config) throws IOException {
         List<CatalogEntry> entries = list();
         var manifests = entries.stream().map(CatalogEntry::manifest).toList();
-        var sizes = entries.stream().collect(java.util.stream.Collectors.toMap(e -> e.manifest().id, CatalogEntry::archiveBytes));
+        var sizes = entries.stream().collect(java.util.stream.Collectors.toMap(
+                e -> e.manifest().id, CatalogEntry::archiveBytes, (existing, replacement) -> replacement));
         var decision = com.frandm.justenoughbackups.backup.retention.RetentionPolicy.planRemote(manifests, sizes, config);
         for (BackupManifest manifest : decision) {
             delete(manifest.id, manifest.zipFileName);
