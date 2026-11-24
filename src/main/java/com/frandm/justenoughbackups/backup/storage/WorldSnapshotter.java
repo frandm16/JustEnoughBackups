@@ -44,11 +44,24 @@ public final class WorldSnapshotter {
             String reason,
             BackupProgressListener progressListener
     ) throws IOException {
+        return snapshot(worldPath, type, reason, progressListener, true);
+    }
+
+    public static Map<String, BackupManifest.FileState> snapshot(
+            Path worldPath,
+            BackupType type,
+            String reason,
+            BackupProgressListener progressListener,
+            boolean hashContents
+    ) throws IOException {
         List<String> excludedPaths = BackupConfig.get().excludedPaths;
-        SnapshotTotals totals;
         LongConsumer activity = ignored -> progressListener.onActivity();
+        List<FileEntryTask> fileEntries;
+        SnapshotTotals totals;
         try {
-            totals = scanTotals(worldPath, excludedPaths, activity);
+            WalkResult walked = walkEntries(worldPath, excludedPaths, activity);
+            fileEntries = walked.entries();
+            totals = walked.totals();
         } catch (IOException exception) {
             progressListener.onProgress(new BackupProgress("", type, reason, BackupProgressPhase.SCANNING,
                     0L, 0L, 0, 0, BackupProgressState.FAILED));
@@ -56,15 +69,14 @@ public final class WorldSnapshotter {
         }
         ScanProgressTracker progress = new ScanProgressTracker(type, reason, totals, progressListener);
         progress.emit(BackupProgressState.STARTED, true);
-        boolean hashContents = true;
         try {
-            Map<String, BackupManifest.FileState> snapshot = snapshot(worldPath, (file, attrs) -> {
+            Map<String, BackupManifest.FileState> snapshot = readEntries(fileEntries, (file, attrs) -> {
                 BackupManifest.FileState state = hashContents
                         ? readFileState(file, attrs, bytes -> progress.activity())
                         : statFileState(attrs);
                 progress.fileScanned(attrs.size());
                 return state;
-            }, excludedPaths);
+            });
             progress.complete();
             return snapshot;
         } catch (IOException exception) {
@@ -73,29 +85,38 @@ public final class WorldSnapshotter {
         }
     }
 
-    static Map<String, BackupManifest.FileState> snapshot(Path worldPath, SnapshotReader reader, List<String> excludedPaths) throws IOException {
-        record FileEntryTask(Path file, BasicFileAttributes attrs, String relativeName) {}
+    private record FileEntryTask(Path file, BasicFileAttributes attrs, String relativeName) {
+    }
+
+    private record WalkResult(List<FileEntryTask> entries, SnapshotTotals totals) {
+    }
+
+    private static WalkResult walkEntries(Path worldPath, List<String> excludedPaths, LongConsumer activity) throws IOException {
         List<FileEntryTask> fileEntries = new ArrayList<>();
+        long[] bytes = {0L};
+        int[] files = {0};
 
         Files.walkFileTree(worldPath, new SimpleFileVisitor<>() {
             @Override
-            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
+                activity.accept(0L);
                 if (shouldSkip(worldPath.relativize(dir), excludedPaths)) {
                     return FileVisitResult.SKIP_SUBTREE;
                 }
-
                 return FileVisitResult.CONTINUE;
             }
 
             @Override
-            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
+                activity.accept(0L);
                 Path relative = worldPath.relativize(file);
                 if (shouldSkip(relative, excludedPaths)) {
                     return FileVisitResult.CONTINUE;
                 }
-
                 String relativeName = relative.toString().replace('\\', '/');
                 fileEntries.add(new FileEntryTask(file, attrs, relativeName));
+                bytes[0] += Math.max(0L, attrs.size());
+                files[0]++;
                 return FileVisitResult.CONTINUE;
             }
 
@@ -103,26 +124,27 @@ public final class WorldSnapshotter {
             public FileVisitResult visitFileFailed(Path file, IOException exception) throws IOException {
                 if (exception instanceof NoSuchFileException) {
                     String relativeName = worldPath.relativize(file).toString().replace('\\', '/');
-                    logSkippedTransientFile(file, relativeName, exception);
+                    WorldBackupMod.LOGGER.debug(
+                            "Skipping transient world file during snapshot: {} ({})",
+                            relativeName,
+                            exception.getMessage() == null || exception.getMessage().isBlank()
+                                    ? exception.getClass().getSimpleName()
+                                    : exception.getMessage()
+                    );
                     return FileVisitResult.CONTINUE;
                 }
                 throw exception;
             }
-
-            private void logSkippedTransientFile(Path file, String relativeName, IOException exception) {
-                WorldBackupMod.LOGGER.debug(
-                        "Skipping transient world file during snapshot: {} ({})",
-                        relativeName,
-                        rootMessage(exception)
-                );
-            }
-
-            private String rootMessage(IOException exception) {
-                return exception.getMessage() == null || exception.getMessage().isBlank()
-                        ? exception.getClass().getSimpleName()
-                        : exception.getMessage();
-            }
         });
+        return new WalkResult(fileEntries, new SnapshotTotals(bytes[0], files[0]));
+    }
+
+    static Map<String, BackupManifest.FileState> snapshot(Path worldPath, SnapshotReader reader, List<String> excludedPaths) throws IOException {
+        List<FileEntryTask> fileEntries = walkEntries(worldPath, excludedPaths, ignored -> {}).entries();
+        return readEntries(fileEntries, reader);
+    }
+
+    private static Map<String, BackupManifest.FileState> readEntries(List<FileEntryTask> fileEntries, SnapshotReader reader) throws IOException {
 
         Map<String, BackupManifest.FileState> snapshotMap = new java.util.concurrent.ConcurrentHashMap<>();
         int threadCount = Math.clamp(BackupConfig.get().threadCount, 1, Math.max(1, Runtime.getRuntime().availableProcessors()));

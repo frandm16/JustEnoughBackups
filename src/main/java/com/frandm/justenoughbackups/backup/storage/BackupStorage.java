@@ -155,7 +155,8 @@ public final class BackupStorage {
         Files.createDirectories(backupDir);
 
         List<BackupManifest> manifests = readManifests(backupDir);
-        Map<String, BackupManifest.FileState> snapshot = WorldSnapshotter.snapshot(worldPath, type, reason, progressListener);
+        boolean hashContents = type != BackupType.FULL && !hasNoFullBackup(manifests) && findBaseManifest(manifests, type, config) != null;
+        Map<String, BackupManifest.FileState> snapshot = WorldSnapshotter.snapshot(worldPath, type, reason, progressListener, hashContents);
         if (type != BackupType.FULL && (hasNoFullBackup(manifests) || findBaseManifest(manifests, type, config) == null)) {
             WorldBackupMod.LOGGER.info("No base backup found for {} backup. Falling back to FULL backup.", type);
             WriteResult fullBase = writeBackup(
@@ -208,7 +209,6 @@ public final class BackupStorage {
             List<BackupManifest> existing, com.frandm.justenoughbackups.backup.storage.remote.RemoteBackupCatalog catalog,
             BackupProgressListener listener
     ) throws IOException {
-        Map<String, BackupManifest.FileState> snapshot = WorldSnapshotter.snapshot(worldPath, requestedType, reason, listener);
         BackupType type = requestedType;
         BackupManifest base = type == BackupType.FULL ? null : findBaseManifest(existing, type, config);
         if (type != BackupType.FULL && (hasNoFullBackup(existing) || base == null)) {
@@ -216,6 +216,7 @@ public final class BackupStorage {
             type = BackupType.FULL;
             base = null;
         }
+        Map<String, BackupManifest.FileState> snapshot = WorldSnapshotter.snapshot(worldPath, type, reason, listener, type != BackupType.FULL);
 
         String timestamp = LocalDateTime.now().format(BackupConstants.FILE_TIME);
         String id = type.commandName() + "-" + timestamp + "-" + java.util.UUID.randomUUID().toString().substring(0, 8);
