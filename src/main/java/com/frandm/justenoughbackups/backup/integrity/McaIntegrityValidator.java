@@ -157,9 +157,17 @@ public final class McaIntegrityValidator {
         return McaType.OTHER;
     }
 
+    private static final long MAX_IN_MEMORY_MCA_BYTES = 8L * 1024L * 1024L;
+
     public static ValidationReport validateFile(Path file, String relativePath) {
-        try (FileChannel channel = FileChannel.open(file, StandardOpenOption.READ)) {
-            return validate(McaByteSource.fromChannel(channel), relativePath, file.getFileName().toString());
+        try {
+            long size = Files.size(file);
+            if (size <= MAX_IN_MEMORY_MCA_BYTES) {
+                return validate(McaByteSource.fromBytes(Files.readAllBytes(file)), relativePath, file.getFileName().toString());
+            }
+            try (FileChannel channel = FileChannel.open(file, StandardOpenOption.READ)) {
+                return validate(McaByteSource.fromChannel(channel), relativePath, file.getFileName().toString());
+            }
         } catch (IOException e) {
             return new ValidationReport(List.of(), List.of("Failed to open " + relativePath + ": " + e.getMessage()));
         }
@@ -241,13 +249,43 @@ public final class McaIntegrityValidator {
             }
         });
 
-        for (Path file : mcaFiles) {
-            heartbeat.run();
-            String relativeName = worldPath.relativize(file).toString().replace('\\', '/');
-            ValidationReport fileReport = validateFile(file, relativeName);
-            misplaced.addAll(fileReport.misplacedChunks());
-            errors.addAll(fileReport.errors());
-            heartbeat.run();
+        int threads = Math.clamp(com.frandm.justenoughbackups.config.BackupConfig.get().threadCount, 1, Math.max(1, Runtime.getRuntime().availableProcessors()));
+        if (threads <= 1 || mcaFiles.size() <= 1) {
+            for (Path file : mcaFiles) {
+                heartbeat.run();
+                String relativeName = worldPath.relativize(file).toString().replace('\\', '/');
+                ValidationReport fileReport = validateFile(file, relativeName);
+                misplaced.addAll(fileReport.misplacedChunks());
+                errors.addAll(fileReport.errors());
+                heartbeat.run();
+            }
+        } else {
+            java.util.concurrent.Semaphore permits = new java.util.concurrent.Semaphore(threads);
+            List<java.util.concurrent.CompletableFuture<ValidationReport>> futures = new ArrayList<>(mcaFiles.size());
+            for (Path file : mcaFiles) {
+                try {
+                    permits.acquire();
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException("MCA validation interrupted.", interrupted);
+                }
+                String relativeName = worldPath.relativize(file).toString().replace('\\', '/');
+                futures.add(java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+                    try {
+                        heartbeat.run();
+                        ValidationReport report = validateFile(file, relativeName);
+                        heartbeat.run();
+                        return report;
+                    } finally {
+                        permits.release();
+                    }
+                }, com.frandm.justenoughbackups.backup.parallel.BackupThreadPool.getExecutor()));
+            }
+            for (var future : futures) {
+                ValidationReport fileReport = future.join();
+                misplaced.addAll(fileReport.misplacedChunks());
+                errors.addAll(fileReport.errors());
+            }
         }
 
         return new ValidationReport(Collections.unmodifiableList(misplaced), Collections.unmodifiableList(errors));
