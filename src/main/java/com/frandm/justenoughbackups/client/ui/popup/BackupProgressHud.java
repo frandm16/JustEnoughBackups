@@ -14,8 +14,12 @@ public final class BackupProgressHud {
     private static final long FINISHED_VISIBLE_NANOS = 5_000_000_000L;
     private static final long RUNNING_TIMEOUT_NANOS = 3_000_000_000L;
     private static volatile HudEntry current;
+    private static CachedLayout cachedLayout;
 
     private record HudEntry(BackupProgressPayload payload, long updatedAtNanos) {
+    }
+
+    private record CachedLayout(BackupProgressPayload progress, BackupConfig.Popup popup, Font font, BackupPopupRenderer.RenderLayout layout) {
     }
 
     private BackupProgressHud() {
@@ -23,6 +27,7 @@ public final class BackupProgressHud {
 
     public static void clear() {
         current = null;
+        cachedLayout = null;
     }
 
     public static void update(BackupProgressPayload payload) {
@@ -59,13 +64,20 @@ public final class BackupProgressHud {
 
         Minecraft minecraft = Minecraft.getInstance();
         Font font = minecraft.font;
+        CachedLayout cached = cachedLayout;
+        BackupPopupRenderer.RenderLayout layout;
+        if (cached != null && cached.progress() == progress && cached.popup() == popup && cached.font() == font) {
+            layout = cached.layout();
+        } else {
+            layout = BackupPopupRenderer.layout(font, popup, progress);
+            cachedLayout = new CachedLayout(progress, popup, font, layout);
+        }
         PopupPositioning.Position position = PopupPositioning.resolve(
-                font,
                 popup,
-                progress,
+                layout.dimensions(),
                 minecraft.getWindow().getGuiScaledWidth(),
                 minecraft.getWindow().getGuiScaledHeight()
         );
-        BackupPopupRenderer.render(graphics, font, popup, progress, position.x(), position.y());
+        BackupPopupRenderer.render(graphics, font, layout, position.x(), position.y());
     }
 }

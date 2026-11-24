@@ -11,7 +11,10 @@ public final class PopupPositioning {
     }
 
     public static Position resolve(Font font, BackupConfig.Popup popup, BackupProgressPayload progress, int screenWidth, int screenHeight) {
-        BackupPopupRenderer.Dimensions dimensions = BackupPopupRenderer.measure(font, popup, progress);
+        return resolve(popup, BackupPopupRenderer.measure(font, popup, progress), screenWidth, screenHeight);
+    }
+
+    public static Position resolve(BackupConfig.Popup popup, BackupPopupRenderer.Dimensions dimensions, int screenWidth, int screenHeight) {
         if (hasRatios(popup)) {
             return new Position(
                     fromRatio(popup.xRatio, screenWidth, dimensions.width()),

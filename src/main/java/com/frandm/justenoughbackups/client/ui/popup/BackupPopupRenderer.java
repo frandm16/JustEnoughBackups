@@ -13,33 +13,56 @@ public final class BackupPopupRenderer {
     }
 
     public static Dimensions measure(Font font, BackupConfig.Popup popup, BackupProgressPayload progress) {
+        return layout(font, popup, progress).dimensions();
+    }
+
+    public static RenderLayout layout(Font font, BackupConfig.Popup popup, BackupProgressPayload progress) {
+        String title = popup.showTitle ? applyTemplate(popup.title, progress) : "";
         String detail = detail(progress, popup);
         String progressLine = progressLine(progress);
-        int contentWidth = Math.max(font.width(detail), font.width(progressLine));
+        int titleWidth = popup.showTitle ? font.width(title) : 0;
+        int detailWidth = font.width(detail);
+        int progressWidth = font.width(progressLine);
+        int contentWidth = Math.max(detailWidth, progressWidth);
         if (popup.showTitle) {
-            contentWidth = Math.max(contentWidth, font.width(applyTemplate(popup.title, progress)));
+            contentWidth = Math.max(contentWidth, titleWidth);
         }
         int height = popup.showTitle ? 34 : 23;
-        return new Dimensions(contentWidth + 12, height);
+        return new RenderLayout(
+                title,
+                detail,
+                progressLine,
+                titleWidth,
+                detailWidth,
+                progressWidth,
+                new Dimensions(contentWidth + 12, height),
+                popup.backgroundColorArgb(),
+                popup.textColorArgb(),
+                color(progress, popup),
+                popup.showTitle,
+                popup.showBorder,
+                popup.centerText
+        );
     }
 
     public static void render(GuiGraphicsExtractor graphics, Font font, BackupConfig.Popup popup, BackupProgressPayload progress, int x, int y) {
-        String detail = detail(progress, popup);
-        String progressLine = progressLine(progress);
-        Dimensions dimensions = measure(font, popup, progress);
+        render(graphics, font, layout(font, popup, progress), x, y);
+    }
 
-        graphics.fill(x - 4, y - 4, x + dimensions.width(), y + dimensions.height(), popup.backgroundColorArgb());
-        if (popup.showBorder) {
-            graphics.outline(x - 4, y - 4, dimensions.width() + 4, dimensions.height() + 4, popup.textColorArgb());
+    public static void render(GuiGraphicsExtractor graphics, Font font, RenderLayout layout, int x, int y) {
+        Dimensions dimensions = layout.dimensions();
+        graphics.fill(x - 4, y - 4, x + dimensions.width(), y + dimensions.height(), layout.backgroundColor());
+        if (layout.showBorder()) {
+            graphics.outline(x - 4, y - 4, dimensions.width() + 4, dimensions.height() + 4, layout.textColor());
         }
 
         int textY = y;
-        if (popup.showTitle) {
-            drawText(graphics, font, popup, applyTemplate(popup.title, progress), x, textY, dimensions.width(), popup.textColorArgb());
+        if (layout.showTitle()) {
+            drawText(graphics, font, layout.centerText(), layout.title(), layout.titleWidth(), x, textY, dimensions.width(), layout.textColor());
             textY += 11;
         }
-        drawText(graphics, font, popup, detail, x, textY, dimensions.width(), color(progress, popup));
-        drawText(graphics, font, popup, progressLine, x, textY + 11, dimensions.width(), popup.textColorArgb());
+        drawText(graphics, font, layout.centerText(), layout.detail(), layout.detailWidth(), x, textY, dimensions.width(), layout.detailColor());
+        drawText(graphics, font, layout.centerText(), layout.progressLine(), layout.progressWidth(), x, textY + 11, dimensions.width(), layout.textColor());
     }
 
     static String detail(BackupProgressPayload progress, BackupConfig.Popup popup) {
@@ -97,8 +120,8 @@ public final class BackupPopupRenderer {
         };
     }
 
-    private static void drawText(GuiGraphicsExtractor graphics, Font font, BackupConfig.Popup popup, String text, int x, int y, int popupWidth, int color) {
-        int textX = popup.centerText ? x + Math.max(0, popupWidth - 8 - font.width(text)) / 2 : x;
+    private static void drawText(GuiGraphicsExtractor graphics, Font font, boolean centerText, String text, int textWidth, int x, int y, int popupWidth, int color) {
+        int textX = centerText ? x + Math.max(0, popupWidth - 8 - textWidth) / 2 : x;
         graphics.text(font, text, textX, y, color, true);
     }
 
@@ -118,5 +141,22 @@ public final class BackupPopupRenderer {
     }
 
     public record Dimensions(int width, int height) {
+    }
+
+    public record RenderLayout(
+            String title,
+            String detail,
+            String progressLine,
+            int titleWidth,
+            int detailWidth,
+            int progressWidth,
+            Dimensions dimensions,
+            int backgroundColor,
+            int textColor,
+            int detailColor,
+            boolean showTitle,
+            boolean showBorder,
+            boolean centerText
+    ) {
     }
 }
