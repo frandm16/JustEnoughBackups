@@ -215,14 +215,8 @@ public final class BackupScheduler {
     }
 
     private static boolean hasPendingRestore(MinecraftServer server) {
-        try {
-            Path worldPath = server.getWorldPath(LevelResource.ROOT).toAbsolutePath().normalize();
-            Path worldParent = worldPath.getParent();
-            return worldParent != null
-                    && com.frandm.justenoughbackups.backup.restore.RestoreJournal.read(worldParent, worldPath).isPresent();
-        } catch (IOException | RuntimeException exception) {
-            return false;
-        }
+        return com.frandm.justenoughbackups.backup.restore.RestoreService.hasPendingRestore(
+                server.getWorldPath(LevelResource.ROOT));
     }
 
     private static boolean hasOnlinePlayers(MinecraftServer server) {

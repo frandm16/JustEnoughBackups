@@ -747,7 +747,7 @@ public final class BackupStorage {
             if (ABORTED.get()) {
                 throw new IOException("Backup was aborted.");
             }
-            ZstdTaskResult result = compressZstandardEntry(worldPath, tempDir, relativeName, config, progress);
+            ZstdTaskResult result = compressZstandardEntry(worldPath, tempDir, relativeName, config, progress, ConcurrentHashMap.newKeySet());
             writeZstdResultToZip(zipOut, result, manifest, status, finalSnapshot, config, progress);
         }
     }

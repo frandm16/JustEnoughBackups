@@ -49,6 +49,16 @@ public final class RestoreService {
         ServerLifecycleEvents.SERVER_STARTED.register(RestoreService::cleanupRestoreArtifacts);
     }
 
+    public static boolean hasPendingRestore(Path worldPath) {
+        try {
+            Path normalizedWorld = worldPath.toAbsolutePath().normalize();
+            Path worldParent = normalizedWorld.getParent();
+            return worldParent != null && RestoreJournal.read(worldParent, normalizedWorld).isPresent();
+        } catch (IOException | RuntimeException exception) {
+            return false;
+        }
+    }
+
     public static PendingRestore prepareRestore(
             Path backupDir,
             Path worldPath,
