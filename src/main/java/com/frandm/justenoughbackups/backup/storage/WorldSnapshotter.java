@@ -31,7 +31,11 @@ public final class WorldSnapshotter {
     }
 
     public static Map<String, BackupManifest.FileState> snapshot(Path worldPath) throws IOException {
-        return snapshot(worldPath, WorldSnapshotter::readFileState, BackupConfig.get().excludedPaths);
+        return snapshot(worldPath, BackupConfig.get().excludedPaths);
+    }
+
+    public static Map<String, BackupManifest.FileState> snapshot(Path worldPath, List<String> excludedPaths) throws IOException {
+        return snapshot(worldPath, WorldSnapshotter::readFileState, excludedPaths);
     }
 
     public static Map<String, BackupManifest.FileState> snapshot(
