@@ -38,6 +38,8 @@ import java.util.Optional;
 import java.util.Set;
 
 public final class RestoreService {
+    private static final Object RESTORE_LOCK = new Object();
+
     private RestoreService() {
     }
 
@@ -48,6 +50,18 @@ public final class RestoreService {
     }
 
     public static PendingRestore prepareRestore(
+            Path backupDir,
+            Path worldPath,
+            BackupManifest targetManifest,
+            String requestedName,
+            BackupProgressListener progressListener
+    ) throws IOException {
+        synchronized (RESTORE_LOCK) {
+            return prepareRestoreLocked(backupDir, worldPath, targetManifest, requestedName, progressListener);
+        }
+    }
+
+    private static PendingRestore prepareRestoreLocked(
             Path backupDir,
             Path worldPath,
             BackupManifest targetManifest,
@@ -121,6 +135,16 @@ public final class RestoreService {
     }
 
     public static PendingRestore prepareRemoteRestore(
+            Path backupDir, Path worldPath, BackupManifest target, List<BackupManifest> chain,
+            Map<String, RemoteBackupCatalog.CatalogEntry> catalogEntries, RemoteBackupCatalog catalog,
+            String requestedName, BackupProgressListener progressListener
+    ) throws IOException {
+        synchronized (RESTORE_LOCK) {
+            return prepareRemoteRestoreLocked(backupDir, worldPath, target, chain, catalogEntries, catalog, requestedName, progressListener);
+        }
+    }
+
+    private static PendingRestore prepareRemoteRestoreLocked(
             Path backupDir, Path worldPath, BackupManifest target, List<BackupManifest> chain,
             Map<String, RemoteBackupCatalog.CatalogEntry> catalogEntries, RemoteBackupCatalog catalog,
             String requestedName, BackupProgressListener progressListener
@@ -421,6 +445,12 @@ public final class RestoreService {
     }
 
     private static void cleanupRestoreArtifactsSync(MinecraftServer server) throws IOException {
+        synchronized (RESTORE_LOCK) {
+            cleanupRestoreArtifactsLocked(server);
+        }
+    }
+
+    private static void cleanupRestoreArtifactsLocked(MinecraftServer server) throws IOException {
         Path worldPath = server.getWorldPath(LevelResource.ROOT).toAbsolutePath().normalize();
         Path worldParent = worldPath.getParent();
         if (worldParent == null) {
