@@ -413,7 +413,7 @@ public final class BackupStorage {
         List<String> includedFiles = includedFiles(type, snapshot, base);
 
         String timestamp = LocalDateTime.now().format(BackupConstants.FILE_TIME);
-        String id = type.commandName() + "-" + timestamp;
+        String id = type.commandName() + "-" + timestamp + "-" + java.util.UUID.randomUUID().toString().substring(0, 8);
         String zipFileName = resolveBackupFileName(backupDir, requestedName, id + ".zip");
         Path backupFile = backupDir.resolve(zipFileName);
         Path tempDir = config.resolveTempRoot().resolve(worldDirectoryName);
