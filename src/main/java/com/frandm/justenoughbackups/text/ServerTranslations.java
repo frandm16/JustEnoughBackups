@@ -32,17 +32,20 @@ public final class ServerTranslations {
             return fallback(key, args);
         }
 
-        String result = template;
         Object[] safeArgs = args == null ? new Object[0] : args;
+        StringBuilder out = new StringBuilder(template.length());
+        int cursor = 0;
         for (Object arg : safeArgs) {
-            int placeholder = result.indexOf("%s");
+            int placeholder = template.indexOf("%s", cursor);
             if (placeholder < 0) {
                 break;
             }
-            String replacement = String.valueOf(arg);
-            result = result.substring(0, placeholder) + replacement + result.substring(placeholder + 2);
+            out.append(template, cursor, placeholder);
+            out.append(arg);
+            cursor = placeholder + 2;
         }
-        return result;
+        out.append(template, cursor, template.length());
+        return out.toString();
     }
 
     private static Map<String, String> loadTranslations() {
@@ -68,7 +71,7 @@ public final class ServerTranslations {
         if (args == null || args.length == 0) {
             return key;
         }
-        return key + " " + List.of(args).stream()
+        return key + " " + java.util.Arrays.stream(args)
                 .map(String::valueOf)
                 .reduce((left, right) -> left + ", " + right)
                 .orElse("");
