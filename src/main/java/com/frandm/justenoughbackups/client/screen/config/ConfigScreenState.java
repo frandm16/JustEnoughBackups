@@ -72,7 +72,7 @@ final class ConfigScreenState {
     }
 
     void resetAll() {
-        working = BackupConfig.defaults();
+        working = BackupConfig.defaults().copy();
         selectedTab = ConfigTab.BACKUPS;
         previewState = ConfigPreviewState.RUNNING;
         selectedColor = ConfigColorTarget.BACKGROUND;

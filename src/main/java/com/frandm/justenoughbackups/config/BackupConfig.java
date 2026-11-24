@@ -269,7 +269,7 @@ public final class BackupConfig {
                     .map(BackupConfig::normalizeExcludedPath)
                     .filter(path -> !path.isBlank())
                     .distinct()
-                    .toList();
+                    .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
         }
     }
 
