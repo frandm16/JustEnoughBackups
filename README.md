@@ -95,8 +95,9 @@ If a new backup would exceed the configured space cap even after deleting every 
 
 Backups and restores use multiple worker threads to speed up large worlds:
 
-- **scanning / hashing**: the world snapshot scan runs across `threadCount` threads (up to one per CPU core), reading and hashing files in parallel
+- **scanning / hashing**: the world snapshot scan runs across `threadCount` threads (up to one per CPU core), reading and hashing files in parallel (and skipping redundant pre-hashing on `FULL` backups)
 - **compression**: the ZIP archive is written with parallel compression
+- **integrity validation**: Anvil `.mca` region integrity checks run in parallel across `threadCount` threads
 - **restore extraction**: backup ZIP files are extracted across `threadCount` threads
 
 The number of threads is controlled by `threadCount` in the config and can be set between `1` and the maximum number of CPU threads (default: CPU cores minus two). Lower values reduce CPU usage; higher values speed up large worlds.
@@ -168,7 +169,7 @@ Notes:
 - `<name>` is optional and becomes the real `.zip` file name after sanitization.
 - `<backup>` is the visible backup name, with or without the `.zip` suffix. Tab completion suggests the visible name.
 - restore is prepared asynchronously and then the server shuts down so the restore can be applied safely on the next startup.
-- `/jeb next` displays a multi-schedule summary showing remaining times and exact execution timestamps for all configured backup types, sorted by proximity.
+- `/jeb next` displays the remaining time (or ready status) for all enabled automatic schedules, sorted by proximity.
 - command access follows the configured permission level.
 
 ## Default keybindings
@@ -205,6 +206,7 @@ Main config areas:
 - `integrityMode`
 - `includeSummaryFile`
 - `minimumFreeSpaceReserveMb`
+- `watchdogTimeoutSeconds`
 - `threadCount`
 - `compressionMethod`
 - `deflateCompressionLevel`
@@ -250,10 +252,11 @@ voxy/cache.db
 
 `startupBackupThreshold` sets the minimum age in minutes for the most recent successful backup of each type before a startup backup of that type runs. A value of `0` keeps the existing behavior. Scheduled and shutdown backups are unaffected.
 
-Before creating a backup, the mod also checks free disk space on the backup destination filesystem. The check is conservative and requires:
+Before creating a local backup, the mod estimates the compressed archive size from the included files and the latest full backup's compression ratio, and checks free disk space:
 
 ```text
-(current world size * 2) + minimumFreeSpaceReserveMb
+Same filesystem: (estimated archive size * 2) + minimumFreeSpaceReserveMb
+Separate filesystems: estimated archive size + minimumFreeSpaceReserveMb on each volume
 ```
 
 If that space is not available, backup creation is aborted before the temporary ZIP is written.

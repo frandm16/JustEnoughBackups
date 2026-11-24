@@ -48,6 +48,7 @@ This example shows the main server settings. The generated file also includes `r
   "integrityMode": "STRICT",
   "includeSummaryFile": false,
   "minimumFreeSpaceReserveMb": 512,
+  "watchdogTimeoutSeconds": 300,
   "threadCount": 6,
   "compressionMethod": "DEFLATED",
   "deflateCompressionLevel": 6,
@@ -125,20 +126,21 @@ backups/<world-id>/<backup-name>.zip
 
 | Property | Default | Description |
 | :--- | :---: | :--- |
-| `threadCount` | `max(1, cores - 2)` | Number of worker threads used for parallel hashing, compression, and extraction. Valid range: `1` to the number of available CPU cores. |
+| `threadCount` | `max(1, cores - 2)` | Number of worker threads used for parallel hashing, compression, `.mca` integrity validation, and extraction. Valid range: `1` to the number of available CPU cores. |
+| `watchdogTimeoutSeconds` | `300` | Maximum seconds without progress before the backup watchdog aborts a stalled backup (`30`–`86400`). |
 | `compressionMethod` | `"DEFLATED"` | Archive compression engine: `"DEFLATED"` (standard ZIP) or `"ZSTANDARD"` (high speed). |
 | `deflateCompressionLevel` | `6` | Deflate level (`1` fastest to `9` smallest). |
 | `zstdCompressionLevel` | `3` | Zstandard level (`1` fastest to `22` ultra). |
-| `integrityMode` | `"STRICT"` | Controls how broken files and damaged restores are handled; see the modes below. |
+| `integrityMode` | `"STRICT"` | Controls how broken files, Anvil `.mca` region validation, and damaged restores are handled; see the modes below. |
 | `includeSummaryFile` | `false` | Adds `summary.txt` to each archive with world details, Minecraft/JEB versions, and the loaded mod list. Restoring the archive also places this file in the world folder. |
 
 Integrity modes:
 
 | Mode | Behavior |
 | :--- | :--- |
-| `STRICT` | Discards failed backups and blocks restores that fail integrity checks. |
-| `PERMISSIVE` | May keep partial backups, but still blocks damaged restores. |
-| `VERY_PERMISSIVE` | Allows a damaged restore to continue with a warning; intended for manual recovery. |
+| `STRICT` | Validates Anvil `.mca` region files, discards failed or corrupted backups, and blocks restores that fail integrity checks. |
+| `PERMISSIVE` | Logs `.mca` and file-read warnings while keeping partial backups, but still blocks damaged restores. |
+| `VERY_PERMISSIVE` | Skips `.mca` validation and allows a damaged restore to continue with a warning; intended for manual recovery. |
 
 ---
 

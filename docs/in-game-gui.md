@@ -28,11 +28,9 @@ Press <kbd>N</kbd> or click the config button in [Mod Menu](https://modrinth.com
 ![Configuration Menu](/ConfigMenu.png)
 
 ### Screen Tabs:
-- **General**: Backup mode, scheduler intervals, player presence check, server stop backups.
-- **Performance**: Multithreading slider (`threadCount`), compression method (`DEFLATED` / `ZSTANDARD`), and compression levels.
-- **Retention**: Limits for Full, Partial, and Differential archives, plus hard total world size caps.
-- **Remote**: Cloud provider selection (S3 or WebDAV), buckets, endpoints, and credentials.
-- **HUD**: Popup styling, position, text, colors, and display options.
+- **Backups**: Backup mode, scheduler intervals, startup minimum age thresholds, player presence check, server start/stop backups, retention limits and total size cap, storage paths, excluded paths, multithreading (`threadCount`), compression method/levels, watchdog timeout, integrity mode, and permissions.
+- **Remote**: Cloud provider selection (S3 or WebDAV), buckets, endpoints, prefixes, retries, and masked credentials.
+- **HUD**: Popup styling, position, text templates, ARGB color channels, and display options.
 - **Preview**: Try the popup in different states and drag it to the desired screen position.
 
 > [!NOTE] Singleplayer vs Dedicated Server

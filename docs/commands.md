@@ -31,7 +31,7 @@ All mod commands use the `/jeb` root namespace.
 /jeb create differential weekly_diff
 ```
 
-- If `[name]` is omitted, JEB automatically generates a type-prefixed timestamped name (e.g. `full-2026-10-16_18-00-00.zip`).
+- If `[name]` is omitted, JEB automatically generates a type-prefixed timestamped name with a short unique suffix (e.g. `full-2026-10-16_18-00-00-a1b2c3d4.zip`).
 - If `[name]` is supplied, it is sanitized to remove illegal filesystem characters and appended with `.zip`.
 
 ---

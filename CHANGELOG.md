@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented in this file.
 
-## 1.2.0.11+26.3 - 20/11/2026
+## 1.2.0.11+26.3 - 24/11/2026
 
 ### Added
 
@@ -12,9 +12,30 @@ All notable changes to this project are documented in this file.
 
 - Fixed misplaced chunk records and structure corruption caused by concurrent chunk saving during live backups: world chunk storage (`chunkMap`) and point-of-interest storage (`poiManager`) are now fully synchronized and flushed before freezing and reading world files.
 - Backups containing mismatched chunk coordinates or corrupted MCA sectors are now detected and rejected during backup creation and restore staging under `STRICT` integrity mode, preventing corrupted archives from overwriting world structures after a restore.
+- Allowed unpadded trailing sectors in live `.mca` region files during integrity validation.
 - Root backup metadata entries (`justenoughbackups.data`, `manifest.json`, `justenoughbackups-status.json`, and `summary.txt`) are now excluded during world snapshotting, preventing manually unzipped archives in world directories from polluting subsequent backups.
-- In-game restore verification now ignores mod metadata files when validating restored snapshots, allowing existing backups that captured `justenoughbackups.data` to be restored successfully.
+- In-game restore verification now ignores mod metadata files and current `excludedPaths` when validating restored snapshots, allowing existing backups to be restored cleanly even after config exclusion changes.
 - Restore integrity mode now prioritizes the active server configuration (`BackupConfig.integrityMode`), allowing `VERY_PERMISSIVE` mode to be applied during recovery of backups created under `STRICT` mode.
+- Offloaded blocking backup listing, UI actions, `/jeb list`, `/jeb restore` tab completion, and startup backup checks off the main server thread to prevent server tick freezes and watchdog crashes.
+- Moved remote backup MCA integrity validation before upload/publication so corrupted worlds are rejected before uploading, and ensured `PERMISSIVE` MCA warnings are broadcast consistently.
+- Fixed cycle detection for `baseBackupId` in retention and local restore chains to prevent infinite loops and `OutOfMemoryError`.
+- Fixed `retention.maxTotalSizeMb` eviction in both local and remote retention so oldest unneeded backups are actually evicted when the size cap is exceeded while preserving required dependency chains.
+- Released the `BACKUP_RUNNING` lock only after world saving is restored on the server thread, preventing concurrent backup overlap and permanently disabled world saving.
+- Routed parallel `DEFLATED` per-file I/O errors through `handleBrokenFile` so `PERMISSIVE` and `VERY_PERMISSIVE` modes work consistently with parallel compression.
+- Prevented local backup ID collisions within the same second by appending a short unique suffix, prevented `.jeb-zstd-*.tmp` leaks on worker interruption, and cleaned up local restore staging directories on failure.
+- Hardened remote storage: blocked cross-host WebDAV redirect credential leakage, retried transient WebDAV HTTP `408`/`429`/`5xx` errors, fixed `WebDavObjectStore` `HttpClient` leak on invalid URL and avoided buffering arbitrary streams into heap, accurately classified S3 `SdkClientException` retryability, and guarded `Instant.EPOCH` and prefix/segment validation in `RemoteBackupCatalog`.
+- Fixed `BackupWatchdog` thread safety, post-stop heartbeat races, and missing activity reporting during MCA validation; fixed `BackupScheduler` thread safety, cascading back-to-back scheduled backups, and shutdown interaction with pending restores.
+- Hardened networking, commands, and config persistence: bounded `BackupUiResponsePayload` list size on decode, preserved original failure causes in UI responses, fixed `RestoreProgressTracker` concurrency, fixed `ServerTranslations` placeholder scanning, wrote `justenoughbackups.json` atomically, and rejected non-hex signs in `ConfigColor.parse`.
+- Fixed client UI bugs: `UnsupportedOperationException` after "Reset All" when adding excluded paths, 6 integer config fields silently discarding typed values on save, modal input box mouse clicks, phantom inline-rename hitbox and footer click interception, dedicated-server config validation scoping, `BackupProgressHud` thread safety and disconnect cleanup, color slider drag width, `threadCount` reset, lineage jump under active filters, and horizontal cursor scrolling for long config fields.
+
+### Performance
+
+- Skipped the redundant full-world SHA-256 read pass on `FULL` backups and combined directory scanning into a single pass.
+- Eliminated triple redundant SHA-256 hashing during restore verification.
+- Reused a `ThreadLocal` 64 KB buffer in `WorldSnapshotter.sha256` and switched hex formatting to `HexFormat`.
+- Parallelized `.mca` region integrity validation across `BackupThreadPool` and avoided tiny per-chunk channel syscalls for standard region files.
+- Parallelized remote catalog sidecar `.json` reads in `RemoteBackupCatalog.list()` and removed redundant ZIP manifest scans in `deleteBackup`.
+- Cached HUD layout/text/color snapshots in `BackupPopupRenderer` / `BackupProgressHud`, eliminated per-frame allocations and redundant rebuilds in config and backup management screens, and reduced guide-line draw calls in `PopupPreviewScreen`.
 
 ## 1.2.0.10+26.3 - 18/10/2026
 

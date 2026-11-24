@@ -111,7 +111,7 @@ Set `"provider": "WEBDAV"` in `config/justenoughbackups.json`:
 
 ## Upload Reliability & Retries
 
-- **SHA-256 Checksum**: After upload, the remote file is verified against its local hash before being cataloged as a valid backup.
-- **Retries (`maxRetries`)**: JEB retries failed operations up to the configured count (0–10; default 3). A WebDAV retry restarts the upload; interrupted uploads are not resumed after a server restart.
+- **Pre-Upload Integrity & SHA-256 Checksum**: Under `STRICT` integrity mode, `.mca` region files are validated before upload begins. After upload, the remote archive is published with its SHA-256 checksum and verified on restore.
+- **Retries (`maxRetries`)**: JEB retries transient network and HTTP `408`/`429`/`5xx` failures up to the configured count (0–10; default 3). WebDAV redirects are restricted to the same origin so credentials are never forwarded to another host. A WebDAV upload retry restarts the upload; interrupted uploads are not resumed after a server restart.
 
 Uploads are streamed and published to the catalog only after checksum verification. Remote restores download the required archive chain into staging and verify it before preparing the restore. When remote storage is enabled, retention settings also apply to remote archives; dependency chains are protected there too.
