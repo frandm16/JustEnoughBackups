@@ -705,6 +705,7 @@ public final class BackupManagementScreen extends Screen implements BackupUiResp
 
             if (activeModal != ActiveModal.NONE) {
                 if (handleModalClick(mx, my)) return true;
+                super.mouseClicked(event, doubleClick);
                 return true;
             }
 
