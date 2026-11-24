@@ -254,6 +254,24 @@ public final class BackupStorage {
                     + BackupSizeFormatter.formatBytes(required) + ", available " + BackupSizeFormatter.formatBytes(usable) + ").");
         }
 
+        List<BackupStatus.BrokenFile> preUploadMcaWarnings = new ArrayList<>();
+        if (config.integrityMode != BackupIntegrityMode.VERY_PERMISSIVE) {
+            var report = com.frandm.justenoughbackups.backup.integrity.McaIntegrityValidator.validateWorldDirectory(worldPath, config.excludedPaths);
+            if (!report.isValid()) {
+                if (config.integrityMode == BackupIntegrityMode.STRICT) {
+                    throw new IOException("Remote backup integrity validation failed:\n" + report.formatErrors());
+                }
+                for (var misplaced : report.misplacedChunks()) {
+                    preUploadMcaWarnings.add(new BackupStatus.BrokenFile(misplaced.relativePath(), misplaced.formatMessage()));
+                }
+                for (String error : report.errors()) {
+                    preUploadMcaWarnings.add(new BackupStatus.BrokenFile(worldDirectoryName, error));
+                }
+                WorldBackupMod.LOGGER.warn("Remote backup world has MCA integrity warnings, continuing under mode {}:\n{}",
+                        config.integrityMode, report.formatErrors());
+            }
+        }
+
         java.io.PipedInputStream input = new java.io.PipedInputStream(4 * 1024 * 1024);
         java.io.PipedOutputStream output = new java.io.PipedOutputStream(input);
         BackupProgressListener remoteProgress = new RemoteUploadProgressListener(listener);
@@ -305,11 +323,9 @@ public final class BackupStorage {
             if (cause instanceof IOException io) throw io;
             throw new IOException("Remote archive creation failed.", cause);
         }
-        if (config.integrityMode == BackupIntegrityMode.STRICT) {
-            var report = com.frandm.justenoughbackups.backup.integrity.McaIntegrityValidator.validateWorldDirectory(worldPath, config.excludedPaths);
-            if (!report.isValid()) {
-                throw new IOException("Remote backup integrity validation failed:\n" + report.formatErrors());
-            }
+        if (!preUploadMcaWarnings.isEmpty()) {
+            status.brokenFiles.addAll(preUploadMcaWarnings);
+            status.completed = false;
         }
         List<BackupManifest> manifests = new ArrayList<>(existing);
         manifests.add(manifest);
