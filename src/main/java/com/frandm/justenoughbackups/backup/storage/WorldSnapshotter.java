@@ -254,6 +254,7 @@ public final class WorldSnapshotter {
                 : relativePath.getFileName().toString().toLowerCase(Locale.ROOT);
 
         return "session.lock".equals(fileName)
+                || "lock".equals(fileName)
                 || TRANSIENT_LEVEL_FILE.matcher(fileName).matches()
                 || fileName.endsWith(".lock")
                 || BackupConstants.isMetadataEntry(normalizedRelative);
