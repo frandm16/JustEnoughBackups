@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Added optional 5-field `cron` expressions and IANA `timezone` support per backup type in `automaticSchedule` (with config load/reload validation, DST handling, skipped missed runs, config UI fields, and wall-clock display in `/jeb next`).
+
 ### Fixed
 
 - Fixed large remote S3 backups failing with `Read timed out` on Backblaze B2. S3 archives are now uploaded straight to their final name instead of being copied from a temporary one.

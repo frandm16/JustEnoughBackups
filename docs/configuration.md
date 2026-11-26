@@ -77,14 +77,46 @@ This example shows the main server settings. The generated file also includes `r
 | `backupOnServerStart` | `false` | Takes a backup shortly after the server finishes starting. |
 | `backupOnServerStop` | `false` | Takes a backup right before the server process shuts down. |
 | `automaticSchedule.full.enabled` | `true` | Enables scheduled Full backups. |
-| `automaticSchedule.full.intervalMinutes` | `240` | Interval in minutes between Full backups (default: 4 hours). |
+| `automaticSchedule.full.intervalMinutes` | `240` | Interval in minutes between Full backups (default: 4 hours). Ignored when `cron` is set. |
+| `automaticSchedule.full.cron` | `""` | Optional 5-field cron expression (`<minute> <hour> <day-of-month> <month> <day-of-week>`) or macro (`@hourly`, `@daily`, `@weekly`, `@monthly`, `@yearly`). Takes precedence over `intervalMinutes` when non-empty. |
+| `automaticSchedule.full.timezone` | `""` | Optional IANA timezone ID for the cron schedule (e.g. `"America/New_York"`, `"UTC"`). Defaults to the server system timezone when empty. |
 | `automaticSchedule.differential.enabled` | `false` | Enables scheduled Differential backups. |
-| `automaticSchedule.differential.intervalMinutes` | `120` | Interval in minutes between Differential backups (default: 2 hours). |
+| `automaticSchedule.differential.intervalMinutes` | `120` | Interval in minutes between Differential backups (default: 2 hours). Ignored when `cron` is set. |
+| `automaticSchedule.differential.cron` | `""` | Optional 5-field cron expression for Differential backups. |
+| `automaticSchedule.differential.timezone` | `""` | Optional IANA timezone ID for Differential cron schedules. |
 | `automaticSchedule.partial.enabled` | `false` | Enables scheduled Partial backups. |
-| `automaticSchedule.partial.intervalMinutes` | `60` | Interval in minutes between Partial backups (default: 1 hour). |
+| `automaticSchedule.partial.intervalMinutes` | `60` | Interval in minutes between Partial backups (default: 1 hour). Ignored when `cron` is set. |
+| `automaticSchedule.partial.cron` | `""` | Optional 5-field cron expression for Partial backups. |
+| `automaticSchedule.partial.timezone` | `""` | Optional IANA timezone ID for Partial cron schedules. |
 | `automaticBackupWarningEnabled` | `true` | Broadcasts an advance warning before an automatic backup starts. |
 | `automaticBackupWarningMinutes` | `5` | Minutes before the backup to send the advance warning. |
 | `startupBackupThreshold.fullMinutes` (and partial/differential) | `0` | Minimum age of the most recent backup of that type before a server-start backup runs. Zero disables the age threshold. |
+
+### Wall-Clock Cron Schedules
+
+Each backup type in `automaticSchedule` accepts optional `cron` and `timezone` fields:
+
+```json
+"automaticSchedule": {
+  "full": {
+    "enabled": true,
+    "intervalMinutes": 240,
+    "cron": "0 3 * * 0",
+    "timezone": "America/New_York"
+  },
+  "differential": {
+    "enabled": true,
+    "intervalMinutes": 120,
+    "cron": "0 3 * * 1-6",
+    "timezone": "America/New_York"
+  }
+}
+```
+
+- **Precedence & Validation**: When `cron` is non-empty, it takes precedence over `intervalMinutes`. Invalid cron expressions or IANA timezones are logged as errors on config load/reload and that schedule is ignored until fixed.
+- **Missed Runs**: Missed cron runs (for example while the server was stopped, paused without players, or stalled past the 60-second grace window) are **skipped** rather than catching up on the next player join.
+- **Daylight Saving Time (DST)**: Non-existent spring-forward times shift forward to the next valid local time so daily backups still run once; ambiguous fall-back times resolve to the earlier offset and run only once.
+- **Visibility**: `/jeb next` displays both the countdown and the next scheduled wall-clock time and timezone.
 
 ---
 

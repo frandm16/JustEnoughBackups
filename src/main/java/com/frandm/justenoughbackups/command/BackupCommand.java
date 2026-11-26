@@ -20,9 +20,14 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.network.chat.Component;
 
 import java.io.IOException;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Locale;
 
 public final class BackupCommand {
+    private static final DateTimeFormatter NEXT_SCHEDULED_FORMAT =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm z", Locale.ROOT);
+
     private BackupCommand() {
     }
 
@@ -115,6 +120,11 @@ public final class BackupCommand {
         for (NextBackupStatus status : statuses) {
             if (status.ready()) {
                 sendLocal(source, BackupMessages.withTitle(ServerTranslations.component("message.justenoughbackups.next_ready")));
+            } else if (status.isCronScheduled()) {
+                sendLocal(source, BackupMessages.withTitle(ServerTranslations.component("message.justenoughbackups.next_waiting_scheduled",
+                        status.type().commandName(),
+                        formatDuration(status.remainingMillis()),
+                        NEXT_SCHEDULED_FORMAT.format(status.scheduledAt()))));
             } else {
                 sendLocal(source, BackupMessages.withTitle(ServerTranslations.component("message.justenoughbackups.next_waiting",
                         status.type().commandName(), formatDuration(status.remainingMillis()))));
@@ -151,7 +161,12 @@ public final class BackupCommand {
     }
 
     private static String describe(BackupConfig.ScheduledBackup schedule) {
-        return (schedule.enabled ? "on" : "off") + "/" + schedule.intervalMinutes + "m";
+        String state = schedule.enabled ? "on" : "off";
+        if (schedule.hasCron()) {
+            String zoneSuffix = (schedule.timezone != null && !schedule.timezone.isBlank()) ? "@" + schedule.timezone : "";
+            return state + "/cron(" + schedule.cron + zoneSuffix + ")";
+        }
+        return state + "/" + schedule.intervalMinutes + "m";
     }
 
     private static Component formatBackup(BackupManifest manifest) {
@@ -167,10 +182,14 @@ public final class BackupCommand {
 
     private static String formatDuration(long millis) {
         long totalSeconds = Math.max(0L, (millis + 999L) / 1000L);
-        long hours = totalSeconds / 3600L;
+        long days = totalSeconds / 86_400L;
+        long hours = (totalSeconds % 86_400L) / 3600L;
         long minutes = (totalSeconds % 3600L) / 60L;
         long seconds = totalSeconds % 60L;
 
+        if (days > 0L) {
+            return days + "d " + hours + "h " + minutes + "m " + seconds + "s";
+        }
         if (hours > 0L) {
             return hours + "h " + minutes + "m " + seconds + "s";
         }

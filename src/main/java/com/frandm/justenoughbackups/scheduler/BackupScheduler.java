@@ -19,17 +19,24 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.io.IOException;
-import java.nio.file.Path;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 
 public final class BackupScheduler {
+    private static final long MISSED_CRON_GRACE_MILLIS = 60_000L;
+    private static final DateTimeFormatter LOG_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm z");
     private static long ticksUntilNextCheck = 20L;
     private static final Map<BackupType, Long> lastBackupMillis =
+            new ConcurrentHashMap<>();
+    private static final Map<BackupType, ScheduledCronSlot> nextCronRuns =
             new ConcurrentHashMap<>();
 
     private static final List<BackupType> SCHEDULE_PRIORITY = List.of(
@@ -79,44 +86,57 @@ public final class BackupScheduler {
 
             ticksUntilNextCheck = 20L;
             BackupConfig config = BackupConfig.get();
-            if (hasOnlinePlayers(server)) {
-                playersSeenSinceLastBackup = true;
-            }
-
             long now = System.currentTimeMillis();
-            BackupType dueType = dueBackupType(config, now);
+            boolean backupRunning = BackupService.isBackupRunning();
+            BackupType dueType = pollDueBackup(config, now, backupRunning, hasOnlinePlayers(server));
             if (dueType == null) {
-                maybeBroadcastAutomaticBackupWarning(server, config, now);
-                return;
-            }
-
-            if (BackupService.isBackupRunning()) {
-                return;
-            }
-
-            lastBackupMillis.put(dueType, now);
-            for (BackupType other : SCHEDULE_PRIORITY) {
-                if (other != dueType && StartupBackupPolicy.satisfiesRequestedType(other, dueType)) {
-                    BackupConfig.ScheduledBackup otherSchedule = config.automaticSchedule.forType(other);
-                    if (otherSchedule.enabled && remainingMillis(other, otherSchedule, now) == 0L) {
-                        lastBackupMillis.put(other, now);
-                    }
+                if (!backupRunning) {
+                    maybeBroadcastAutomaticBackupWarning(server, config, now);
                 }
-            }
-            resetWarnings();
-            if (config.pauseAutomaticBackupsWithoutPlayers && !playersSeenSinceLastBackup) {
                 return;
             }
 
-            playersSeenSinceLastBackup = false;
             BackupService.createBackup(server, dueType, "automatic")
                     .whenComplete((manifest, exception) -> {
                         if (exception != null) {
                             WorldBackupMod.LOGGER.error("Automatic backup failed.", exception);
-                            return;
                         }
                     });
         });
+    }
+
+    static BackupType pollDueBackup(BackupConfig config, long now, boolean backupRunning, boolean hasOnlinePlayers) {
+        if (hasOnlinePlayers) {
+            playersSeenSinceLastBackup = true;
+        }
+
+        skipMissedCronRuns(config, now);
+
+        BackupType dueType = dueBackupType(config, now);
+        if (dueType == null) {
+            return null;
+        }
+
+        if (backupRunning) {
+            return null;
+        }
+
+        advanceSchedule(dueType, config.automaticSchedule.forType(dueType), now);
+        for (BackupType other : SCHEDULE_PRIORITY) {
+            if (other != dueType && StartupBackupPolicy.satisfiesRequestedType(other, dueType)) {
+                BackupConfig.ScheduledBackup otherSchedule = config.automaticSchedule.forType(other);
+                if (otherSchedule.enabled && remainingMillis(other, otherSchedule, now) == 0L) {
+                    advanceSchedule(other, otherSchedule, now);
+                }
+            }
+        }
+        resetWarnings();
+        if (config.pauseAutomaticBackupsWithoutPlayers && !playersSeenSinceLastBackup) {
+            return null;
+        }
+
+        playersSeenSinceLastBackup = false;
+        return dueType;
     }
 
     private static boolean shouldRunStartupBackup(MinecraftServer server, BackupConfig config) {
@@ -224,22 +244,51 @@ public final class BackupScheduler {
     }
 
     public static void resetTimer() {
-        long now = System.currentTimeMillis();
+        resetTimer(BackupConfig.get(), System.currentTimeMillis());
+    }
+
+    static void resetTimer(BackupConfig config, long now) {
         for (BackupType type : BackupType.values()) {
             lastBackupMillis.put(type, now);
+        }
+        nextCronRuns.clear();
+        if (config != null && config.automaticSchedule != null) {
+            for (BackupType type : SCHEDULE_PRIORITY) {
+                BackupConfig.ScheduledBackup schedule = config.automaticSchedule.forType(type);
+                if (schedule != null && schedule.enabled && schedule.hasCron()) {
+                    resolveCronSlot(type, schedule, now);
+                }
+            }
         }
         playersSeenSinceLastBackup = false;
         resetWarnings();
     }
 
     public static List<NextBackupStatus> nextBackupStatus() {
-        BackupConfig config = BackupConfig.get();
-        long now = System.currentTimeMillis();
+        return nextBackupStatus(BackupConfig.get(), System.currentTimeMillis());
+    }
+
+    static List<NextBackupStatus> nextBackupStatus(BackupConfig config, long now) {
+        skipMissedCronRuns(config, now);
         List<NextBackupStatus> list = new ArrayList<>();
 
         for (BackupType type : SCHEDULE_PRIORITY) {
             BackupConfig.ScheduledBackup schedule = config.automaticSchedule.forType(type);
             if (!schedule.enabled) {
+                continue;
+            }
+
+            if (schedule.hasCron()) {
+                ScheduledCronSlot slot = resolveCronSlot(type, schedule, now);
+                if (slot == null) {
+                    continue;
+                }
+                long remaining = Math.max(0L, slot.nextRun().toInstant().toEpochMilli() - now);
+                if (remaining <= 0L) {
+                    list.add(NextBackupStatus.readyNow(type, slot.nextRun()));
+                } else {
+                    list.add(NextBackupStatus.waiting(type, remaining, slot.nextRun()));
+                }
                 continue;
             }
 
@@ -286,6 +335,14 @@ public final class BackupScheduler {
     }
 
     private static long remainingMillis(BackupType type, BackupConfig.ScheduledBackup schedule, long now) {
+        if (schedule.hasCron()) {
+            ScheduledCronSlot slot = resolveCronSlot(type, schedule, now);
+            if (slot == null) {
+                return Long.MAX_VALUE;
+            }
+            return Math.max(0L, slot.nextRun().toInstant().toEpochMilli() - now);
+        }
+
         long last = lastBackupMillis.getOrDefault(type, 0L);
         if (last == 0L) {
             return 0L;
@@ -295,13 +352,91 @@ public final class BackupScheduler {
         return Math.max(0L, intervalMillis - (now - last));
     }
 
+    private static void advanceSchedule(BackupType type, BackupConfig.ScheduledBackup schedule, long now) {
+        lastBackupMillis.put(type, now);
+        if (!schedule.hasCron()) {
+            nextCronRuns.remove(type);
+            return;
+        }
+        ScheduledCronSlot current = resolveCronSlot(type, schedule, now);
+        if (current == null) {
+            return;
+        }
+        long referenceMillis = Math.max(now, current.nextRun().toInstant().toEpochMilli());
+        current.expression().nextAfter(Instant.ofEpochMilli(referenceMillis), current.zone())
+                .ifPresentOrElse(
+                        next -> nextCronRuns.put(type, new ScheduledCronSlot(
+                                current.cron(), current.timezone(), current.expression(), current.zone(), next)),
+                        () -> nextCronRuns.remove(type)
+                );
+    }
+
+    private static void skipMissedCronRuns(BackupConfig config, long now) {
+        if (config == null || config.automaticSchedule == null) {
+            return;
+        }
+        for (BackupType type : SCHEDULE_PRIORITY) {
+            BackupConfig.ScheduledBackup schedule = config.automaticSchedule.forType(type);
+            if (schedule == null || !schedule.enabled || !schedule.hasCron()) {
+                nextCronRuns.remove(type);
+                continue;
+            }
+            ScheduledCronSlot slot = resolveCronSlot(type, schedule, now);
+            if (slot == null) {
+                continue;
+            }
+            long scheduledMillis = slot.nextRun().toInstant().toEpochMilli();
+            if (now - scheduledMillis > MISSED_CRON_GRACE_MILLIS) {
+                slot.expression().nextAfter(Instant.ofEpochMilli(now), slot.zone())
+                        .ifPresentOrElse(
+                                next -> {
+                                    WorldBackupMod.LOGGER.info(
+                                            "Skipping missed {} cron backup scheduled for {}; next run is {}.",
+                                            type.commandName(),
+                                            LOG_TIME_FORMAT.format(slot.nextRun()),
+                                            LOG_TIME_FORMAT.format(next));
+                                    nextCronRuns.put(type, new ScheduledCronSlot(
+                                            slot.cron(), slot.timezone(), slot.expression(), slot.zone(), next));
+                                },
+                                () -> nextCronRuns.remove(type)
+                        );
+            }
+        }
+    }
+
+    private static ScheduledCronSlot resolveCronSlot(BackupType type, BackupConfig.ScheduledBackup schedule, long now) {
+        if (schedule == null || !schedule.hasCron()) {
+            nextCronRuns.remove(type);
+            return null;
+        }
+        ScheduledCronSlot existing = nextCronRuns.get(type);
+        if (existing != null && existing.matches(schedule)) {
+            return existing;
+        }
+        try {
+            CronExpression expression = CronExpression.parse(schedule.cron);
+            ZoneId zone = CronExpression.parseZoneId(schedule.timezone);
+            ZonedDateTime next = expression.nextAfter(Instant.ofEpochMilli(now), zone).orElse(null);
+            if (next == null) {
+                nextCronRuns.remove(type);
+                return null;
+            }
+            ScheduledCronSlot created = new ScheduledCronSlot(schedule.cron, schedule.timezone, expression, zone, next);
+            nextCronRuns.put(type, created);
+            return created;
+        } catch (IllegalArgumentException exception) {
+            nextCronRuns.remove(type);
+            return null;
+        }
+    }
+
     private static void maybeBroadcastAutomaticBackupWarning(MinecraftServer server, BackupConfig config, long now) {
         if (!config.automaticBackupWarningEnabled || automaticWarningSent) {
             return;
         }
 
         long remainingMillis = nextRemainingMillis(config, now);
-        if (remainingMillis == Long.MAX_VALUE) {
+        if (remainingMillis <= 0L || remainingMillis == Long.MAX_VALUE) {
             return;
         }
 
@@ -314,5 +449,17 @@ public final class BackupScheduler {
 
     private static void resetWarnings() {
         automaticWarningSent = false;
+    }
+
+    private record ScheduledCronSlot(
+            String cron,
+            String timezone,
+            CronExpression expression,
+            ZoneId zone,
+            ZonedDateTime nextRun
+    ) {
+        boolean matches(BackupConfig.ScheduledBackup schedule) {
+            return Objects.equals(cron, schedule.cron) && Objects.equals(timezone, schedule.timezone);
+        }
     }
 }

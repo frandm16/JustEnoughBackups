@@ -8,6 +8,7 @@ import com.frandm.justenoughbackups.backup.model.BackupCompressionMethod;
 import com.frandm.justenoughbackups.backup.model.BackupType;
 import com.frandm.justenoughbackups.backup.storage.remote.RemoteProviderType;
 import com.frandm.justenoughbackups.scheduler.BackupScheduler;
+import com.frandm.justenoughbackups.scheduler.CronExpression;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import net.fabricmc.loader.api.FabricLoader;
@@ -317,27 +318,62 @@ public final class BackupConfig {
             if (differential == null) differential = new ScheduledBackup(false, 120);
             if (partial == null) partial = new ScheduledBackup(false, 60);
 
-            full.normalize();
-            differential.normalize();
-            partial.normalize();
+            full.normalize("full");
+            differential.normalize("differential");
+            partial.normalize("partial");
         }
     }
 
     public static final class ScheduledBackup {
         public boolean enabled;
         public int intervalMinutes;
+        public String cron = "";
+        public String timezone = "";
 
         public ScheduledBackup(boolean enabled, int intervalMinutes) {
+            this(enabled, intervalMinutes, "", "");
+        }
+
+        public ScheduledBackup(boolean enabled, int intervalMinutes, String cron, String timezone) {
             this.enabled = enabled;
             this.intervalMinutes = intervalMinutes;
+            this.cron = cron == null ? "" : cron.trim();
+            this.timezone = timezone == null ? "" : timezone.trim();
+        }
+
+        public boolean hasCron() {
+            return cron != null && !cron.isBlank();
         }
 
         public ScheduledBackup copy() {
-            return new ScheduledBackup(enabled, intervalMinutes);
+            return new ScheduledBackup(enabled, intervalMinutes, cron, timezone);
         }
 
-        private void normalize() {
+        private void normalize(String typeName) {
             intervalMinutes = Math.max(1, intervalMinutes);
+            cron = cron == null ? "" : cron.trim();
+            timezone = timezone == null ? "" : timezone.trim();
+            if (!cron.isEmpty()) {
+                try {
+                    CronExpression.parse(cron);
+                } catch (IllegalArgumentException exception) {
+                    WorldBackupMod.LOGGER.error(
+                            "Invalid cron expression '{}' for automaticSchedule.{}: {}. This schedule will be ignored until fixed.",
+                            cron, typeName, exception.getMessage());
+                }
+            }
+            if (!timezone.isEmpty()) {
+                try {
+                    CronExpression.parseZoneId(timezone);
+                } catch (IllegalArgumentException exception) {
+                    WorldBackupMod.LOGGER.error(
+                            "Invalid timezone '{}' for automaticSchedule.{}: {}. {}",
+                            timezone, typeName, exception.getMessage(),
+                            cron.isEmpty()
+                                    ? "Timezone is ignored when no cron expression is configured."
+                                    : "This schedule will be ignored until fixed.");
+                }
+            }
         }
     }
 

@@ -239,6 +239,12 @@ public final class JEBConfigScreen extends Screen {
         return switch (fieldId) {
             case BACKUP_DIRECTORY -> () -> state.working.backupDirectory;
             case TEMP_DIRECTORY -> () -> state.working.tempBackupDirectory;
+            case AUTOMATIC_FULL_CRON -> () -> state.working.automaticSchedule.full.cron;
+            case AUTOMATIC_FULL_TIMEZONE -> () -> state.working.automaticSchedule.full.timezone;
+            case AUTOMATIC_DIFFERENTIAL_CRON -> () -> state.working.automaticSchedule.differential.cron;
+            case AUTOMATIC_DIFFERENTIAL_TIMEZONE -> () -> state.working.automaticSchedule.differential.timezone;
+            case AUTOMATIC_PARTIAL_CRON -> () -> state.working.automaticSchedule.partial.cron;
+            case AUTOMATIC_PARTIAL_TIMEZONE -> () -> state.working.automaticSchedule.partial.timezone;
             case REMOTE_S3_ENDPOINT -> () -> state.working.remoteStorage.s3Endpoint;
             case REMOTE_S3_REGION -> () -> state.working.remoteStorage.s3Region;
             case REMOTE_S3_BUCKET -> () -> state.working.remoteStorage.s3Bucket;
@@ -262,6 +268,12 @@ public final class JEBConfigScreen extends Screen {
         return switch (fieldId) {
             case BACKUP_DIRECTORY -> value -> state.working.backupDirectory = value;
             case TEMP_DIRECTORY -> value -> state.working.tempBackupDirectory = value;
+            case AUTOMATIC_FULL_CRON -> value -> state.working.automaticSchedule.full.cron = value;
+            case AUTOMATIC_FULL_TIMEZONE -> value -> state.working.automaticSchedule.full.timezone = value;
+            case AUTOMATIC_DIFFERENTIAL_CRON -> value -> state.working.automaticSchedule.differential.cron = value;
+            case AUTOMATIC_DIFFERENTIAL_TIMEZONE -> value -> state.working.automaticSchedule.differential.timezone = value;
+            case AUTOMATIC_PARTIAL_CRON -> value -> state.working.automaticSchedule.partial.cron = value;
+            case AUTOMATIC_PARTIAL_TIMEZONE -> value -> state.working.automaticSchedule.partial.timezone = value;
             case REMOTE_S3_ENDPOINT -> value -> state.working.remoteStorage.s3Endpoint = value;
             case REMOTE_S3_REGION -> value -> state.working.remoteStorage.s3Region = value;
             case REMOTE_S3_BUCKET -> value -> state.working.remoteStorage.s3Bucket = value;
@@ -966,6 +978,12 @@ public final class JEBConfigScreen extends Screen {
             case PERMISSION_LEVEL -> parseInt(input).ifPresent(value -> state.working.commandPermissionLevel = value);
             case BACKUP_DIRECTORY -> state.working.backupDirectory = input;
             case TEMP_DIRECTORY -> state.working.tempBackupDirectory = input;
+            case AUTOMATIC_FULL_CRON -> state.working.automaticSchedule.full.cron = input;
+            case AUTOMATIC_FULL_TIMEZONE -> state.working.automaticSchedule.full.timezone = input;
+            case AUTOMATIC_DIFFERENTIAL_CRON -> state.working.automaticSchedule.differential.cron = input;
+            case AUTOMATIC_DIFFERENTIAL_TIMEZONE -> state.working.automaticSchedule.differential.timezone = input;
+            case AUTOMATIC_PARTIAL_CRON -> state.working.automaticSchedule.partial.cron = input;
+            case AUTOMATIC_PARTIAL_TIMEZONE -> state.working.automaticSchedule.partial.timezone = input;
             case REMOTE_S3_ENDPOINT -> state.working.remoteStorage.s3Endpoint = input;
             case REMOTE_S3_REGION -> state.working.remoteStorage.s3Region = input;
             case REMOTE_S3_BUCKET -> state.working.remoteStorage.s3Bucket = input;

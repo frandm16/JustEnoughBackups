@@ -2,6 +2,7 @@ package com.frandm.justenoughbackups.client.screen.config;
 
 import com.frandm.justenoughbackups.config.ConfigColor;
 import com.frandm.justenoughbackups.backup.storage.remote.RemoteProviderType;
+import com.frandm.justenoughbackups.scheduler.CronExpression;
 import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
@@ -87,6 +88,13 @@ final class ConfigValidator {
         validateRawInt(errors, state, ConfigFieldId.ZSTD_COMPRESSION_LEVEL, 1, 22);
         validateRawInt(errors, state, ConfigFieldId.REMOTE_STORAGE_RETRIES, 0, 10);
 
+        validateCron(errors, state, ConfigFieldId.AUTOMATIC_FULL_CRON, state.working.automaticSchedule.full.cron);
+        validateTimezone(errors, state, ConfigFieldId.AUTOMATIC_FULL_TIMEZONE, state.working.automaticSchedule.full.timezone);
+        validateCron(errors, state, ConfigFieldId.AUTOMATIC_DIFFERENTIAL_CRON, state.working.automaticSchedule.differential.cron);
+        validateTimezone(errors, state, ConfigFieldId.AUTOMATIC_DIFFERENTIAL_TIMEZONE, state.working.automaticSchedule.differential.timezone);
+        validateCron(errors, state, ConfigFieldId.AUTOMATIC_PARTIAL_CRON, state.working.automaticSchedule.partial.cron);
+        validateTimezone(errors, state, ConfigFieldId.AUTOMATIC_PARTIAL_TIMEZONE, state.working.automaticSchedule.partial.timezone);
+
         if (state.rawInputs.getOrDefault(ConfigFieldId.BACKUP_DIRECTORY, value(state.working.backupDirectory)).isBlank()) {
             errors.add(new ValidationError(ConfigFieldId.BACKUP_DIRECTORY, Component.translatable("screen.justenoughbackups.config.error.backup_directory_empty")));
         }
@@ -105,6 +113,34 @@ final class ConfigValidator {
     private void validateInt(List<ValidationError> errors, ConfigFieldId fieldId, int value, int min, int max, String key) {
         if (value < min || value > max) {
             errors.add(new ValidationError(fieldId, Component.translatable(key)));
+        }
+    }
+
+    private void validateCron(List<ValidationError> errors, ConfigScreenState state, ConfigFieldId fieldId, String fallback) {
+        String raw = state.rawInputs.getOrDefault(fieldId, value(fallback));
+        if (raw == null || raw.isBlank()) {
+            return;
+        }
+        try {
+            CronExpression.parse(raw);
+        } catch (IllegalArgumentException exception) {
+            errors.add(new ValidationError(fieldId,
+                    Component.translatable("screen.justenoughbackups.config.error.invalid_cron",
+                            Component.translatable(fieldId.labelKey()))));
+        }
+    }
+
+    private void validateTimezone(List<ValidationError> errors, ConfigScreenState state, ConfigFieldId fieldId, String fallback) {
+        String raw = state.rawInputs.getOrDefault(fieldId, value(fallback));
+        if (raw == null || raw.isBlank()) {
+            return;
+        }
+        try {
+            CronExpression.parseZoneId(raw);
+        } catch (IllegalArgumentException exception) {
+            errors.add(new ValidationError(fieldId,
+                    Component.translatable("screen.justenoughbackups.config.error.invalid_timezone",
+                            Component.translatable(fieldId.labelKey()))));
         }
     }
 
