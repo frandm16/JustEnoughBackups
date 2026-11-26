@@ -42,7 +42,11 @@ import java.util.concurrent.Executors;
 
 final class S3ObjectStore implements RemoteObjectStore {
     private static final long SINGLE_COPY_LIMIT_BYTES = 5_000_000_000L;
-    private static final long COPY_PART_SIZE_BYTES    =   512_000_000L;
+    // Large single copies time out on B2.
+    static final long MULTIPART_COPY_THRESHOLD_BYTES = 100L * 1024 * 1024;
+    static final long COPY_PART_SIZE_BYTES           = 100L * 1024 * 1024;
+    private static final long MAX_COPY_PART_SIZE_BYTES = 5L * 1024 * 1024 * 1024;
+    private static final int MAX_PARTS = 10_000;
     private final String bucket;
     private final S3AsyncClient client;
     private final ExecutorService streamExecutor;
@@ -165,7 +169,7 @@ final class S3ObjectStore implements RemoteObjectStore {
         try {
             long size = client.headObject(HeadObjectRequest.builder().bucket(bucket).key(sourceKey).build())
                     .join().contentLength();
-            if (size > SINGLE_COPY_LIMIT_BYTES) {
+            if (size > MULTIPART_COPY_THRESHOLD_BYTES) {
                 multipartCopy(sourceKey, targetKey, size);
             } else {
                 client.copyObject(CopyObjectRequest.builder().sourceBucket(bucket).sourceKey(sourceKey)
@@ -182,22 +186,31 @@ final class S3ObjectStore implements RemoteObjectStore {
         }
     }
 
-    private void multipartCopy(String sourceKey, String targetKey, long size) {
-        if (size > COPY_PART_SIZE_BYTES * 10_000L) {
+    static List<long[]> copyRanges(long size, long preferredPartSize) {
+        long partSize = Math.max(preferredPartSize, (size + MAX_PARTS - 1) / MAX_PARTS);
+        if (partSize > MAX_COPY_PART_SIZE_BYTES) {
             throw new IllegalArgumentException("S3 object exceeds the 10,000-part multipart copy limit.");
         }
+        List<long[]> ranges = new ArrayList<>();
+        for (long firstByte = 0; firstByte < size; firstByte += partSize) {
+            ranges.add(new long[] { firstByte, Math.min(size - 1L, firstByte + partSize - 1L) });
+        }
+        return ranges;
+    }
+
+    private void multipartCopy(String sourceKey, String targetKey, long size) {
+        List<long[]> ranges = copyRanges(size, COPY_PART_SIZE_BYTES);
         String uploadId = client.createMultipartUpload(CreateMultipartUploadRequest.builder()
                 .bucket(bucket).key(targetKey).build()).join().uploadId();
         List<CompletedPart> completedParts = new ArrayList<>();
         try {
             int partNumber = 1;
-            for (long firstByte = 0; firstByte < size; firstByte += COPY_PART_SIZE_BYTES) {
-                long lastByte = Math.min(size - 1L, firstByte + COPY_PART_SIZE_BYTES - 1L);
+            for (long[] range : ranges) {
                 UploadPartCopyResponse response = client.uploadPartCopy(UploadPartCopyRequest.builder()
                         .sourceBucket(bucket).sourceKey(sourceKey)
                         .destinationBucket(bucket).destinationKey(targetKey).uploadId(uploadId)
                         .partNumber(partNumber)
-                        .copySourceRange("bytes=" + firstByte + "-" + lastByte)
+                        .copySourceRange("bytes=" + range[0] + "-" + range[1])
                         .build()).join();
                 completedParts.add(CompletedPart.builder().partNumber(partNumber)
                         .eTag(response.copyPartResult().eTag()).build());
@@ -216,6 +229,11 @@ final class S3ObjectStore implements RemoteObjectStore {
             }
             throw failure;
         }
+    }
+
+    @Override
+    public boolean supportsAtomicPut() {
+        return true;
     }
 
     @Override

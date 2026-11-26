@@ -118,13 +118,17 @@ public final class RemoteBackupCatalog implements AutoCloseable {
         String tempKey = worldPrefix + "temporary/" + manifest.id + "-" + UUID.randomUUID() + ".zip.uploading";
         String tempCatalog = worldPrefix + "temporary/" + manifest.id + "-" + UUID.randomUUID() + ".json.uploading";
         String finalKey = archiveKey(manifest.zipFileName);
+        // S3 uploads straight to the final key; the catalog sidecar is what publishes it.
+        boolean directUpload = store.supportsAtomicPut();
+        String uploadKey = directUpload ? finalKey : tempKey;
         boolean promoted = false;
         try {
             if (objectExists(finalKey)) throw new IOException("A remote backup already uses this archive name: " + manifest.zipFileName);
             MessageDigest digest = sha256();
             CountingInputStream counted = new CountingInputStream(archive);
+            if (directUpload) promoted = true;
             try (InputStream checked = new DigestInputStream(counted, digest)) {
-                store.put(tempKey, checked);
+                store.put(uploadKey, checked);
             }
             UploadInfo uploaded = new UploadInfo(counted.bytesRead(), HexFormat.of().formatHex(digest.digest()));
             if (completedStatus != null) {
@@ -133,8 +137,10 @@ public final class RemoteBackupCatalog implements AutoCloseable {
                     throw new IOException("Archive creation failed before publication.", exception.getCause());
                 }
             }
-            store.move(tempKey, finalKey);
-            promoted = true;
+            if (!directUpload) {
+                store.move(tempKey, finalKey);
+                promoted = true;
+            }
             manifest.archiveBytes = uploaded.bytes();
             manifest.compressionMethod = manifest.compressionMethod == null ? "DEFLATED" : manifest.compressionMethod;
             CatalogEnvelope envelope = new CatalogEnvelope(new BackupMetadata(manifest, status), uploaded.sha256());
