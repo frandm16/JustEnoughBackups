@@ -139,10 +139,16 @@ public final class JEBConfigScreen extends Screen {
     private boolean isAutomaticBackupSubOption(ConfigFieldId id) {
         return id == ConfigFieldId.AUTOMATIC_FULL_ENABLED
                 || id == ConfigFieldId.AUTOMATIC_FULL_INTERVAL_MINUTES
+                || id == ConfigFieldId.AUTOMATIC_FULL_CRON
+                || id == ConfigFieldId.AUTOMATIC_FULL_TIMEZONE
                 || id == ConfigFieldId.AUTOMATIC_PARTIAL_ENABLED
                 || id == ConfigFieldId.AUTOMATIC_PARTIAL_INTERVAL_MINUTES
+                || id == ConfigFieldId.AUTOMATIC_PARTIAL_CRON
+                || id == ConfigFieldId.AUTOMATIC_PARTIAL_TIMEZONE
                 || id == ConfigFieldId.AUTOMATIC_DIFFERENTIAL_ENABLED
-                || id == ConfigFieldId.AUTOMATIC_DIFFERENTIAL_INTERVAL_MINUTES;
+                || id == ConfigFieldId.AUTOMATIC_DIFFERENTIAL_INTERVAL_MINUTES
+                || id == ConfigFieldId.AUTOMATIC_DIFFERENTIAL_CRON
+                || id == ConfigFieldId.AUTOMATIC_DIFFERENTIAL_TIMEZONE;
     }
 
     private Supplier<Boolean> booleanGetter(ConfigFieldId fieldId) {
