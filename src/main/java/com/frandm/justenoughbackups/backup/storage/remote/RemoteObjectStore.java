@@ -14,6 +14,11 @@ public interface RemoteObjectStore extends AutoCloseable {
 
     void delete(String key) throws IOException;
 
+    // True if a failed put never leaves a partial object behind.
+    default boolean supportsAtomicPut() {
+        return false;
+    }
+
     default void move(String sourceKey, String targetKey) throws IOException {
         try (InputStream in = get(sourceKey)) {
             put(targetKey, in);

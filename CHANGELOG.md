@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## Unreleased
+
+### Fixed
+
+- Fixed large remote S3 backups failing with `Read timed out` on Backblaze B2. S3 archives are now uploaded straight to their final name instead of being copied from a temporary one.
+- S3 copies over 100 MB (e.g. renaming a remote backup) now use multipart copy in 100 MB parts.
+
 ## 1.2.0.11+26.3 - 24/11/2026
 
 ### Added
